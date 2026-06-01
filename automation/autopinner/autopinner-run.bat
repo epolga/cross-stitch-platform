@@ -1,12 +1,12 @@
 @echo off
-REM Fired every 30 minutes by the Windows scheduled task "AutoPinner".
+REM Fired every 20 minutes by the Windows scheduled task "AutoPinner".
 REM Switches CWD into the repo root so DotNetEnv.TraversePath finds .env,
 REM then runs the Release build with --once. Output is appended to
 REM autopinner-run.log alongside this batch file for morning review.
 
-cd /d D:\ann\Git\AutoPinner
+cd /d D:\ann\Git\cross-stitch-platform\automation\autopinner
 
-set LOGFILE=D:\ann\Git\AutoPinner\autopinner-run.log
+set LOGFILE=D:\ann\Git\cross-stitch-platform\automation\autopinner\autopinner-run.log
 echo. >> "%LOGFILE%"
 echo [%date% %time%] === AutoPinner cron tick === >> "%LOGFILE%"
 
