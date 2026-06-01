@@ -1,0 +1,3958 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Configuration;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Diagnostics;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Security.Cryptography;
+using System.Text;
+using System.Globalization;
+using Amazon;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.DocumentModel;
+using Amazon.DynamoDBv2.Model;
+using Amazon.S3;
+using Amazon.S3.Model;
+using Amazon.S3.Transfer;
+using Amazon.SimpleEmail;
+using Amazon.SimpleEmail.Model;
+using System.Windows.Controls;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.parser;
+using UploadPatterns;
+using Uploader.Helpers;
+using CrossStitch.Shared;
+using CrossStitch.Shared.Pinterest;
+using CrossStitch.Shared.Email;
+using MessageBox = System.Windows.MessageBox;
+using Path = System.IO.Path;
+
+namespace Uploader
+{
+    /// <summary>
+    /// Main WPF window for uploading a cross-stitch design batch:
+    /// - Reads PDF and extracts pattern info
+    /// - Extracts and saves preview image
+    /// - Uploads SCC, PDF and JPG to S3
+    /// - Inserts item into DynamoDB
+    /// - Creates a Pinterest pin
+    /// - Sends notification email, reboots EC2 environment, and notifies users
+    /// </summary>
+    public partial class MainWindow : Window
+    {
+        private readonly string _bucketName =
+            ConfigurationManager.AppSettings["S3BucketName"] ?? "cross-stitch-designs";
+
+        private readonly AmazonDynamoDBClient _dynamoDbClient = new AmazonDynamoDBClient();
+        private readonly AmazonS3Client _s3Client = new AmazonS3Client();
+        private readonly AmazonSimpleEmailServiceClient _sesClient = new AmazonSimpleEmailServiceClient();
+        private readonly string? _sesConfigurationSetName = GetOptionalAppSetting("SesConfigurationSetName");
+
+        private readonly ElasticBeanstalkHelper _elasticBeanstalkHelper =
+            new ElasticBeanstalkHelper(
+                RegionEndpoint.USEast1,
+                ConfigurationManager.AppSettings["ElasticBeanstalkEnvironmentName"] ?? "cross-stitch-com-env-clone");
+
+        private readonly S3Helper _s3Helper =
+            new S3Helper(RegionEndpoint.USEast1, "cross-stitch-designs");
+
+        private readonly PinterestUploader _pinterestHelper = HelperFactory.CreatePinterestUploader();
+        private readonly PatternLinkHelper _linkHelper = HelperFactory.CreatePatternLinkHelper();
+        private readonly EmailHelper _emailHelper = new EmailHelper();
+        private readonly TransferUtility _s3TransferUtility;
+
+        private string _imageFilePath = string.Empty;
+        private string _pinterestImageFilePath = string.Empty;
+        private string _batchFolderPath = string.Empty;
+        private bool _isSendingEmails;
+        private bool _isSendingTextEmails;
+
+        private const string PhotoPrefix = "photos";
+        private const string PinterestPhotoFileName = "4_pinterest.jpg";
+        private const int PinterestTargetWidth = 1000;
+        private const int PinterestTargetHeight = 1500;
+        private const string PinterestWatermarkText = "cross-stitch.com";
+        private const string PinterestWatermarkFontFamily = "Arial Black";
+        private const float PinterestWatermarkMinFontSize = 24f;
+        private const string HtmlEmailTemplatePathDefault = "Templates\\HtmlEmailTemplate.txt";
+        private const string TextEmailTemplatePathDefault = "Templates\\TextEmailTemplate.txt";
+        // %CROSS_STITCH% in any path read by ResolveTemplatePath expands to the
+        // CROSS_STITCH environment variable, falling back to this default when
+        // the env var is not set. Lets App.config point at sibling-repo paths
+        // (cross-stitch-platform-docs/docs/uploader/HtmlEmailTemplate.txt) in
+        // a way that survives moving all three repos to a different common root.
+        private const string CrossStitchRootEnvVar = "CROSS_STITCH";
+        private const string CrossStitchRootDefault = @"D:\ann\Git";
+        private const string CrossStitchRootToken = "%CROSS_STITCH%";
+        private const string AdminPreviewUnsubscribeToken = "preview-admin-unsubscribe-token";
+        private const string SuppressedListPath = @"D:\ann\Git\cross-stitch\list-suppressed.txt";
+        private const string ConverterExePath = @"D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe";
+        private static readonly string[] RequiredPdfVariants = { "1", "3", "5" };
+        private static readonly string[] HtmlEmailTemplateRequiredSections =
+            { "Subject", "Greeting", "BeforeImage", "ImageWithLink", "AfterImage", "Unsubscribe", "Closing", "Signature" };
+        private static readonly string[] TextEmailTemplateRequiredSections =
+            { "Subject", "Greeting", "BeforeBody", "AfterBody", "Unsubscribe", "Closing", "Signature" };
+
+        // Cached email templates. Populated lazily on first use via
+        // GetActiveHtmlEmailTemplate / GetActiveTextEmailTemplate, and
+        // refreshed by the "Reload Email Template" button. Send loops read
+        // these fields once per iteration so clicking Reload mid-send causes
+        // subsequent emails in the same loop to pick up the new template.
+        private EmailTemplateDefinition? _cachedHtmlEmailTemplate;
+        private EmailTemplateDefinition? _cachedTextEmailTemplate;
+        private int _albumId;
+
+        public PatternInfo? PatternInfo { get; private set; }
+        public string AlbumPartitionKey { get; private set; } = string.Empty;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            _s3TransferUtility = new TransferUtility(_s3Client);
+        }
+
+        /// <summary>
+        /// Sets album internal fields based on album ID.
+        /// </summary>
+        private void SetAlbumInfo(int albumId)
+        {
+            _albumId = albumId;
+            AlbumPartitionKey = $"ALB#{albumId:D4}";
+        }
+
+        #region Event handlers (UI thread)
+
+        private async void BtnSelectFolder_Click(object sender, RoutedEventArgs e)
+        {
+            using var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Select a folder",
+                InitialDirectory = ConfigurationManager.AppSettings["InitialFolder"]
+            };
+
+            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                return;
+
+            _batchFolderPath = dialog.SelectedPath;
+            _imageFilePath = Path.Combine(_batchFolderPath, "4.jpg");
+            _pinterestImageFilePath = Path.Combine(_batchFolderPath, PinterestPhotoFileName);
+
+            // UI updates are safe here (we are on UI thread)
+            txtFolderPath.Text = _batchFolderPath;
+
+            try
+            {
+                var requiredPdfs = new[] { "1.pdf", "3.pdf", "5.pdf" };
+                var missing = requiredPdfs
+                    .Where(name => !File.Exists(Path.Combine(_batchFolderPath, name)))
+                    .ToList();
+                if (missing.Count > 0)
+                {
+                    string missingList = string.Join(", ", missing);
+                    txtStatus.Text = $"Missing required PDFs: {missingList}\r\n";
+                    MessageBox.Show($"Missing required PDFs: {missingList}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                PatternInfo = await CreatePatternInfoAsync();
+
+                // Back on UI thread after await (no ConfigureAwait(false) here),
+                // so we can safely update text boxes
+                SetPatternInfoToUI(PatternInfo);
+                string pdfPath = Path.Combine(_batchFolderPath, "1.pdf");
+                GetAndShowImage(pdfPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error while reading pattern info: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnUpload_Click(object sender, RoutedEventArgs e)
+        {
+            if (PatternInfo == null)
+            {
+                txtStatus.Text = "Extract PDF info before upload.\r\n";
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_batchFolderPath) || string.IsNullOrEmpty(txtAlbumNumber.Text))
+            {
+                MessageBox.Show("Please select a folder and ensure AlbumID is loaded.",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            txtStatus.Text = "Processing...\r\n";
+
+            try
+            {
+                await RunFullUploadFlowAsync();
+
+                // Continuation is on UI thread (no ConfigureAwait(false) here)
+                txtStatus.Text += "[Upload] Done. Use Send Emails when you're ready to notify.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"[Upload] Operation failed: {ex.Message}\r\n";
+                txtStatus.Text += $"[Upload] Exception details: {ex}\r\n";
+
+                MessageBox.Show($"An error occurred: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnSendEmails_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isSendingEmails)
+            {
+                txtStatus.Text += "[Email] Send already in progress.\r\n";
+                return;
+            }
+
+            _isSendingEmails = true;
+            var sendButton = sender as System.Windows.Controls.Button;
+            if (sendButton != null)
+                sendButton.IsEnabled = false;
+
+            txtStatus.Text += "[Email] Sending notification emails...\r\n";
+
+            try
+            {
+                await SendNotificationEmailsAsync().ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "[Email] Sent notification emails to admin and users.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[Email] Failed to send notification emails: {ex.Message}\r\n";
+                }));
+
+                MessageBox.Show($"Failed to send emails: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _isSendingEmails = false;
+                if (sendButton != null)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        sendButton.IsEnabled = true;
+                    }));
+                }
+            }
+        }
+
+        private async void BtnSendTextEmails_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isSendingTextEmails)
+            {
+                txtStatus.Text += "[Email/Text] Send already in progress.\r\n";
+                return;
+            }
+
+            _isSendingTextEmails = true;
+            var sendButton = sender as System.Windows.Controls.Button;
+            if (sendButton != null)
+                sendButton.IsEnabled = false;
+
+            txtStatus.Text += "[Email/Text] Sending text-only emails...\r\n";
+
+            try
+            {
+                await SendTextOnlyEmailsAsync().ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "[Email/Text] Sent text-only emails to admin and users.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[Email/Text] Failed to send text-only emails: {ex.Message}\r\n";
+                }));
+
+                MessageBox.Show($"Failed to send text-only emails: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _isSendingTextEmails = false;
+                if (sendButton != null)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        sendButton.IsEnabled = true;
+                    }));
+                }
+            }
+        }
+
+        private async void BtnPinterestReAuth_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var clientId = ConfigurationManager.AppSettings["PinterestClientId"] ?? "";
+                var redirectUri = ConfigurationManager.AppSettings["PinterestRedirectUri"] ?? "http://localhost:8080/callback";
+                var scope = ConfigurationManager.AppSettings["PinterestScope"] ?? "";
+
+                // Pinterest expects comma-separated scopes in the URL
+                var scopeParam = scope.Replace(' ', ',');
+
+                var authUrl = $"https://www.pinterest.com/oauth/?client_id={clientId}"
+                    + $"&redirect_uri={Uri.EscapeDataString(redirectUri)}"
+                    + $"&response_type=code"
+                    + $"&scope={Uri.EscapeDataString(scopeParam)}";
+
+                txtStatus.Text = "[Pinterest OAuth] Starting re-authorization...\r\n";
+                txtStatus.Text += $"[Pinterest OAuth] Scopes: {scope}\r\n";
+                txtStatus.Text += "[Pinterest OAuth] Opening browser — please approve the app...\r\n";
+
+                // Parse host and port from redirectUri
+                var callbackUri = new Uri(redirectUri);
+                var prefix = $"http://localhost:{callbackUri.Port}/";
+
+                // Start local HTTP listener before opening browser
+                var listener = new HttpListener();
+                listener.Prefixes.Add(prefix);
+                listener.Start();
+
+                // Open browser
+                Process.Start(new ProcessStartInfo(authUrl) { UseShellExecute = true });
+
+                // Wait for the callback (with timeout)
+                var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+                HttpListenerContext ctx;
+                try
+                {
+                    ctx = await Task.Run(() => listener.GetContext(), cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    listener.Stop();
+                    txtStatus.Text += "[Pinterest OAuth] Timed out waiting for callback.\r\n";
+                    return;
+                }
+
+                var code = ctx.Request.QueryString["code"];
+
+                // Send a friendly response to the browser
+                var responseBytes = System.Text.Encoding.UTF8.GetBytes(
+                    "<html><body><h2>Authorization complete!</h2><p>You can close this tab.</p></body></html>");
+                ctx.Response.ContentType = "text/html";
+                ctx.Response.ContentLength64 = responseBytes.Length;
+                ctx.Response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
+                ctx.Response.Close();
+                listener.Stop();
+
+                if (string.IsNullOrEmpty(code))
+                {
+                    txtStatus.Text += "[Pinterest OAuth] No authorization code received.\r\n";
+                    return;
+                }
+
+                txtStatus.Text += "[Pinterest OAuth] Code received. Exchanging for token...\r\n";
+
+                var oauthClient = HelperFactory.CreatePinterestOAuthClient();
+                var tokenInfo = await oauthClient.ExchangeAuthorizationCodeAsync(code);
+
+                txtStatus.Text += $"[Pinterest OAuth] Success! Token scope: {tokenInfo.Scope}\r\n";
+                txtStatus.Text += $"[Pinterest OAuth] Expires: {tokenInfo.ExpiresAtUtc:u}\r\n";
+                txtStatus.Text += "[Pinterest OAuth] Token saved to store.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"[Pinterest OAuth] Failed: {ex.Message}\r\n";
+            }
+        }
+
+        private async void BtnRestartEb_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as System.Windows.Controls.Button;
+            if (button != null) button.IsEnabled = false;
+
+            txtStatus.Text += "Requesting Elastic Beanstalk restart...\r\n";
+
+            try
+            {
+                bool restarted = await _elasticBeanstalkHelper.RestartEnvironmentAsync(msg =>
+                {
+                    Dispatcher.BeginInvoke(new Action(() => { txtStatus.Text += msg; }));
+                }).ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += restarted
+                        ? "Elastic Beanstalk restart requested successfully.\r\n"
+                        : "Elastic Beanstalk restart failed.\r\n";
+                }));
+            }
+            finally
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (button != null) button.IsEnabled = true;
+                }));
+            }
+        }
+
+        private async void BtnTestPinterest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Hard-coded test path - adjust if needed
+                var info = new PatternInfo(@"D:\Stitch Craft\Charts\ReadyCharts\2025_11_02\1.pdf");
+                var pinResult = await _pinterestHelper.UploadPinForPatternAsync(info.ToPinPatternInfo(), true);
+
+                txtStatus.Text += $"[Test Pinterest] Pin created: {pinResult.PinId} ({pinResult.LinkType})\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"[Test Pinterest] Failed: {ex.Message}\r\n";
+            }
+        }
+
+        private async void BtnCreateBoards_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text = "Creating Pinterest boards from albums...\r\n";
+
+            var creator = new PinterestBoardCreator();
+            var progress = new Progress<string>(msg =>
+            {
+                // This callback may run on background threads, so we marshal to UI thread
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += msg + Environment.NewLine;
+                }));
+            });
+
+            try
+            {
+                await creator.CreateBoardsAndCsvAsync(progress, CancellationToken.None);
+
+                // Back on UI thread (no ConfigureAwait(false) at call site)
+                txtStatus.Text += "Finished creating boards and CSV.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnRenameBoards_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text = "Renaming Pinterest boards from CSV...\r\n";
+
+            var renamer = new PinterestBoardRenamer();
+            IProgress<string> progress = new Progress<string>(msg =>
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += msg + Environment.NewLine;
+                }));
+            });
+
+            try
+            {
+                await renamer.RenameBoardsFromCsvAsync(progress, CancellationToken.None);
+                txtStatus.Text += "Finished renaming boards.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error while renaming boards: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void InitializeUserUnsubscribe_Click(object sender, RoutedEventArgs e)
+        {
+
+            txtStatus.Text = "Initializing user unsubscribe fields...\r\n";
+            try
+            {
+                await InitializeUserUnsubscribeFieldsAsync();
+                // Back on UI thread
+                txtStatus.Text += "Finished initializing user unsubscribe fields.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void InitializeUserSubscriptions_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text = "Initializing user subscription fields...\r\n";
+
+            try
+            {
+                await InitializeUserSubscriptionFieldsAsync();
+                txtStatus.Text += "Finished initializing user subscription fields.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void InitializeUserCid_Click(object sender, RoutedEventArgs e)
+        {
+
+            txtStatus.Text = "Initializing user cid fields...\r\n";
+            try
+            {
+                await InitializeUserCidFieldsAsync();
+                // Back on UI thread
+                txtStatus.Text += "Finished initializing user cid fields.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void CheckMissingPdfs_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "Checking S3 for missing PDFs...\r\n";
+
+            IProgress<string> progress = new Progress<string>(msg =>
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += msg + Environment.NewLine;
+                }));
+            });
+
+            try
+            {
+                var designs = await LoadAllDesignLocationsAsync(progress).ConfigureAwait(false);
+                progress.Report($"Fetched {designs.Count} designs from DynamoDB.");
+
+                var pdfKeys = await LoadAllPdfKeysAsync(progress).ConfigureAwait(false);
+
+                var missing = FindDesignsWithMissingPdfs(designs, pdfKeys);
+                string reportPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MissingDesignPdfs.txt");
+                await WriteMissingPdfReportAsync(reportPath, missing).ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Missing PDFs for {missing.Count} design(s). Report written to: {reportPath}\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to check PDFs: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        private void TxtStatus_OnTextChanged(object sender, TextChangedEventArgs e)
+        {
+            txtStatus.ScrollToEnd();
+        }
+
+        #endregion
+
+        #region Pattern info and album helpers (no UI access inside)
+
+        /// <summary>
+        /// Creates PatternInfo from 1.pdf in the batch folder and enriches it
+        /// with AlbumId, NPage and DesignID from DynamoDB.
+        /// </summary>
+        private async Task<PatternInfo> CreatePatternInfoAsync()
+        {
+            string pdfPath = Path.Combine(_batchFolderPath, "1.pdf");
+            var patternInfo = new PatternInfo(pdfPath);
+
+            patternInfo.AlbumId = LoadAlbumIdFromTxt();
+            if (patternInfo.AlbumId == 0)
+            {
+                throw new Exception("Failed to load AlbumID from .txt file.");
+            }
+            patternInfo.NPage = await GetNextNPageAsync();
+            patternInfo.DesignID = await GetNextDesignIdAsync();
+
+            return patternInfo;
+        }
+
+        /// <summary>
+        /// Copies pattern information into UI text boxes. Called only on UI thread.
+        /// </summary>
+        private void SetPatternInfoToUI(PatternInfo patternInfo)
+        {
+            txtTitle.Text = patternInfo.Title;
+            txtNotes.Text = patternInfo.Notes;
+            txtWidth.Text = patternInfo.Width.ToString();
+            txtHeight.Text = patternInfo.Height.ToString();
+            txtNColors.Text = patternInfo.NColors.ToString();
+        }
+
+        private int LoadAlbumIdFromTxt()
+        {
+            string? albumFile = Directory
+                .GetFiles(_batchFolderPath, "*.txt")
+                .FirstOrDefault();
+
+            if (albumFile == null)
+            {
+                MessageBox.Show("Exactly one .txt file expected for AlbumID.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return 0;
+            }
+
+            string albumIdStr = Path.GetFileNameWithoutExtension(albumFile);
+            if (!int.TryParse(albumIdStr, out int albumId))
+            {
+                MessageBox.Show("Invalid AlbumID in .txt file.", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return 0;
+            }
+
+            // Update UI and internal fields on UI thread
+            txtAlbumNumber.Text = albumId.ToString();
+            SetAlbumInfo(albumId);
+
+            return albumId;
+        }
+
+        #endregion
+
+        #region Upload flow (no direct UI access)
+
+        /// <summary>
+        /// Full upload flow: S3, DynamoDB, Pinterest, SES, EC2 reboot.
+        /// This method does not touch UI directly.
+        /// </summary>
+        private async Task RunFullUploadFlowAsync()
+        {
+            // 1. Calculate global page and next design ID
+            int maxGlobalPage = await GetMaxGlobalPageAsync();
+            int nGlobalPage = maxGlobalPage + 1;
+
+            string sccFile = GetSccFile();
+
+            // Recalculate DesignID to avoid conflicts
+            PatternInfo.DesignID = await GetNextDesignIdAsync().ConfigureAwait(false);
+
+            // 2. Upload files to S3
+            await UploadChartToS3Async(PatternInfo.DesignID, sccFile).ConfigureAwait(false);
+            await UploadPdfToS3Async(PatternInfo.DesignID).ConfigureAwait(false);
+            await UploadImageToS3Async(PatternInfo.DesignID).ConfigureAwait(false);
+
+            // 3. Create Pinterest pin
+            PatternInfo.AlbumCaption = await GetAlbumCaptionAsync(_albumId).ConfigureAwait(false);
+            string? pinterestPhotoFileName = GetPinterestPhotoFileName();
+            var pinResult = await _pinterestHelper
+                .UploadPinForPatternAsync(PatternInfo.ToPinPatternInfo(), photoFileName: pinterestPhotoFileName)
+                .ConfigureAwait(false);
+
+            PatternInfo.PinId = pinResult.PinId;
+            if (string.IsNullOrWhiteSpace(PatternInfo.PinId))
+            {
+                throw new InvalidOperationException("Pinterest pin was created without returning a pin ID.");
+            }
+
+            // 3b. Generate SEO description via Claude (non-blocking — upload continues if it fails)
+            Dispatcher.BeginInvoke(new Action(() => txtStatus.Text += "Generating SEO description...\r\n"));
+            string? seoDescription = await Uploader.Helpers.SeoTextGenerator.GenerateAsync(
+                PatternInfo.Title,
+                PatternInfo.AlbumCaption,
+                PatternInfo.Width,
+                PatternInfo.Height,
+                PatternInfo.NColors,
+                Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty
+            ).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+                txtStatus.Text += string.IsNullOrWhiteSpace(seoDescription)
+                    ? "SEO description: skipped (API unavailable).\r\n"
+                    : $"SEO description: {seoDescription.Length} chars generated.\r\n"));
+
+            // 4. Insert item into DynamoDB
+            await InsertItemIntoDynamoDbAsync(nGlobalPage, pinResult.LinkType, seoDescription).ConfigureAwait(false);
+
+            // 5. Restart Elastic Beanstalk environment (status text is updated via callback which marshals to UI)
+            bool restarted = await _elasticBeanstalkHelper.RestartEnvironmentAsync(msg =>
+            {
+                Dispatcher.BeginInvoke(new Action(() => { txtStatus.Text += msg; }));
+            }).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += restarted
+                    ? "Elastic Beanstalk restart requested successfully.\r\n"
+                    : "Elastic Beanstalk restart failed.\r\n";
+            }));
+        }
+
+        private async Task SendNotificationEmailsAsync()
+        {
+            DateTime recentUserCutoffUtc = DateTime.UtcNow.AddMonths(-2);
+            LatestDesignEmailInfo latestDesign = await GetLatestDesignEmailInfoAsync(requirePinId: true)
+                .ConfigureAwait(false);
+
+            await SendNotificationMailToAdminAsync(latestDesign)
+                .ConfigureAwait(false);
+
+            var userRecipients = await FetchAllUserEmailsAsync(
+                    onlyVerified: true,
+                    onlySubscribed: true,
+                    minLastEmailEntryOrVerifiedAtUtc: recentUserCutoffUtc)
+                .ConfigureAwait(false);
+            await SendNotificationMailToUsersAsync(
+                    latestDesign,
+                    userRecipients)
+                .ConfigureAwait(false);
+        }
+
+        private async Task SendTextOnlyEmailsAsync()
+        {
+            string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+            string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+            EmailTemplateDefinition template = GetActiveTextEmailTemplate();
+            DateTime recentUserCutoffUtc = DateTime.UtcNow.AddMonths(-2);
+            LatestDesignEmailInfo latestDesign = await GetLatestDesignEmailInfoAsync().ConfigureAwait(false);
+            string patternUrl = BuildPatternUrl(latestDesign);
+
+            if (string.IsNullOrWhiteSpace(sender))
+                throw new InvalidOperationException("SenderEmail is not configured.");
+
+            var userRecipients = await FetchAllUserEmailsAsync(
+                    onlyVerified: true,
+                    onlySubscribed: true,
+                    minLastEmailEntryOrVerifiedAtUtc: recentUserCutoffUtc)
+                .ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(admin))
+            {
+                RenderedEmailContent adminContent = RenderTextEmailContent(template, "admin", AppendUtmParameters(patternUrl), null);
+
+                await _emailHelper.SendEmailAsync(
+                    _sesClient,
+                    sender,
+                    new[] { admin },
+                    adminContent.Subject,
+                    adminContent.TextBody,
+                    adminContent.HtmlBody,
+                    configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "[TextEmail] Sent text-only email to admin.\r\n";
+                }));
+            }
+
+            var recipients = userRecipients;
+
+            if (!string.IsNullOrWhiteSpace(admin))
+            {
+                recipients = userRecipients
+                    .Where(r => !string.Equals(r.Email, admin, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (recipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "[TextEmail] No user recipients found.\r\n";
+                }));
+                return;
+            }
+
+            await SendTextEmailsWithProgressAsync(
+                "[TextEmail]",
+                recipients,
+                sender,
+                patternUrl,
+                recipients.Count,
+                usersTable,
+                emailAttribute,
+                userIdAttribute).ConfigureAwait(false);
+        }
+
+        private string GetSccFile()
+        {
+            string? sccFile = Directory.GetFiles(_batchFolderPath, "*.scc").FirstOrDefault();
+            if (sccFile == null)
+            {
+                throw new Exception(".scc file expected.");
+            }
+
+            return sccFile;
+        }
+
+        private async Task<int> GetMaxGlobalPageAsync()
+        {
+            var request = new QueryRequest
+            {
+                TableName = "CrossStitchItems",
+                IndexName = "Designs-index",
+                KeyConditionExpression = "EntityType = :et",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":et", new AttributeValue { S = "DESIGN" } }
+                },
+                ScanIndexForward = false,
+                Limit = 1,
+                ProjectionExpression = "NGlobalPage"
+            };
+
+            var response = await _dynamoDbClient.QueryAsync(request).ConfigureAwait(false);
+
+            if (response.Items.Count > 0 && response.Items[0].ContainsKey("NGlobalPage"))
+            {
+                return int.Parse(response.Items[0]["NGlobalPage"].N);
+            }
+
+            return 0;
+        }
+
+        private async Task<string> GetNextNPageAsync()
+        {
+            var request = new QueryRequest
+            {
+                TableName = "CrossStitchItems",
+                KeyConditionExpression = "ID = :id",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":id", new AttributeValue { S = AlbumPartitionKey } }
+                },
+                ScanIndexForward = false,
+                Limit = 1,
+                ProjectionExpression = "NPage"
+            };
+
+            var response = await _dynamoDbClient.QueryAsync(request).ConfigureAwait(false);
+
+            int maxNPage = 0;
+            if (response.Items.Count > 0 && response.Items[0].ContainsKey("NPage"))
+            {
+                string current = response.Items[0]["NPage"].S;
+                string trimmed = current.TrimStart('0');
+                maxNPage = string.IsNullOrEmpty(trimmed) ? 0 : int.Parse(trimmed);
+            }
+
+            return (maxNPage + 1).ToString("D5");
+        }
+
+        private async Task<int> GetNextDesignIdAsync()
+        {
+            var request = new QueryRequest
+            {
+                TableName = "CrossStitchItems",
+                IndexName = "DesignsByID-index",
+                KeyConditionExpression = "EntityType = :et",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":et", new AttributeValue { S = "DESIGN" } }
+                },
+                ScanIndexForward = false,
+                Limit = 1,
+                ProjectionExpression = "DesignID"
+            };
+
+            var response = await _dynamoDbClient.QueryAsync(request).ConfigureAwait(false);
+
+            if (response.Items.Count > 0 && response.Items[0].ContainsKey("DesignID"))
+            {
+                return int.Parse(response.Items[0]["DesignID"].N) + 1;
+            }
+
+            return 1;
+        }
+
+        private async Task<LatestDesignEmailInfo> GetLatestDesignEmailInfoAsync(bool requirePinId = false)
+        {
+            var request = new QueryRequest
+            {
+                TableName = "CrossStitchItems",
+                IndexName = "DesignsByID-index",
+                KeyConditionExpression = "EntityType = :et",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":et", new AttributeValue { S = "DESIGN" } }
+                },
+                ScanIndexForward = false,
+                Limit = 1,
+                ProjectionExpression = "DesignID, AlbumID, NPage, Caption, PinID"
+            };
+
+            var response = await _dynamoDbClient.QueryAsync(request).ConfigureAwait(false);
+            if (response.Items.Count == 0)
+                throw new InvalidOperationException("No design records were found in DynamoDB.");
+
+            var item = response.Items[0];
+            int designId = ParseRequiredIntAttribute(item, "DesignID");
+            int albumId = ParseRequiredIntAttribute(item, "AlbumID");
+            string nPage = GetAttributeStringValue(item, "NPage");
+            if (string.IsNullOrWhiteSpace(nPage))
+                throw new InvalidOperationException("Latest design is missing NPage in DynamoDB.");
+
+            string title = GetAttributeStringValue(item, "Caption");
+            if (string.IsNullOrWhiteSpace(title))
+                title = $"Design {designId}";
+
+            string pinId = GetAttributeStringValue(item, "PinID");
+            if (requirePinId && string.IsNullOrWhiteSpace(pinId))
+            {
+                throw new InvalidOperationException(
+                    "Latest design is missing Pinterest PinID in DynamoDB; complete upload first.");
+            }
+
+            return new LatestDesignEmailInfo(designId, albumId, nPage, title, pinId);
+        }
+
+        private static int ParseRequiredIntAttribute(
+            IReadOnlyDictionary<string, AttributeValue> item,
+            string attributeName)
+        {
+            string rawValue = GetAttributeStringValue(item, attributeName);
+            if (!int.TryParse(rawValue, out int parsedValue))
+            {
+                throw new InvalidOperationException(
+                    $"Latest design attribute '{attributeName}' is missing or invalid in DynamoDB.");
+            }
+
+            return parsedValue;
+        }
+
+        private static string GetAttributeStringValue(
+            IReadOnlyDictionary<string, AttributeValue> item,
+            string attributeName)
+        {
+            if (!item.TryGetValue(attributeName, out var attributeValue) || attributeValue == null)
+                return string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(attributeValue.S))
+                return attributeValue.S.Trim();
+
+            if (!string.IsNullOrWhiteSpace(attributeValue.N))
+                return attributeValue.N.Trim();
+
+            return string.Empty;
+        }
+
+        private async Task UploadChartToS3Async(int designId, string sccFilePath)
+        {
+            string paddedDesignId = designId.ToString("D5");
+            string key = $"charts/{paddedDesignId}_{PatternInfo?.Title}.scc";
+
+            var request = new TransferUtilityUploadRequest
+            {
+                FilePath = sccFilePath,
+                BucketName = _bucketName,
+                Key = key,
+                ContentType = "text/scc"
+            };
+
+            await _s3TransferUtility.UploadAsync(request).ConfigureAwait(false);
+        }
+
+        private async Task UploadPdfToS3Async(int designId)
+        {
+            string pdf1Path = Path.Combine(_batchFolderPath, "1.pdf");
+            string pdf3Path = Path.Combine(_batchFolderPath, "3.pdf");
+            string pdf5Path = Path.Combine(_batchFolderPath, "5.pdf");
+
+            if (!File.Exists(pdf1Path) || !File.Exists(pdf3Path) || !File.Exists(pdf5Path))
+            {
+                throw new Exception("Required PDFs (1.pdf, 3.pdf, 5.pdf) not found.");
+            }
+
+            string mainKey = $"pdfs/{_albumId}/Stitch{designId}_Kit.pdf";
+            string designFolder = $"pdfs/{_albumId}/{designId}";
+            string key1 = $"{designFolder}/Stitch{designId}_1_Kit.pdf";
+            string key3 = $"{designFolder}/Stitch{designId}_3_Kit.pdf";
+            string key5 = $"{designFolder}/Stitch{designId}_5_Kit.pdf";
+
+            string convertedPdf1Path = await ConvertPdfForUploadAsync(pdf1Path).ConfigureAwait(false);
+            string convertedPdf3Path = await ConvertPdfForUploadAsync(pdf3Path).ConfigureAwait(false);
+            string convertedPdf5Path = await ConvertPdfForUploadAsync(pdf5Path).ConfigureAwait(false);
+
+            await UploadPdfFileAsync(convertedPdf1Path, mainKey).ConfigureAwait(false);
+            await UploadPdfFileAsync(convertedPdf1Path, key1).ConfigureAwait(false);
+            await UploadPdfFileAsync(convertedPdf3Path, key3).ConfigureAwait(false);
+            await UploadPdfFileAsync(convertedPdf5Path, key5).ConfigureAwait(false);
+        }
+
+        private static async Task<string> ConvertPdfForUploadAsync(string inputPath)
+        {
+            if (!File.Exists(inputPath))
+                throw new FileNotFoundException("Input PDF not found.", inputPath);
+
+            if (!File.Exists(ConverterExePath))
+                throw new FileNotFoundException("Converter.exe not found.", ConverterExePath);
+
+            string? folder = Path.GetDirectoryName(inputPath);
+            string outputPath = Path.Combine(folder ?? string.Empty,
+                $"{Path.GetFileNameWithoutExtension(inputPath)}.converted.pdf");
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = ConverterExePath,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            startInfo.ArgumentList.Add(inputPath);
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+                throw new InvalidOperationException("Failed to start PDF converter process.");
+
+            Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync().ConfigureAwait(false);
+            string stdOut = await stdOutTask.ConfigureAwait(false);
+            string stdErr = await stdErrTask.ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
+                throw new Exception(
+                    $"Converter failed for {Path.GetFileName(inputPath)} (exit {process.ExitCode}). {details}".Trim());
+            }
+
+            if (!File.Exists(outputPath))
+                throw new Exception($"Converter did not produce expected output: {outputPath}");
+
+            return outputPath;
+        }
+
+        private Task UploadPdfFileAsync(string filePath, string key)
+        {
+            var request = new TransferUtilityUploadRequest
+            {
+                FilePath = filePath,
+                BucketName = _bucketName,
+                Key = key,
+                ContentType = "application/pdf"
+            };
+
+            return _s3TransferUtility.UploadAsync(request);
+        }
+
+        private async Task UploadImageToS3Async(int designId)
+        {
+            await UploadPhotoFileAsync(designId, _imageFilePath).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(_pinterestImageFilePath) && File.Exists(_pinterestImageFilePath))
+            {
+                await UploadPhotoFileAsync(designId, _pinterestImageFilePath).ConfigureAwait(false);
+            }
+        }
+
+        private Task UploadPhotoFileAsync(int designId, string filePath)
+        {
+            string fileName = Path.GetFileName(filePath);
+            string photoKey = GetPhotoKey(designId, fileName);
+
+            var request = new TransferUtilityUploadRequest
+            {
+                FilePath = filePath,
+                BucketName = _bucketName,
+                Key = photoKey,
+                ContentType = "image/jpeg"
+            };
+
+            return _s3TransferUtility.UploadAsync(request);
+        }
+
+        private async Task InsertItemIntoDynamoDbAsync(
+            int nGlobalPage,
+            CrossStitch.Shared.Pinterest.PinLinkType pinLinkType = CrossStitch.Shared.Pinterest.PinLinkType.Design,
+            string? seoDescription = null)
+        {
+            if (PatternInfo == null)
+                throw new InvalidOperationException("PatternInfo is not initialized.");
+
+            if (string.IsNullOrWhiteSpace(PatternInfo.PinId))
+                throw new InvalidOperationException("Pinterest PinID is missing; aborting DynamoDB insert.");
+
+            var item = new Dictionary<string, AttributeValue>
+            {
+                { "ID",          new AttributeValue { S = AlbumPartitionKey } },
+                { "NPage",       new AttributeValue { S = PatternInfo.NPage } },
+                { "AlbumID",     new AttributeValue { N = _albumId.ToString() } },
+                { "Caption",     new AttributeValue { S = PatternInfo.Title } },
+                { "Description", new AttributeValue { S = PatternInfo.Description } },
+                { "DesignID",    new AttributeValue { N = PatternInfo.DesignID.ToString() } },
+                { "EntityType",  new AttributeValue { S = "DESIGN" } },
+                { "Height",      new AttributeValue { N = PatternInfo.Height.ToString() } },
+                { "NColors",     new AttributeValue { N = PatternInfo.NColors.ToString() } },
+                { "NDownloaded", new AttributeValue { N = "0" } },
+                { "NGlobalPage", new AttributeValue { N = nGlobalPage.ToString() } },
+                { "Notes",       new AttributeValue { S = PatternInfo.Notes } },
+                { "Width",       new AttributeValue { N = PatternInfo.Width.ToString() } },
+                { "PinID",       new AttributeValue { S = PatternInfo.PinId } },
+                { "PinLinkType", new AttributeValue { S = pinLinkType.ToString().ToUpperInvariant() } },
+            };
+
+            if (!string.IsNullOrWhiteSpace(seoDescription))
+                item["SeoDescription"] = new AttributeValue { S = seoDescription };
+
+            var request = new PutItemRequest
+            {
+                TableName = "CrossStitchItems",
+                Item = item
+            };
+
+            await _dynamoDbClient.PutItemAsync(request).ConfigureAwait(false);
+        }
+
+        private async Task<string> GetAlbumCaptionAsync(int albumId)
+        {
+            try
+            {
+                string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+                var request = new QueryRequest
+                {
+                    TableName = tableName,
+                    KeyConditionExpression = "ID = :pk",
+                    FilterExpression = "EntityType = :albumType",
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        { ":pk",        new AttributeValue { S = $"ALB#{albumId:D4}" } },
+                        { ":albumType", new AttributeValue { S = "ALBUM" } },
+                    },
+                    ProjectionExpression = "Caption",
+                    Limit = 1,
+                };
+                var response = await _dynamoDbClient.QueryAsync(request).ConfigureAwait(false);
+                if (response.Items.Count > 0 &&
+                    response.Items[0].TryGetValue("Caption", out var captionAttr) &&
+                    !string.IsNullOrWhiteSpace(captionAttr.S))
+                {
+                    return captionAttr.S;
+                }
+            }
+            catch { /* non-fatal: album URL degrades gracefully */ }
+            return string.Empty;
+        }
+
+        private async Task<List<AlbumInfo>> FetchAlbumSuggestionsAsync(int takeCount)
+        {
+            var albums = new List<AlbumInfo>();
+            string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+
+            try
+            {
+                var scanRequest = new ScanRequest
+                {
+                    TableName = tableName,
+                    FilterExpression = "EntityType = :albumType",
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        { ":albumType", new AttributeValue { S = "ALBUM" } }
+                    },
+                    ProjectionExpression = "ID, Caption, EntityType"
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+
+                    foreach (var item in response.Items)
+                    {
+                        if (!item.TryGetValue("ID", out var idAttr) || string.IsNullOrEmpty(idAttr.S))
+                            continue;
+
+                        string id = idAttr.S;
+                        if (!id.StartsWith("ALB#", StringComparison.OrdinalIgnoreCase) || id.Length <= 4)
+                            continue;
+
+                        string albumId = id.Substring(4);
+                        string caption = item.TryGetValue("Caption", out var captionAttr)
+                            ? captionAttr.S ?? string.Empty
+                            : string.Empty;
+
+                        albums.Add(new AlbumInfo
+                        {
+                            AlbumId = albumId,
+                            Caption = caption
+                        });
+                    }
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to fetch albums: {ex.Message}\r\n";
+                    DateTime recentUserCutoffUtc = DateTime.UtcNow.AddMonths(-2);
+                }));
+                return new List<AlbumInfo>();
+            }
+
+            string currentAlbum = _albumId.ToString("D4");
+            var pool = albums
+                .Where(a => !string.Equals(a.AlbumId, currentAlbum, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (pool.Count == 0)
+                pool = albums;
+
+            return TakeRandomAlbums(pool, takeCount);
+        }
+
+        private static List<AlbumInfo> TakeRandomAlbums(List<AlbumInfo> source, int takeCount)
+        {
+            if (source.Count == 0 || takeCount <= 0)
+                return new List<AlbumInfo>();
+
+            if (source.Count <= takeCount)
+                return source.Take(takeCount).ToList();
+
+            var rng = new Random();
+            for (int i = source.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (source[i], source[j]) = (source[j], source[i]);
+            }
+
+            return source.Take(takeCount).ToList();
+        }
+
+        private string BuildAlbumSuggestionsHtml(IReadOnlyList<AlbumInfo> albums, string? cid = null, string? eid = null)
+        {
+            if (albums == null || albums.Count == 0)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+            sb.Append("<p>Explore more albums:</p><ul>");
+            int index = 1;
+
+            foreach (var album in albums)
+            {
+                string caption = string.IsNullOrWhiteSpace(album.Caption)
+                    ? $"Featured album {index}"
+                    : album.Caption;
+                string url = _linkHelper.BuildAlbumUrl(album.AlbumId, album.Caption);
+                url = AppendTrackingParameters(url, cid, eid);
+
+                sb.Append($"<li><a href=\"{WebUtility.HtmlEncode(url)}\">{WebUtility.HtmlEncode(caption)}</a></li>");
+                index++;
+            }
+
+            sb.Append("</ul>");
+            return sb.ToString();
+        }
+
+        private string BuildAlbumSuggestionsText(IReadOnlyList<AlbumInfo> albums, string? cid = null, string? eid = null)
+        {
+            if (albums == null || albums.Count == 0)
+                return string.Empty;
+
+            var sb = new StringBuilder();
+            sb.AppendLine();
+            sb.AppendLine("Explore more albums:");
+            int index = 1;
+
+            foreach (var album in albums)
+            {
+                string caption = string.IsNullOrWhiteSpace(album.Caption)
+                    ? $"Featured album {index}"
+                    : album.Caption;
+                string url = _linkHelper.BuildAlbumUrl(album.AlbumId, album.Caption);
+                url = AppendTrackingParameters(url, cid, eid);
+
+                sb.AppendLine($"- {caption}: {url}");
+                index++;
+            }
+
+            return sb.ToString();
+        }
+
+        private async Task SendNotificationMailToAdminAsync(LatestDesignEmailInfo latestDesign)
+        {
+            string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+            string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+
+            if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
+                return;
+
+            string patternUrl = BuildPatternUrl(latestDesign);
+            string imageUrl = _linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
+            string patternUrlWithUtm = AppendUtmParameters(patternUrl);
+            string altText = string.IsNullOrWhiteSpace(latestDesign.Title)
+                ? "New cross stitch pattern"
+                : latestDesign.Title;
+            string htmlBody =
+                $"<p>The upload for album {latestDesign.AlbumId} design {latestDesign.DesignId} was successful.</p>" +
+                $"<p><a href=\"{patternUrlWithUtm}\">" +
+                $"<img src=\"{imageUrl}\" alt=\"{altText}\" style=\"max-width:280px; max-height:280px; width:auto; height:auto; border:0;\"/>" +
+                $"</a></p>" +
+                $"<p>Pin ID: {latestDesign.PinId}</p>";
+
+            string textBody =
+                $"The upload for album {latestDesign.AlbumId} design {latestDesign.DesignId} ({latestDesign.Title}) pinId {latestDesign.PinId} was successful.";
+
+            await _emailHelper.SendEmailAsync(
+                _sesClient,
+                sender,
+                new[] { admin },
+                "Upload Successful",
+                textBody,
+                htmlBody,
+                configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += "Sent notification email to admin.\r\n";
+            }));
+        }
+
+        /// <summary>
+        /// One-time (or repeatable) migration helper:
+        /// for every user in the CrossStitchUsers table, ensures two attributes exist:
+        /// - UnsubscribeToken (string, securely generated if missing)
+        /// - Unsubscribed   (bool, false by default if missing)
+        ///
+        /// Existing values are preserved; only missing attributes are added.
+        /// </summary>
+        private async Task InitializeUserUnsubscribeFieldsAsync()
+        {
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+
+            int updatedCount = 0;
+            int skippedCount = 0;
+
+            try
+            {
+                var scanRequest = new ScanRequest
+                {
+                    TableName = usersTable
+                    // No ProjectionExpression: we read full items to keep things simple
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                    foreach (var item in response.Items)
+                    {
+                        if (!item.TryGetValue("ID", out var idAttr))
+                        {
+                            // Without PK we cannot update this record safely.
+                            continue;
+                        }
+
+                        bool hasToken =
+                            item.TryGetValue("UnsubscribeToken", out var tokenAttr) &&
+                            !string.IsNullOrWhiteSpace(tokenAttr.S);
+
+                        bool hasUnsubscribed = item.ContainsKey("Unsubscribed");
+
+                        if (hasToken && hasUnsubscribed)
+                        {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        var key = new Dictionary<string, AttributeValue>
+                        {
+                            { "ID", idAttr }
+                        };
+
+                        var exprValues = new Dictionary<string, AttributeValue>();
+                        var setClauses = new List<string>();
+
+                        if (!hasToken)
+                        {
+                            exprValues[":token"] = new AttributeValue
+                            {
+                                S = GenerateRandomToken()
+                            };
+                            setClauses.Add("UnsubscribeToken = :token");
+                        }
+
+                        if (!hasUnsubscribed)
+                        {
+                            exprValues[":falseVal"] = new AttributeValue
+                            {
+                                BOOL = false
+                            };
+                            setClauses.Add("Unsubscribed = :falseVal");
+                        }
+
+                        if (setClauses.Count == 0)
+                        {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        string updateExpression = "SET " + string.Join(", ", setClauses);
+
+                        var updateRequest = new UpdateItemRequest
+                        {
+                            TableName = usersTable,
+                            Key = key,
+                            UpdateExpression = updateExpression,
+                            ExpressionAttributeValues = exprValues
+                        };
+
+                        await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+                        updatedCount++;
+                    }
+
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text +=
+                        $"InitializeUserUnsubscribeFieldsAsync finished. Updated {updatedCount} user(s), skipped {skippedCount} user(s).\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to initialize unsubscribe fields for users: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Counts users in a table with an optional filter.
+        /// </summary>
+        private async Task<int> CountUsersAsync(
+            string tableName,
+            string? filterExpression = null,
+            Dictionary<string, AttributeValue>? expressionValues = null)
+        {
+            var request = new ScanRequest
+            {
+                TableName = tableName,
+                Select = Select.COUNT
+            };
+
+            if (!string.IsNullOrWhiteSpace(filterExpression))
+            {
+                request.FilterExpression = filterExpression;
+                request.ExpressionAttributeValues = expressionValues;
+            }
+
+            int total = 0;
+            Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+            do
+            {
+                request.ExclusiveStartKey = lastEvaluatedKey;
+                var response = await _dynamoDbClient.ScanAsync(request).ConfigureAwait(false);
+                total += response.Count;
+                lastEvaluatedKey = response.LastEvaluatedKey;
+            } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+            return total;
+        }
+
+        /// <summary>
+        /// Adds a per-user correlation id ("cid") if missing, using a random GUID.
+        /// Existing cid values are preserved.
+        /// </summary>
+        private async Task InitializeUserCidFieldsAsync()
+        {
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+
+            int updatedCount = 0;
+            int skippedCount = 0;
+            int missingNPageCount = 0;
+            int scannedCount = 0;
+            int totalCount = await CountUsersAsync(usersTable).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (totalCount > 0)
+                    txtStatus.Text += $"[CrossStitchUsers] Total users found: {totalCount}.\r\n";
+                else
+                    txtStatus.Text += "[CrossStitchUsers] Could not determine total users (count returned 0).\r\n";
+            }));
+
+            try
+            {
+                var scanRequest = new ScanRequest
+                {
+                    TableName = usersTable,
+                    ProjectionExpression = "ID, NPage, cid"
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                    foreach (var item in response.Items)
+                    {
+                        scannedCount++;
+
+                        if (!item.TryGetValue("ID", out var idAttr))
+                        {
+                            continue;
+                        }
+
+                        if (!item.TryGetValue("NPage", out var nPageAttr) ||
+                            string.IsNullOrWhiteSpace(nPageAttr.S))
+                        {
+                            missingNPageCount++;
+                            continue;
+                        }
+
+                        bool hasCid =
+                            item.TryGetValue("cid", out var cidAttr) &&
+                            !string.IsNullOrWhiteSpace(cidAttr.S);
+
+                        if (hasCid)
+                        {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        var updateRequest = new UpdateItemRequest
+                        {
+                            TableName = usersTable,
+                            Key = new Dictionary<string, AttributeValue>
+                            {
+                                { "ID", idAttr },
+                                { "NPage", nPageAttr }
+                            },
+                            UpdateExpression = "SET cid = :cid",
+                            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                            {
+                                { ":cid", new AttributeValue { S = Guid.NewGuid().ToString("N") } }
+                            }
+                        };
+
+                        await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+                        updatedCount++;
+
+                        if ((updatedCount + skippedCount) % 50 == 0)
+                        {
+                            int progressUpdated = updatedCount;
+                            int progressSkipped = skippedCount;
+                            int progressScanned = scannedCount;
+                            int progressMissing = missingNPageCount;
+                            int remaining = totalCount > 0
+                                ? Math.Max(totalCount - (progressUpdated + progressSkipped + progressMissing), 0)
+                                : -1;
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                string remainingText = remaining >= 0
+                                    ? $"Remaining ~{remaining}"
+                                    : "Remaining: unknown";
+                                txtStatus.Text +=
+                                    $"[CrossStitchUsers] Scanned {progressScanned}, updated {progressUpdated}, skipped {progressSkipped}, missing NPage {progressMissing}. {remainingText}.\r\n";
+                            }));
+                        }
+                    }
+
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text +=
+                        $"InitializeUserCidFieldsAsync finished. Total {totalCount}, updated {updatedCount} user(s), skipped {skippedCount} user(s), missing NPage {missingNPageCount}.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to initialize cid fields for users: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        /// <summary>
+        /// Adds cid for users stored in CrossStitchItems table (ID starts with USR#).
+        /// Progress is reported to the status control during processing.
+        /// </summary>
+        private async Task InitializeItemsUserCidFieldsAsync()
+        {
+            string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+
+            int updatedCount = 0;
+            int skippedCount = 0;
+            int scannedCount = 0;
+            int missingNPageCount = 0;
+            var filterValues = new Dictionary<string, AttributeValue>
+            {
+                { ":userPrefix", new AttributeValue { S = "USR#" } }
+            };
+            int totalCount = await CountUsersAsync(
+                    tableName,
+                    "begins_with(ID, :userPrefix)",
+                    filterValues)
+                .ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (totalCount > 0)
+                    txtStatus.Text += $"[CrossStitchItems] Total users found: {totalCount}.\r\n";
+                else
+                    txtStatus.Text += "[CrossStitchItems] Could not determine total users (count returned 0).\r\n";
+            }));
+
+            try
+            {
+                var scanRequest = new ScanRequest
+                {
+                    TableName = tableName,
+                    FilterExpression = "begins_with(ID, :userPrefix)",
+                    ExpressionAttributeValues = filterValues,
+                    ProjectionExpression = "ID, NPage, cid"
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                    foreach (var item in response.Items)
+                    {
+                        scannedCount++;
+
+                        if (!item.TryGetValue("ID", out var idAttr) || string.IsNullOrWhiteSpace(idAttr.S))
+                        {
+                            continue;
+                        }
+
+                        if (!item.TryGetValue("NPage", out var nPageAttr) ||
+                            string.IsNullOrWhiteSpace(nPageAttr.S))
+                        {
+                            missingNPageCount++;
+                            continue;
+                        }
+
+                        bool hasCid =
+                            item.TryGetValue("cid", out var cidAttr) &&
+                            !string.IsNullOrWhiteSpace(cidAttr.S);
+
+                        if (hasCid)
+                        {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        var updateRequest = new UpdateItemRequest
+                        {
+                            TableName = tableName,
+                            Key = new Dictionary<string, AttributeValue>
+                            {
+                                { "ID", idAttr },
+                                { "NPage", nPageAttr }
+                            },
+                            UpdateExpression = "SET cid = :cid",
+                            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                            {
+                                { ":cid", new AttributeValue { S = Guid.NewGuid().ToString("N") } }
+                            }
+                        };
+
+                        await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+                        updatedCount++;
+
+                        if ((updatedCount + skippedCount) % 50 == 0)
+                        {
+                            int progressUpdated = updatedCount;
+                            int progressSkipped = skippedCount;
+                            int progressScanned = scannedCount;
+                            int progressMissing = missingNPageCount;
+                            int remaining = totalCount > 0
+                                ? Math.Max(totalCount - (progressUpdated + progressSkipped + progressMissing), 0)
+                                : -1;
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                string remainingText = remaining >= 0
+                                    ? $"Remaining ~{remaining}"
+                                    : "Remaining: unknown";
+                                txtStatus.Text +=
+                                    $"[CrossStitchItems] Scanned {progressScanned}, updated {progressUpdated}, skipped {progressSkipped}, missing NPage {progressMissing}. {remainingText}.\r\n";
+                            }));
+                        }
+                    }
+
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text +=
+                        $"InitializeItemsUserCidFieldsAsync finished. Total {totalCount}, updated {updatedCount} user(s), skipped {skippedCount} user(s), missing NPage {missingNPageCount}.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to initialize cid fields for CrossStitchItems users: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        private sealed class UserRecipient
+        {
+            public UserRecipient(
+                string email,
+                string? firstName,
+                AttributeValue? idAttribute = null,
+                string? cid = null,
+                string? unsubscribeToken = null)
+            {
+                Email = email;
+                FirstName = firstName;
+                IdAttribute = idAttribute;
+                Cid = cid;
+                UnsubscribeToken = unsubscribeToken;
+            }
+
+            public string Email { get; }
+            public string? FirstName { get; }
+            public AttributeValue? IdAttribute { get; }
+            public string? Cid { get; }
+            public string? UnsubscribeToken { get; }
+        }
+
+        private sealed class LatestDesignEmailInfo
+        {
+            public LatestDesignEmailInfo(int designId, int albumId, string nPage, string title, string? pinId)
+            {
+                DesignId = designId;
+                AlbumId = albumId;
+                NPage = nPage;
+                Title = title;
+                PinId = pinId ?? string.Empty;
+            }
+
+            public int DesignId { get; }
+            public int AlbumId { get; }
+            public string NPage { get; }
+            public string Title { get; }
+            public string PinId { get; }
+        }
+
+        private sealed class EmailTemplateDefinition
+        {
+            public EmailTemplateDefinition(string sourcePath, Dictionary<string, string> sections)
+            {
+                SourcePath = sourcePath;
+                Sections = sections;
+            }
+
+            public string SourcePath { get; }
+            public Dictionary<string, string> Sections { get; }
+
+            public string GetRequiredSection(string sectionName)
+            {
+                if (!Sections.TryGetValue(sectionName, out string? value) || string.IsNullOrWhiteSpace(value))
+                {
+                    throw new InvalidOperationException(
+                        $"Template section '{sectionName}' is missing or empty in {SourcePath}.");
+                }
+
+                return value;
+            }
+        }
+
+        private sealed class RenderedEmailContent
+        {
+            public RenderedEmailContent(string subject, string textBody, string? htmlBody)
+            {
+                Subject = subject;
+                TextBody = textBody;
+                HtmlBody = htmlBody;
+            }
+
+            public string Subject { get; }
+            public string TextBody { get; }
+            public string? HtmlBody { get; }
+        }
+
+        private async Task<List<UserRecipient>> FetchAllUserEmailsAsync(
+            bool onlyVerified = false,
+            bool onlySubscribed = false,
+            DateTime? minLastEmailEntryOrVerifiedAtUtc = null)
+        {
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            string firstNameAttribute = ConfigurationManager.AppSettings["UserFirstNameAttribute"] ?? "FirstName";
+            string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+            string userCidAttribute = ConfigurationManager.AppSettings["UserCidAttribute"] ?? "cid";
+            string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
+            string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+            const string unsubscribeTokenAttribute = "UnsubscribeToken";
+            const string lastEmailEntryAttribute = "LastEmailEntry";
+            const string verifiedAtAttribute = "VerifiedAt";
+
+            var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var recipients = new List<UserRecipient>();
+
+            try
+            {
+                var projectionParts = new List<string>
+                {
+                    emailAttribute,
+                    firstNameAttribute,
+                    userIdAttribute,
+                    userCidAttribute,
+                    unsubscribeTokenAttribute,
+                    lastEmailEntryAttribute,
+                    verifiedAtAttribute
+                };
+
+                if (onlyVerified)
+                    projectionParts.Add(verifiedAttribute);
+                if (onlySubscribed)
+                    projectionParts.Add(unsubscribedAttribute);
+
+                var scanRequest = new ScanRequest
+                {
+                    TableName = usersTable,
+                    ProjectionExpression = string.Join(", ", projectionParts.Distinct())
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+                int nSendingLimit = 220;
+                int iSent = 0;
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                    foreach (var item in response.Items)
+                    {
+                        if (!item.TryGetValue(emailAttribute, out var emailAttr))
+                            continue;
+
+                        string? email = null;
+                        if (!string.IsNullOrWhiteSpace(emailAttr.S))
+                        {
+                            email = emailAttr.S.Trim();
+                        }
+                        else if (emailAttr.L != null && emailAttr.L.Count > 0)
+                        {
+                            foreach (var entry in emailAttr.L)
+                            {
+                                if (!string.IsNullOrWhiteSpace(entry.S))
+                                {
+                                    email = entry.S.Trim();
+                                }
+                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(email))
+                            continue;
+
+                        if (!emails.Add(email))
+                            continue;
+
+                        string? firstName = null;
+                        if (item.TryGetValue(firstNameAttribute, out var firstNameAttr))
+                        {
+                            if (!string.IsNullOrWhiteSpace(firstNameAttr.S))
+                            {
+                                firstName = firstNameAttr.S.Trim();
+                            }
+                            else if (firstNameAttr.L != null && firstNameAttr.L.Count > 0)
+                            {
+                                firstName = firstNameAttr.L
+                                    .Select(entry => entry.S)
+                                    .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s))
+                                    ?.Trim();
+                            }
+                        }
+
+                        AttributeValue? idAttr = null;
+                        if (item.TryGetValue(userIdAttribute, out var idValue))
+                        {
+                            idAttr = idValue;
+                        }
+
+                        string? cid = null;
+                        if (item.TryGetValue(userCidAttribute, out var cidAttr) &&
+                            !string.IsNullOrWhiteSpace(cidAttr.S))
+                        {
+                            cid = cidAttr.S.Trim();
+                        }
+
+                        if (onlyVerified)
+                        {
+                            bool isVerified = item.TryGetValue(verifiedAttribute, out var verifiedAttr) &&
+                                              verifiedAttr.BOOL;
+                            if (!isVerified)
+                                continue;
+                        }
+
+                        if (onlySubscribed)
+                        {
+                            bool unsubscribed = item.TryGetValue(unsubscribedAttribute, out var unsubAttr) &&
+                                                unsubAttr.BOOL;
+                            if (unsubscribed)
+                                continue;
+                        }
+
+                        if (minLastEmailEntryOrVerifiedAtUtc.HasValue &&
+                            !MatchesRecentEmailRecipientWindow(item, minLastEmailEntryOrVerifiedAtUtc.Value))
+                        {
+                            continue;
+                        }
+
+                        string? unsubscribeToken = null;
+                        if (item.TryGetValue(unsubscribeTokenAttribute, out var tokenAttr) &&
+                            !string.IsNullOrWhiteSpace(tokenAttr.S))
+                        {
+                            unsubscribeToken = tokenAttr.S.Trim();
+                        }
+
+                        recipients.Add(new UserRecipient(email, firstName, idAttr, cid, unsubscribeToken));
+                    }
+
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+                    //if (iSent++ > nSendingLimit) { break; }
+
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Fetched {recipients.Count} user emails.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to fetch user emails: {ex.Message}\r\n";
+                }));
+            }
+
+            return recipients;
+        }
+
+        private static bool MatchesRecentEmailRecipientWindow(
+            IReadOnlyDictionary<string, AttributeValue> item,
+            DateTime minLastEmailEntryOrVerifiedAtUtc)
+        {
+            return TryGetDateTimeAttributeUtc(item, "LastEmailEntry", out DateTime lastEmailEntryUtc) && lastEmailEntryUtc >= minLastEmailEntryOrVerifiedAtUtc ||
+                   TryGetDateTimeAttributeUtc(item, "VerifiedAt", out DateTime verifiedAtUtc) && verifiedAtUtc >= minLastEmailEntryOrVerifiedAtUtc;
+        }
+
+        private static bool TryGetDateTimeAttributeUtc(
+            IReadOnlyDictionary<string, AttributeValue> item,
+            string attributeName,
+            out DateTime valueUtc)
+        {
+            valueUtc = default;
+            if (!item.TryGetValue(attributeName, out var attributeValue) || string.IsNullOrWhiteSpace(attributeValue?.S))
+                return false;
+
+            string rawValue = attributeValue.S.Trim();
+            if (DateTimeOffset.TryParse(
+                    rawValue,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out DateTimeOffset dto))
+            {
+                valueUtc = dto.UtcDateTime;
+                return true;
+            }
+
+            if (DateTime.TryParse(
+                    rawValue,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out DateTime parsedDateTime))
+            {
+                valueUtc = DateTime.SpecifyKind(parsedDateTime, DateTimeKind.Utc);
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task<List<UserRecipient>> FetchItemUserEmailsAsync(bool onlyVerified, bool onlySubscribed)
+        {
+            string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+            string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            string firstNameAttribute = ConfigurationManager.AppSettings["UserFirstNameAttribute"] ?? "FirstName";
+            string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+            string userCidAttribute = ConfigurationManager.AppSettings["UserCidAttribute"] ?? "cid";
+            string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
+            string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+            const string unsubscribeTokenAttribute = "UnsubscribeToken";
+
+            var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var recipients = new List<UserRecipient>();
+
+            try
+            {
+                var scanRequest = new ScanRequest
+                {
+                    TableName = tableName,
+                    FilterExpression = "begins_with(ID, :userPrefix)",
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        { ":userPrefix", new AttributeValue { S = "USR#" } }
+                    },
+                    ProjectionExpression = $"{emailAttribute}, {firstNameAttribute}, {userIdAttribute}, {userCidAttribute}, {unsubscribeTokenAttribute}"
+                };
+
+                Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+                do
+                {
+                    scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                    var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                    foreach (var item in response.Items)
+                    {
+                        if (!item.TryGetValue(emailAttribute, out var emailAttr))
+                            continue;
+
+                        string? email = null;
+                        if (!string.IsNullOrWhiteSpace(emailAttr.S))
+                        {
+                            email = emailAttr.S.Trim();
+                        }
+                        else if (emailAttr.L != null && emailAttr.L.Count > 0)
+                        {
+                            foreach (var entry in emailAttr.L)
+                            {
+                                if (!string.IsNullOrWhiteSpace(entry.S))
+                                {
+                                    email = entry.S.Trim();
+                                }
+                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(email))
+                            continue;
+
+                        if (!emails.Add(email))
+                            continue;
+
+                        string? firstName = null;
+                        if (item.TryGetValue(firstNameAttribute, out var firstNameAttr))
+                        {
+                            if (!string.IsNullOrWhiteSpace(firstNameAttr.S))
+                            {
+                                firstName = firstNameAttr.S.Trim();
+                            }
+                            else if (firstNameAttr.L != null && firstNameAttr.L.Count > 0)
+                            {
+                                firstName = firstNameAttr.L
+                                    .Select(entry => entry.S)
+                                    .FirstOrDefault(s => !string.IsNullOrWhiteSpace(s))
+                                    ?.Trim();
+                            }
+                        }
+
+                        AttributeValue? idAttr = null;
+                        if (item.TryGetValue(userIdAttribute, out var idValue))
+                        {
+                            idAttr = idValue;
+                        }
+
+                        string? cid = null;
+                        if (item.TryGetValue(userCidAttribute, out var cidAttr) &&
+                            !string.IsNullOrWhiteSpace(cidAttr.S))
+                        {
+                            cid = cidAttr.S.Trim();
+                        }
+
+                        if (onlyVerified)
+                        {
+                            bool isVerified = item.TryGetValue(verifiedAttribute, out var verifiedAttr) &&
+                                              verifiedAttr.BOOL;
+                            if (!isVerified)
+                                continue;
+                        }
+
+                        if (onlySubscribed)
+                        {
+                            bool unsubscribed = item.TryGetValue(unsubscribedAttribute, out var unsubAttr) &&
+                                                unsubAttr.BOOL;
+                            if (unsubscribed)
+                                continue;
+                        }
+
+                        string? unsubscribeToken = null;
+                        if (item.TryGetValue(unsubscribeTokenAttribute, out var tokenAttr) &&
+                            !string.IsNullOrWhiteSpace(tokenAttr.S))
+                        {
+                            unsubscribeToken = tokenAttr.S.Trim();
+                        }
+
+                        recipients.Add(new UserRecipient(email, firstName, idAttr, cid, unsubscribeToken));
+                    }
+
+                    lastEvaluatedKey = response.LastEvaluatedKey;
+                } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[CrossStitchItems] Fetched {recipients.Count} user emails.\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[CrossStitchItems] Failed to fetch user emails: {ex.Message}\r\n";
+                }));
+            }
+
+            return recipients;
+        }
+
+        private async Task SendAdminUserStyleEmailAsync()
+        {
+            string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+            string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+
+            if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
+                return;
+
+            LatestDesignEmailInfo latestDesign = await GetLatestDesignEmailInfoAsync().ConfigureAwait(false);
+            EmailTemplateDefinition template = GetActiveHtmlEmailTemplate();
+            string patternUrl = BuildPatternUrl(latestDesign);
+            string imageUrl = _linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
+            string altText = string.IsNullOrWhiteSpace(latestDesign.Title)
+                ? "New cross stitch pattern"
+                : latestDesign.Title;
+            string patternUrlWithTracking = AppendTrackingParameters(
+                patternUrl,
+                "admin",
+                DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+            string siteUrlWithTracking = AppendTrackingParameters(
+                _linkHelper.SiteBaseUrl,
+                "admin",
+                DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+            string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
+            var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+            RenderedEmailContent content = RenderHtmlEmailContent(
+                template,
+                "admin",
+                patternUrlWithTracking,
+                siteUrlWithTracking,
+                imageUrl,
+                altText,
+                unsubscribeUrl);
+
+            await _emailHelper.SendEmailAsync(
+                _sesClient,
+                sender,
+                new[] { admin },
+                content.Subject,
+                content.TextBody,
+                content.HtmlBody,
+                unsubscribeHeaders,
+                configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+        }
+
+        private async Task SendNotificationMailToUsersAsync(
+            LatestDesignEmailInfo latestDesign,
+            List<UserRecipient> userRecipients)
+        {
+            string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+            string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+            string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
+            string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+            EmailTemplateDefinition template = GetActiveHtmlEmailTemplate();
+
+            if (string.IsNullOrEmpty(sender) || userRecipients.Count == 0)
+                return;
+
+            string patternUrl = BuildPatternUrl(latestDesign);
+            string imageUrl = _linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
+            string altText = string.IsNullOrWhiteSpace(latestDesign.Title)
+                ? "New cross stitch pattern"
+                : latestDesign.Title;
+            string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+
+            // Send the same email to admin first.
+            if (!string.IsNullOrEmpty(admin))
+            {
+                string adminSiteUrl = AppendTrackingParameters(_linkHelper.SiteBaseUrl, "admin", eid);
+                RenderedEmailContent adminContent = RenderHtmlEmailContent(
+                    template,
+                    "admin",
+                    AppendUtmParameters(patternUrl),
+                    adminSiteUrl,
+                    imageUrl,
+                    altText,
+                    null);
+
+                await _emailHelper.SendEmailAsync(
+                    _sesClient,
+                    sender,
+                    new[] { admin },
+                    adminContent.Subject,
+                    adminContent.TextBody,
+                    adminContent.HtmlBody,
+                    configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+            }
+
+            var recipients = userRecipients;
+            if (!string.IsNullOrEmpty(admin))
+            {
+                recipients = userRecipients
+                    .Where(r => !string.Equals(r.Email, admin, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            await SendEmailsWithProgressAsync(
+                "[CrossStitchUsers]",
+                recipients,
+                sender,
+                patternUrl,
+                imageUrl,
+                altText,
+                eid,
+                recipients.Count,
+                true,
+                usersTable,
+                emailAttribute,
+                userIdAttribute).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"Sent notification email to {recipients.Count} verified, subscribed users from CrossStitchUsers.\r\n";
+            }));
+        }
+
+        private async Task UpdateLastEmailDateAsync(
+            UserRecipient recipient,
+            string usersTable,
+            string emailAttribute,
+            string userIdAttribute)
+        {
+            var key = new Dictionary<string, AttributeValue>();
+
+            if (recipient.IdAttribute != null)
+            {
+                key[userIdAttribute] = recipient.IdAttribute;
+            }
+            else
+            {
+                key[emailAttribute] = new AttributeValue { S = recipient.Email };
+            }
+
+            var updateRequest = new UpdateItemRequest
+            {
+                TableName = usersTable,
+                Key = key,
+                UpdateExpression = "SET LastEmailDate = :now",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    [":now"] = new AttributeValue { S = DateTime.UtcNow.ToString("o") }
+                }
+            };
+
+            await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+        }
+
+        private string GetPhotoKey(int designId, string fileName)
+        {
+            return $"{PhotoPrefix}/{_albumId}/{designId}/{fileName}";
+        }
+
+        private string? GetPinterestPhotoFileName()
+        {
+            if (string.IsNullOrWhiteSpace(_pinterestImageFilePath))
+                return null;
+
+            if (!File.Exists(_pinterestImageFilePath))
+                return null;
+
+            return Path.GetFileName(_pinterestImageFilePath);
+        }
+
+        private async Task<string> GetStoredUnsubscribeTokenAsync(string email, IEnumerable<UserRecipient>? knownRecipients = null)
+        {
+            string? token = knownRecipients == null
+                ? null
+                : FindUnsubscribeTokenForEmail(knownRecipients, email);
+
+            if (!string.IsNullOrWhiteSpace(token))
+                return token;
+
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            const string unsubscribeTokenAttribute = "UnsubscribeToken";
+
+            var scanRequest = new ScanRequest
+            {
+                TableName = usersTable,
+                ProjectionExpression = $"{emailAttribute}, {unsubscribeTokenAttribute}"
+            };
+
+            Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+            do
+            {
+                scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                foreach (var item in response.Items)
+                {
+                    if (!item.TryGetValue(emailAttribute, out var emailAttr))
+                        continue;
+
+                    string? candidateEmail = null;
+                    if (!string.IsNullOrWhiteSpace(emailAttr.S))
+                    {
+                        candidateEmail = emailAttr.S.Trim();
+                    }
+                    else if (emailAttr.L != null && emailAttr.L.Count > 0)
+                    {
+                        candidateEmail = emailAttr.L
+                            .Select(entry => entry.S)
+                            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                            ?.Trim();
+                    }
+
+                    if (!string.Equals(candidateEmail, email, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    if (item.TryGetValue(unsubscribeTokenAttribute, out var tokenAttr) &&
+                        !string.IsNullOrWhiteSpace(tokenAttr.S))
+                    {
+                        return tokenAttr.S.Trim();
+                    }
+
+                    throw new InvalidOperationException($"Unsubscribe token for {email} was not found in the database.");
+                }
+
+                lastEvaluatedKey = response.LastEvaluatedKey;
+            } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+            throw new InvalidOperationException($"User record for {email} was not found in the database.");
+        }
+
+        private string BuildUnsubscribeUrl(string token)
+        {
+            string configuredBaseUrl = ConfigurationManager.AppSettings["UnsubscribeBaseUrl"];
+            string baseUrl = !string.IsNullOrWhiteSpace(configuredBaseUrl)
+                ? configuredBaseUrl.TrimEnd('/')
+                : $"{_linkHelper.SiteBaseUrl}/unsubscribe";
+
+            return $"{baseUrl}?token={Uri.EscapeDataString(token)}";
+        }
+
+        private string BuildUnsubscribeUrlFromStoredToken(string email, string? token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                throw new InvalidOperationException($"Unsubscribe token for {email} was not found in the database.");
+
+            return BuildUnsubscribeUrl(token);
+        }
+
+        private static string? FindUnsubscribeTokenForEmail(IEnumerable<UserRecipient> recipients, string email) =>
+            recipients
+                .FirstOrDefault(r => string.Equals(r.Email, email, StringComparison.OrdinalIgnoreCase))
+                ?.UnsubscribeToken;
+
+        /// <summary>
+        /// Generates a cryptographically secure random token
+        /// encoded as URL-safe base64 (same style as ToBase64Url).
+        /// </summary>
+        private static string GenerateRandomToken(int size = 32)
+        {
+            var data = new byte[size];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(data);
+            }
+
+            return ToBase64Url(data);
+        }
+
+        private static string ToBase64Url(byte[] data)
+        {
+            return Convert.ToBase64String(data)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        private static string AppendTrackingParameters(string url, string? cid, string? eid)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            var queryParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(cid))
+                queryParts.Add($"cid={Uri.EscapeDataString(cid)}");
+            if (!string.IsNullOrWhiteSpace(eid))
+                queryParts.Add($"eid={Uri.EscapeDataString(eid)}");
+
+            string trackedUrl = queryParts.Count == 0
+                ? url
+                : AppendQueryParameters(url, queryParts);
+
+            return AppendUtmParameters(trackedUrl);
+        }
+
+        private static string AppendUtmParameters(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
+
+            var queryParts = new List<string>();
+
+            if (!HasQueryParameter(url, "utm_source"))
+                queryParts.Add("utm_source=newsletter");
+            if (!HasQueryParameter(url, "utm_medium"))
+                queryParts.Add("utm_medium=email");
+            if (!HasQueryParameter(url, "utm_campaign"))
+            {
+                string campaign = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                queryParts.Add($"utm_campaign={Uri.EscapeDataString(campaign)}");
+            }
+
+            return queryParts.Count == 0
+                ? url
+                : AppendQueryParameters(url, queryParts);
+        }
+
+        private static bool HasQueryParameter(string url, string parameterName)
+        {
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(parameterName))
+                return false;
+
+            int queryIndex = url.IndexOf('?');
+            if (queryIndex < 0)
+                return false;
+
+            string query = url.Substring(queryIndex + 1);
+            int hashIndex = query.IndexOf('#');
+            if (hashIndex >= 0)
+                query = query.Substring(0, hashIndex);
+
+            foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                int eqIndex = part.IndexOf('=');
+                string name = eqIndex >= 0 ? part.Substring(0, eqIndex) : part;
+                if (string.Equals(name, parameterName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string AppendQueryParameters(string url, IReadOnlyList<string> parameters)
+        {
+            if (string.IsNullOrWhiteSpace(url) || parameters == null || parameters.Count == 0)
+                return url;
+
+            string fragment = string.Empty;
+            string baseUrl = url;
+            int hashIndex = url.IndexOf('#');
+            if (hashIndex >= 0)
+            {
+                fragment = url.Substring(hashIndex);
+                baseUrl = url.Substring(0, hashIndex);
+            }
+
+            string separator = baseUrl.Contains("?") ? "&" : "?";
+            return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
+        }
+
+        private static Dictionary<string, string> BuildUnsubscribeHeaders(string unsubscribeUrl, string sender)
+        {
+            string mailto = $"mailto:{sender}";
+            return new Dictionary<string, string>
+            {
+                { "List-Unsubscribe", $"<{mailto}>, <{unsubscribeUrl}>" },
+                { "List-Unsubscribe-Post", "List-Unsubscribe=One-Click" }
+            };
+        }
+
+        private static string ConvertPlainTextToHtml(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+            var paragraphs = normalized.Split(new[] { "\n\n" }, StringSplitOptions.None);
+            var htmlParagraphs = paragraphs
+                .Select(p => WebUtility.HtmlEncode(p).Replace("\n", "<br/>"))
+                .Where(p => !string.IsNullOrWhiteSpace(p));
+
+            return string.Join(string.Empty, htmlParagraphs.Select(p => $"<p>{p}</p>"));
+        }
+
+        private async Task SendTextEmailsWithProgressAsync(
+            string label,
+            List<UserRecipient> recipients,
+            string sender,
+            string patternUrl,
+            int totalCount,
+            string usersTable,
+            string emailAttribute,
+            string userIdAttribute)
+        {
+            if (recipients == null || recipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"{label} No recipients found.\r\n";
+                }));
+                return;
+            }
+
+            List<UserRecipient> eligibleRecipients = recipients
+                .Where(r => !string.IsNullOrWhiteSpace(r.UnsubscribeToken))
+                .ToList();
+            int skippedMissingToken = recipients.Count - eligibleRecipients.Count;
+
+            if (skippedMissingToken > 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text +=
+                        $"{label} Skipping {skippedMissingToken} recipient(s) without unsubscribe token.\r\n";
+                }));
+            }
+
+            if (eligibleRecipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"{label} No eligible recipients with unsubscribe tokens.\r\n";
+                }));
+                return;
+            }
+
+            int targetCount = eligibleRecipients.Count;
+            var stopwatch = Stopwatch.StartNew();
+            int sent = 0;
+
+            foreach (var recipient in eligibleRecipients)
+            {
+                string unsubscribeUrl = BuildUnsubscribeUrlFromStoredToken(recipient.Email, recipient.UnsubscribeToken);
+                var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+                string cid = recipient.Cid ?? string.Empty;
+                string patternUrlWithTracking = AppendTrackingParameters(patternUrl, cid, DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+                // Re-read the cache each iteration so a mid-send Reload click
+                // applies the new template to subsequent emails.
+                RenderedEmailContent content = RenderTextEmailContent(GetActiveTextEmailTemplate(), recipient.FirstName, patternUrlWithTracking, unsubscribeUrl);
+
+                await _emailHelper.SendEmailAsync(
+                    _sesClient,
+                    sender,
+                    new[] { recipient.Email },
+                    content.Subject,
+                    content.TextBody,
+                    content.HtmlBody,
+                    unsubscribeHeaders,
+                    configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                try
+                {
+                    await UpdateLastEmailDateAsync(recipient, usersTable, emailAttribute, userIdAttribute)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text += $"{label} Failed to update LastEmailDate for {recipient.Email}: {ex.Message}\r\n";
+                    }));
+                }
+
+                sent++;
+
+                if (sent % 50 == 0 || sent == eligibleRecipients.Count)
+                {
+                    TimeSpan elapsed = stopwatch.Elapsed;
+                    double avgSeconds = sent > 0 ? elapsed.TotalSeconds / sent : 0;
+                    int remaining = Math.Max(targetCount - sent, 0);
+                    TimeSpan eta = avgSeconds > 0 ? TimeSpan.FromSeconds(avgSeconds * remaining) : TimeSpan.Zero;
+                    double percentRemaining = targetCount > 0 ? (remaining * 100.0 / targetCount) : 0;
+
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text +=
+                            $"{label} Sent {sent}/{targetCount} | Elapsed {elapsed:hh\\:mm\\:ss} | Avg {avgSeconds:F2}s/email | ETA {eta:hh\\:mm\\:ss} | Remaining {remaining} ({percentRemaining:F1}% left).\r\n";
+                    }));
+                }
+            }
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text +=
+                    $"{label} Finished sending {sent} email(s) in {stopwatch.Elapsed:hh\\:mm\\:ss}. Skipped {skippedMissingToken} without token.\r\n";
+            }));
+        }
+
+        private async Task SendEmailsWithProgressAsync(
+            string label,
+            List<UserRecipient> recipients,
+            string sender,
+            string patternUrl,
+            string imageUrl,
+            string altText,
+            string eid,
+            int totalCount,
+            bool updateLastEmailDate,
+            string usersTable,
+            string emailAttribute,
+            string userIdAttribute)
+        {
+            if (recipients == null || recipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"{label} No recipients found.\r\n";
+                }));
+                return;
+            }
+
+            List<UserRecipient> eligibleRecipients = recipients
+                .Where(r => !string.IsNullOrWhiteSpace(r.UnsubscribeToken))
+                .ToList();
+            int skippedMissingToken = recipients.Count - eligibleRecipients.Count;
+
+            if (skippedMissingToken > 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text +=
+                        $"{label} Skipping {skippedMissingToken} recipient(s) without unsubscribe token.\r\n";
+                }));
+            }
+
+            if (eligibleRecipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"{label} No eligible recipients with unsubscribe tokens.\r\n";
+                }));
+                return;
+            }
+
+            int targetCount = eligibleRecipients.Count;
+            var stopwatch = Stopwatch.StartNew();
+            int sent = 0;
+
+            foreach (var recipient in eligibleRecipients)
+            {
+                string cid = recipient.Cid ?? string.Empty;
+                string patternUrlWithTracking = AppendTrackingParameters(patternUrl, cid, eid);
+                string siteUrlWithTracking = AppendTrackingParameters(_linkHelper.SiteBaseUrl, cid, eid);
+
+                string unsubscribeUrl = BuildUnsubscribeUrlFromStoredToken(recipient.Email, recipient.UnsubscribeToken);
+                var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+                // Re-read the cache each iteration so a mid-send Reload click
+                // applies the new template to subsequent emails.
+                RenderedEmailContent content = RenderHtmlEmailContent(
+                    GetActiveHtmlEmailTemplate(),
+                    recipient.FirstName,
+                    patternUrlWithTracking,
+                    siteUrlWithTracking,
+                    imageUrl,
+                    altText,
+                    unsubscribeUrl);
+
+                await _emailHelper.SendEmailAsync(
+                    _sesClient,
+                    sender,
+                    new[] { recipient.Email },
+                    content.Subject,
+                    content.TextBody,
+                    content.HtmlBody,
+                    unsubscribeHeaders,
+                    configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                if (updateLastEmailDate)
+                {
+                    try
+                    {
+                        await UpdateLastEmailDateAsync(recipient, usersTable, emailAttribute, userIdAttribute)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            txtStatus.Text += $"{label} Failed to update LastEmailDate for {recipient.Email}: {ex.Message}\r\n";
+                        }));
+                    }
+                }
+
+                sent++;
+
+                if (sent % 50 == 0 || sent == eligibleRecipients.Count)
+                {
+                    TimeSpan elapsed = stopwatch.Elapsed;
+                    double avgSeconds = sent > 0 ? elapsed.TotalSeconds / sent : 0;
+                    int remaining = Math.Max(targetCount - sent, 0);
+                    TimeSpan eta = avgSeconds > 0 ? TimeSpan.FromSeconds(avgSeconds * remaining) : TimeSpan.Zero;
+                    double percentRemaining = targetCount > 0 ? (remaining * 100.0 / targetCount) : 0;
+
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text +=
+                            $"{label} Sent {sent}/{targetCount} | Elapsed {elapsed:hh\\:mm\\:ss} | Avg {avgSeconds:F2}s/email | ETA {eta:hh\\:mm\\:ss} | Remaining {remaining} ({percentRemaining:F1}% left).\r\n";
+                    }));
+                }
+            }
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text +=
+                    $"{label} Finished sending {sent} email(s) in {stopwatch.Elapsed:hh\\:mm\\:ss}. Skipped {skippedMissingToken} without token.\r\n";
+            }));
+        }
+
+        private EmailTemplateDefinition LoadHtmlEmailTemplate() =>
+            LoadEmailTemplate(
+                "HtmlEmailTemplatePath",
+                HtmlEmailTemplatePathDefault,
+                HtmlEmailTemplateRequiredSections);
+
+        private EmailTemplateDefinition LoadTextEmailTemplate() =>
+            LoadEmailTemplate(
+                "TextEmailTemplatePath",
+                TextEmailTemplatePathDefault,
+                TextEmailTemplateRequiredSections);
+
+        // The cache accessors used by both the Send code paths and the per-
+        // recipient loops. Lazy-load on first call so a Send that runs before
+        // any explicit Reload still gets a valid template.
+        private EmailTemplateDefinition GetActiveHtmlEmailTemplate() =>
+            _cachedHtmlEmailTemplate ??= LoadHtmlEmailTemplate();
+
+        private EmailTemplateDefinition GetActiveTextEmailTemplate() =>
+            _cachedTextEmailTemplate ??= LoadTextEmailTemplate();
+
+        private static RenderedEmailContent RenderTextEmailContent(
+            EmailTemplateDefinition template,
+            string? firstName,
+            string? patternUrl,
+            string? unsubscribeUrl)
+        {
+            Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
+            replacements["<pattern_url>"] = patternUrl ?? string.Empty;
+            replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+            string subject = ReplaceTemplateTokens(template.GetRequiredSection("Subject"), replacements);
+            string greeting = ReplaceTemplateTokens(template.GetRequiredSection("Greeting"), replacements);
+            string beforeBody = ReplaceTemplateTokens(template.GetRequiredSection("BeforeBody"), replacements);
+            string afterBody = ReplaceTemplateTokens(template.GetRequiredSection("AfterBody"), replacements);
+            string unsubscribe = RenderOptionalTemplateSection(
+                template.GetRequiredSection("Unsubscribe"),
+                replacements,
+                unsubscribeUrl);
+            string closing = ReplaceTemplateTokens(template.GetRequiredSection("Closing"), replacements);
+            string signature = ReplaceTemplateTokens(template.GetRequiredSection("Signature"), replacements);
+            string textBody = JoinTextSections(
+                greeting,
+                beforeBody,
+                afterBody,
+                unsubscribe,
+                closing,
+                signature);
+            string htmlBody = JoinHtmlSections(
+                greeting,
+                beforeBody,
+                afterBody,
+                unsubscribe,
+                closing,
+                signature);
+
+            return new RenderedEmailContent(subject, textBody, htmlBody);
+        }
+
+        private static RenderedEmailContent RenderHtmlEmailContent(
+            EmailTemplateDefinition template,
+            string? firstName,
+            string patternUrl,
+            string? siteUrl,
+            string imageUrl,
+            string altText,
+            string? unsubscribeUrl)
+        {
+            Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
+            replacements["<pattern_url>"] = patternUrl ?? string.Empty;
+            replacements["<image_url>"] = imageUrl ?? string.Empty;
+            replacements["<alt_text>"] = altText ?? string.Empty;
+            replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+            string subject = ReplaceTemplateTokens(template.GetRequiredSection("Subject"), replacements);
+            string greeting = ReplaceTemplateTokens(template.GetRequiredSection("Greeting"), replacements);
+            string beforeImage = ReplaceTemplateTokens(template.GetRequiredSection("BeforeImage"), replacements);
+            string imageWithLink = RenderOptionalTemplateSection(
+                template.GetRequiredSection("ImageWithLink"),
+                replacements,
+                imageUrl);
+            string afterImage = ReplaceTemplateTokens(template.GetRequiredSection("AfterImage"), replacements);
+            string unsubscribe = RenderOptionalTemplateSection(
+                template.GetRequiredSection("Unsubscribe"),
+                replacements,
+                unsubscribeUrl);
+            string closing = ReplaceTemplateTokens(template.GetRequiredSection("Closing"), replacements);
+            string signature = ReplaceTemplateTokens(template.GetRequiredSection("Signature"), replacements);
+            string signatureHtml = RenderHtmlSignature(signature, siteUrl);
+            string textBody = JoinTextSections(
+                greeting,
+                beforeImage,
+                string.IsNullOrWhiteSpace(patternUrl) ? string.Empty : $"View the design: {patternUrl}",
+                afterImage,
+                unsubscribe,
+                closing,
+                signature);
+            string htmlBody =
+                JoinHtmlSections(
+                    greeting,
+                    beforeImage) +
+                imageWithLink +
+                JoinHtmlSections(
+                    afterImage,
+                    unsubscribe,
+                    closing) +
+                signatureHtml;
+
+            return new RenderedEmailContent(subject, textBody, htmlBody);
+        }
+
+        private static string RenderHtmlSignature(string signature, string? siteUrl)
+        {
+            if (string.IsNullOrWhiteSpace(signature))
+                return string.Empty;
+
+            if (string.IsNullOrWhiteSpace(siteUrl))
+                return ConvertPlainTextToHtml(signature);
+
+            return $"<p><a href=\"{WebUtility.HtmlEncode(siteUrl)}\">{WebUtility.HtmlEncode(signature)}</a></p>";
+        }
+
+        private static string GetRecipientName(string? firstName) =>
+            string.IsNullOrWhiteSpace(firstName)
+                ? "Friend"
+                : firstName.Trim();
+
+        private static string RenderOptionalTemplateSection(
+            string templateValue,
+            IReadOnlyDictionary<string, string> replacements,
+            string? requiredPlaceholderValue)
+        {
+            if (string.IsNullOrWhiteSpace(requiredPlaceholderValue))
+                return string.Empty;
+
+            return ReplaceTemplateTokens(templateValue, replacements);
+        }
+
+        private EmailTemplateDefinition LoadEmailTemplate(
+            string appSettingKey,
+            string defaultRelativePath,
+            IEnumerable<string> requiredSections)
+        {
+            string configuredPath = ConfigurationManager.AppSettings[appSettingKey] ?? defaultRelativePath;
+            string resolvedPath = ResolveTemplatePath(configuredPath);
+            if (!File.Exists(resolvedPath))
+            {
+                throw new FileNotFoundException($"Email template file was not found: {resolvedPath}", resolvedPath);
+            }
+
+            var sections = ParseTemplateSections(File.ReadAllText(resolvedPath), resolvedPath);
+            foreach (string requiredSection in requiredSections)
+            {
+                if (!sections.TryGetValue(requiredSection, out string? value) || string.IsNullOrWhiteSpace(value))
+                {
+                    throw new InvalidOperationException(
+                        $"Email template section '{requiredSection}' is missing or empty in {resolvedPath}.");
+                }
+            }
+
+            return new EmailTemplateDefinition(resolvedPath, sections);
+        }
+
+        private static string ResolveTemplatePath(string templatePath)
+        {
+            templatePath = ExpandCrossStitchToken(templatePath);
+
+            if (Path.IsPathRooted(templatePath))
+                return templatePath;
+
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, templatePath);
+        }
+
+        // Substitutes %CROSS_STITCH% with the CROSS_STITCH env var (falling back
+        // to CrossStitchRootDefault) so App.config can express paths like
+        // %CROSS_STITCH%\cross-stitch-platform-docs\docs\uploader\HtmlEmailTemplate.txt
+        // without hard-coding the local checkout root.
+        private static string ExpandCrossStitchToken(string path)
+        {
+            if (string.IsNullOrEmpty(path) || path.IndexOf(CrossStitchRootToken, StringComparison.OrdinalIgnoreCase) < 0)
+                return path;
+
+            string root = Environment.GetEnvironmentVariable(CrossStitchRootEnvVar);
+            if (string.IsNullOrWhiteSpace(root)) root = CrossStitchRootDefault;
+            return path.Replace(CrossStitchRootToken, root, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, string> ParseTemplateSections(string content, string sourcePath)
+        {
+            var sections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string? currentSection = null;
+            var buffer = new StringBuilder();
+
+            using var reader = new StringReader(content);
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                if (TryGetTemplateSectionName(line, out string? sectionName))
+                {
+                    CommitTemplateSection(sections, currentSection, buffer, sourcePath);
+                    currentSection = sectionName;
+                    buffer.Clear();
+                    continue;
+                }
+
+                if (currentSection == null)
+                    continue;
+
+                if (buffer.Length > 0)
+                    buffer.AppendLine();
+
+                buffer.Append(line);
+            }
+
+            CommitTemplateSection(sections, currentSection, buffer, sourcePath);
+
+            if (sections.Count == 0)
+                throw new InvalidOperationException($"Email template file {sourcePath} does not contain any sections.");
+
+            return sections;
+        }
+
+        private static bool TryGetTemplateSectionName(string line, out string? sectionName)
+        {
+            string trimmed = line.Trim();
+            if (trimmed.Length >= 3 && trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.EndsWith("]", StringComparison.Ordinal))
+            {
+                sectionName = trimmed.Substring(1, trimmed.Length - 2).Trim();
+                return sectionName.Length > 0;
+            }
+
+            sectionName = null;
+            return false;
+        }
+
+        private static void CommitTemplateSection(
+            IDictionary<string, string> sections,
+            string? sectionName,
+            StringBuilder buffer,
+            string sourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(sectionName))
+                return;
+
+            if (sections.ContainsKey(sectionName))
+            {
+                throw new InvalidOperationException(
+                    $"Email template file {sourcePath} contains duplicate section '{sectionName}'.");
+            }
+
+            sections[sectionName] = buffer.ToString().Trim();
+        }
+
+        private static Dictionary<string, string> CreateCommonTemplateReplacements(string? firstName)
+        {
+            string userName = GetRecipientName(firstName);
+
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["<username>"] = userName,
+                ["[FName]"] = userName,
+                ["[Fname]"] = userName,
+                ["[fname]"] = userName,
+                ["[Recipient's Name]"] = userName,
+                ["[Recipient’s Name]"] = userName
+            };
+        }
+
+        private static string ReplaceTemplateTokens(string templateValue, IReadOnlyDictionary<string, string> replacements)
+        {
+            string rendered = templateValue;
+            foreach (var pair in replacements)
+            {
+                rendered = rendered.Replace(pair.Key, pair.Value, StringComparison.Ordinal);
+            }
+
+            return rendered;
+        }
+
+        private static string? GetOptionalAppSetting(string key)
+        {
+            string? value = ConfigurationManager.AppSettings[key];
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static string JoinTextSections(params string[] sections) =>
+            string.Join("\r\n\r\n", sections.Where(section => !string.IsNullOrWhiteSpace(section)));
+
+        private static string JoinHtmlSections(params string[] sections) =>
+            string.Concat(sections
+                .Where(section => !string.IsNullOrWhiteSpace(section))
+                .Select(ConvertPlainTextToHtml));
+
+        private string BuildPatternUrl(LatestDesignEmailInfo latestDesign)
+        {
+            string caption = (latestDesign.Title ?? "Cross-stitch-pattern").Replace(' ', '-');
+            int.TryParse(latestDesign.NPage, out int nPage);
+            return $"{_linkHelper.SiteBaseUrl}/{caption}-{latestDesign.AlbumId}-{nPage - 1}-Free-Design.aspx";
+        }
+
+        private static List<string> ReadSuppressedEmails(string filePath)
+        {
+            var emails = new List<string>();
+
+            if (!File.Exists(filePath))
+            {
+                throw new FileNotFoundException("Suppressed list file not found.", filePath);
+            }
+
+            var lines = File.ReadAllLines(filePath);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                // Every 3rd line starting at index 0 (0,3,6,...). If the source format differs,
+                // adjust the stride logic here.
+                if (i % 3 == 0 && !string.IsNullOrWhiteSpace(lines[i]))
+                {
+                    emails.Add(lines[i].Trim());
+                }
+            }
+
+            return emails;
+        }
+
+        private async Task RemoveSuppressedUsersAsync(List<string> emails)
+        {
+            string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+            int deletedCount = 0;
+            int missingCount = 0;
+            int missingNPageCount = 0;
+            int errors = 0;
+            var stopwatch = Stopwatch.StartNew();
+            List<string> lstMissing = new List<string>();
+            for (int index = 0; index < emails.Count; index++)
+            {
+                string email = emails[index];
+                string userId = $"USR#{email}";
+
+                try
+                {
+                    var queryRequest = new QueryRequest
+                    {
+                        TableName = tableName,
+                        KeyConditionExpression = "ID = :id",
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            { ":id", new AttributeValue { S = userId } }
+                        },
+                        ProjectionExpression = "ID, NPage"
+                    };
+
+                    var queryResponse = await _dynamoDbClient.QueryAsync(queryRequest).ConfigureAwait(false);
+                    if (queryResponse.Items.Count == 0)
+                    {
+                        missingCount++;
+                        lstMissing.Add(userId);
+                        continue;
+                    }
+
+                    foreach (var item in queryResponse.Items)
+                    {
+                        if (!item.TryGetValue("NPage", out var nPageAttr) || string.IsNullOrWhiteSpace(nPageAttr.S))
+                        {
+                            missingNPageCount++;
+                            continue;
+                        }
+
+                        var deleteRequest = new DeleteItemRequest
+                        {
+                            TableName = tableName,
+                            Key = new Dictionary<string, AttributeValue>
+                            {
+                                { "ID", new AttributeValue { S = userId } },
+                                { "NPage", nPageAttr }
+                            }
+                        };
+
+                        await _dynamoDbClient.DeleteItemAsync(deleteRequest).ConfigureAwait(false);
+                        deletedCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text += $"[Suppress] Error for {email}: {ex.Message}\r\n";
+                    }));
+                }
+
+                if ((index + 1) % 50 == 0 || index == emails.Count - 1)
+                {
+                    double avgSeconds = (index + 1) > 0 ? stopwatch.Elapsed.TotalSeconds / (index + 1) : 0;
+                    int remaining = Math.Max(emails.Count - (index + 1), 0);
+                    TimeSpan eta = avgSeconds > 0 ? TimeSpan.FromSeconds(avgSeconds * remaining) : TimeSpan.Zero;
+                    double percentRemaining = emails.Count > 0 ? (remaining * 100.0 / emails.Count) : 0;
+
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text +=
+                            $"[Suppress] Processed {index + 1}/{emails.Count} | Deleted {deletedCount}, Missing {missingCount}, Missing NPage {missingNPageCount}, Errors {errors}. Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}, ETA {eta:hh\\:mm\\:ss}, Remaining {remaining} ({percentRemaining:F1}% left).\r\n";
+                    }));
+                }
+            }
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"[Suppress] Done. Deleted {deletedCount}, Missing {missingCount}, Missing NPage {missingNPageCount}, Errors {errors}. Total time {stopwatch.Elapsed:hh\\:mm\\:ss}.\r\n";
+            }));
+        }
+
+        private async Task MarkUsersVerifiedAsync()
+        {
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            const string verifiedField = "Verified";
+            const string verifiedAtField = "VerifiedAt";
+            const string createdAtField = "CreatedAt";
+
+            int updatedCount = 0;
+            int skippedCount = 0;
+            int missingCreatedAtCount = 0;
+            int errors = 0;
+            int scannedCount = 0;
+            int totalCount = await CountUsersAsync(usersTable).ConfigureAwait(false);
+            var stopwatch = Stopwatch.StartNew();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"{usersTable}: total users {totalCount}.\r\n";
+            }));
+
+            var scanRequest = new ScanRequest
+            {
+                TableName = usersTable,
+                ProjectionExpression = $"ID, {createdAtField}, {verifiedField}, {verifiedAtField}, NPage"
+            };
+
+            Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+            do
+            {
+                scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                foreach (var item in response.Items)
+                {
+                    scannedCount++;
+
+                    if (!item.TryGetValue("ID", out var idAttr))
+                        continue;
+
+                    bool alreadyVerified = item.TryGetValue(verifiedField, out var verifiedAttr) && verifiedAttr.BOOL;
+                    bool hasVerifiedAt = item.TryGetValue(verifiedAtField, out var verifiedAtAttr) && !string.IsNullOrWhiteSpace(verifiedAtAttr.S);
+
+                    if (alreadyVerified && hasVerifiedAt)
+                    {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    if (!item.TryGetValue(createdAtField, out var createdAtAttr) || string.IsNullOrWhiteSpace(createdAtAttr.S))
+                    {
+                        missingCreatedAtCount++;
+                        continue;
+                    }
+
+                    var updateRequest = new UpdateItemRequest
+                    {
+                        TableName = usersTable,
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            { "ID", idAttr }
+                        },
+                        UpdateExpression = $"SET {verifiedField} = :trueVal, {verifiedAtField} = :createdAt",
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            { ":trueVal", new AttributeValue { BOOL = true } },
+                            { ":createdAt", new AttributeValue { S = createdAtAttr.S } }
+                        }
+                    };
+
+                    try
+                    {
+                        await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+                        updatedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            txtStatus.Text += $"[Verify] Failed to update {idAttr.S}: {ex.Message}\r\n";
+                        }));
+                    }
+
+                    if ((updatedCount + skippedCount + missingCreatedAtCount) % 50 == 0)
+                    {
+                        int remaining = totalCount > 0
+                            ? Math.Max(totalCount - (updatedCount + skippedCount + missingCreatedAtCount), 0)
+                            : -1;
+                        double avgSeconds = scannedCount > 0 ? stopwatch.Elapsed.TotalSeconds / scannedCount : 0;
+                        TimeSpan eta = avgSeconds > 0 && remaining >= 0
+                            ? TimeSpan.FromSeconds(avgSeconds * remaining)
+                            : TimeSpan.Zero;
+                        double percentRemaining = totalCount > 0
+                            ? (remaining * 100.0 / totalCount)
+                            : 0;
+
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            string remainingText = remaining >= 0
+                                ? $"{remaining} remaining ({percentRemaining:F1}% left)"
+                                : "remaining: unknown";
+                            txtStatus.Text +=
+                                $"[Verify] Scanned {scannedCount}, updated {updatedCount}, skipped {skippedCount}, missing CreatedAt {missingCreatedAtCount}, errors {errors}. Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}, ETA {eta:hh\\:mm\\:ss}, {remainingText}.\r\n";
+                        }));
+                    }
+                }
+
+                lastEvaluatedKey = response.LastEvaluatedKey;
+            } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text +=
+                    $"[Verify] Done. Updated {updatedCount}, skipped {skippedCount}, missing CreatedAt {missingCreatedAtCount}, errors {errors}. Total time {stopwatch.Elapsed:hh\\:mm\\:ss}.\r\n";
+            }));
+        }
+
+        private async Task InitializeUserSubscriptionFieldsAsync()
+        {
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            const string subscriptionStartedAtField = "SubscriptionStartedAt";
+            const string subscriptionActiveField = "SubscriptionActive";
+            string todayDate = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            int scannedCount = 0;
+            int updatedCount = 0;
+            int errors = 0;
+            int totalCount = await CountUsersAsync(usersTable).ConfigureAwait(false);
+            var stopwatch = Stopwatch.StartNew();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text +=
+                    $"[Subscription] Using fields {subscriptionStartedAtField} and {subscriptionActiveField}. Setting date to {todayDate} for all users ({totalCount} total).\r\n";
+            }));
+
+            var scanRequest = new ScanRequest
+            {
+                TableName = usersTable,
+                ProjectionExpression = "ID"
+            };
+
+            Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+            do
+            {
+                scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                var response = await _dynamoDbClient.ScanAsync(scanRequest).ConfigureAwait(false);
+
+                foreach (var item in response.Items)
+                {
+                    scannedCount++;
+
+                    if (!item.TryGetValue("ID", out var idAttr))
+                        continue;
+
+                    var updateRequest = new UpdateItemRequest
+                    {
+                        TableName = usersTable,
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            { "ID", idAttr }
+                        },
+                        UpdateExpression = "SET #startedAt = :startedAt, #active = :active",
+                        ExpressionAttributeNames = new Dictionary<string, string>
+                        {
+                            { "#startedAt", subscriptionStartedAtField },
+                            { "#active", subscriptionActiveField }
+                        },
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            { ":startedAt", new AttributeValue { S = todayDate } },
+                            { ":active", new AttributeValue { BOOL = true } }
+                        }
+                    };
+
+                    try
+                    {
+                        await _dynamoDbClient.UpdateItemAsync(updateRequest).ConfigureAwait(false);
+                        updatedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            txtStatus.Text += $"[Subscription] Failed to update {idAttr.S}: {ex.Message}\r\n";
+                        }));
+                    }
+
+                    if (scannedCount % 50 == 0)
+                    {
+                        int remaining = totalCount > 0
+                            ? Math.Max(totalCount - scannedCount, 0)
+                            : -1;
+
+                        double avgSeconds = scannedCount > 0
+                            ? stopwatch.Elapsed.TotalSeconds / scannedCount
+                            : 0;
+
+                        TimeSpan eta = avgSeconds > 0 && remaining >= 0
+                            ? TimeSpan.FromSeconds(avgSeconds * remaining)
+                            : TimeSpan.Zero;
+
+                        double percentRemaining = totalCount > 0
+                            ? (remaining * 100.0 / totalCount)
+                            : 0;
+
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            string remainingText = remaining >= 0
+                                ? $"{remaining} remaining ({percentRemaining:F1}% left)"
+                                : "remaining: unknown";
+
+                            txtStatus.Text +=
+                                $"[Subscription] Scanned {scannedCount}, updated {updatedCount}, errors {errors}. Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}, ETA {eta:hh\\:mm\\:ss}, {remainingText}.\r\n";
+                        }));
+                    }
+                }
+
+                lastEvaluatedKey = response.LastEvaluatedKey;
+            } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text +=
+                    $"[Subscription] Done. Scanned {scannedCount}, updated {updatedCount}, errors {errors}. Total time {stopwatch.Elapsed:hh\\:mm\\:ss}.\r\n";
+            }));
+        }
+
+        #endregion
+
+        #region PDF image extraction (UI only at the end)
+
+        /// <summary>
+        /// Extracts images from the PDF and shows the first one in the UI.
+        /// Also saves it to _imageFilePath as JPEG.
+        /// </summary>
+        private void GetAndShowImage(string pdfPath)
+        {
+            if (!File.Exists(pdfPath))
+            {
+                ShowError("No file " + pdfPath);
+                return;
+            }
+
+            List<System.Drawing.Image> images;
+
+            try
+            {
+                images = ExtractImages(pdfPath);
+            }
+            catch (Exception ex)
+            {
+                ShowError("Failed to extract images: " + ex.Message);
+                return;
+            }
+
+            if (images.Count < 1)
+            {
+                ShowError("Failed to get Image");
+                return;
+            }
+
+            using var bitmap = new System.Drawing.Bitmap(images[0]);
+            //using var bitmap = new System.Drawing.Bitmap("D:\\Stitch Craft\\Charts\\ReadyCharts\\2026_04_13\\4__.jpg");
+            bitmap.RotateFlip(System.Drawing.RotateFlipType.RotateNoneFlipY);
+
+            ImageSource imgSource = ToBitmapSource(bitmap);
+            imgBatch.Source = imgSource;
+
+            try
+            {
+                bitmap.Save(_imageFilePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+            }
+            catch
+            {
+                ShowError("Could not save image file");
+            }
+
+            try
+            {
+                SavePinterestImage(bitmap);
+            }
+            catch
+            {
+                ShowError("Could not save Pinterest image file");
+            }
+        }
+
+        private void SavePinterestImage(System.Drawing.Bitmap source)
+        {
+            if (string.IsNullOrWhiteSpace(_pinterestImageFilePath))
+                return;
+
+            using var pinterestImage = CreatePinterestImage(source);
+            pinterestImage.Save(_pinterestImageFilePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+        }
+
+        private static System.Drawing.Bitmap CreatePinterestImage(System.Drawing.Bitmap source)
+        {
+            var canvas = new System.Drawing.Bitmap(
+                PinterestTargetWidth,
+                PinterestTargetHeight,
+                System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+
+            using var graphics = System.Drawing.Graphics.FromImage(canvas);
+            graphics.Clear(System.Drawing.Color.White);
+            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            float scale = Math.Min(
+                PinterestTargetWidth / (float)source.Width,
+                PinterestTargetHeight / (float)source.Height);
+
+            int scaledWidth = (int)Math.Round(source.Width * scale);
+            int scaledHeight = (int)Math.Round(source.Height * scale);
+
+            int x = (PinterestTargetWidth - scaledWidth) / 2;
+            bool dockTop = source.Width >= source.Height;
+            int y = dockTop ? 0 : (PinterestTargetHeight - scaledHeight) / 2;
+
+            graphics.DrawImage(source, new System.Drawing.Rectangle(x, y, scaledWidth, scaledHeight));
+
+            if (dockTop)
+            {
+                TryDrawPinterestText(graphics, y + scaledHeight);
+            }
+
+            return canvas;
+        }
+
+        private static void TryDrawPinterestText(System.Drawing.Graphics graphics, int imageBottom)
+        {
+            int bottomSpace = PinterestTargetHeight - imageBottom;
+            if (bottomSpace < 80)
+                return;
+
+            float margin = Math.Max(12f, bottomSpace * 0.12f);
+            float fontSize = Math.Min(PinterestTargetWidth / 12f, bottomSpace - margin);
+            if (fontSize < PinterestWatermarkMinFontSize)
+                return;
+
+            float maxWidth = PinterestTargetWidth - (margin * 2f);
+            float fittedFontSize = FitFontSize(
+                graphics,
+                PinterestWatermarkText,
+                PinterestWatermarkFontFamily,
+                fontSize,
+                maxWidth);
+            if (fittedFontSize < PinterestWatermarkMinFontSize)
+                return;
+
+            using var font = new System.Drawing.Font(
+                PinterestWatermarkFontFamily,
+                fittedFontSize,
+                System.Drawing.FontStyle.Bold,
+                System.Drawing.GraphicsUnit.Pixel);
+
+            var size = graphics.MeasureString(PinterestWatermarkText, font);
+            float textY = PinterestTargetHeight - size.Height - margin;
+            if (textY < imageBottom)
+                return;
+
+            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(60, 60, 60));
+            using var format = new System.Drawing.StringFormat
+            {
+                Alignment = System.Drawing.StringAlignment.Center,
+                LineAlignment = System.Drawing.StringAlignment.Near
+            };
+
+            graphics.DrawString(
+                PinterestWatermarkText,
+                font,
+                brush,
+                new System.Drawing.RectangleF(0, textY, PinterestTargetWidth, size.Height),
+                format);
+        }
+
+        private static float FitFontSize(
+            System.Drawing.Graphics graphics,
+            string text,
+            string fontFamily,
+            float baseSize,
+            float maxWidth)
+        {
+            using var font = new System.Drawing.Font(
+                fontFamily,
+                baseSize,
+                System.Drawing.FontStyle.Bold,
+                System.Drawing.GraphicsUnit.Pixel);
+
+            var size = graphics.MeasureString(text, font);
+            if (size.Width <= maxWidth)
+                return baseSize;
+
+            float scale = maxWidth / size.Width;
+            return baseSize * scale;
+        }
+
+        private static List<System.Drawing.Image> ExtractImages(string pdfPath)
+        {
+            var images = new List<System.Drawing.Image>();
+
+            using var reader = new PdfReader(pdfPath);
+            for (int i = 0; i <= reader.XrefSize - 1; i++)
+            {
+                var obj = reader.GetPdfObject(i);
+                if (obj == null || !obj.IsStream())
+                    continue;
+
+                var stream = (PRStream)obj;
+                var subtype = stream.Get(PdfName.SUBTYPE);
+                if (subtype == null || !PdfName.IMAGE.Equals(subtype))
+                    continue;
+
+                try
+                {
+                    var imgObj = new PdfImageObject(stream);
+                    var img = imgObj.GetDrawingImage();
+                    if (img != null)
+                        images.Add(img);
+                }
+                catch
+                {
+                    // Ignore image that cannot be parsed
+                }
+            }
+
+            return images;
+        }
+
+        private static void ShowError(string message)
+        {
+            MessageBox.Show(message, "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        public static BitmapSource ToBitmapSource(System.Drawing.Bitmap source)
+        {
+            using var stream = new MemoryStream();
+            source.Save(stream, System.Drawing.Imaging.ImageFormat.Bmp);
+            stream.Position = 0;
+
+            var result = new BitmapImage();
+            result.BeginInit();
+            result.CacheOption = BitmapCacheOption.OnLoad;
+            result.StreamSource = stream;
+            result.EndInit();
+            result.Freeze();
+            return result;
+        }
+
+        #endregion
+
+        #region Missing PDFs audit
+
+        private async Task<List<DesignLocation>> LoadAllDesignLocationsAsync(
+            IProgress<string>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            var designs = new List<DesignLocation>();
+            string tableName = ConfigurationManager.AppSettings["DynamoTableName"] ?? "CrossStitchItems";
+
+            var scanRequest = new ScanRequest
+            {
+                TableName = tableName,
+                FilterExpression = "EntityType = :designType",
+                ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                {
+                    { ":designType", new AttributeValue { S = "DESIGN" } }
+                },
+                ProjectionExpression = "AlbumID, DesignID, EntityType"
+            };
+
+            Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+            do
+            {
+                scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+                var response = await _dynamoDbClient.ScanAsync(scanRequest, cancellationToken).ConfigureAwait(false);
+                lastEvaluatedKey = response.LastEvaluatedKey;
+
+                foreach (var item in response.Items)
+                {
+                    if (!item.TryGetValue("AlbumID", out var albumAttr) ||
+                        !item.TryGetValue("DesignID", out var designAttr))
+                    {
+                        continue;
+                    }
+
+                    if (!int.TryParse(albumAttr.N ?? albumAttr.S, out int albumId) ||
+                        !int.TryParse(designAttr.N ?? designAttr.S, out int designId))
+                    {
+                        continue;
+                    }
+
+                    designs.Add(new DesignLocation(albumId, designId));
+                }
+
+                if (designs.Count > 0 && designs.Count % 200 == 0)
+                {
+                    progress?.Report($"Loaded {designs.Count} designs so far...");
+                }
+            } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+            progress?.Report($"Loaded {designs.Count} designs in total.");
+            return designs;
+        }
+
+        private async Task<HashSet<string>> LoadAllPdfKeysAsync(
+            IProgress<string>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var listRequest = new ListObjectsV2Request
+            {
+                BucketName = _bucketName,
+                Prefix = "pdfs/"
+            };
+
+            int count = 0;
+            var paginator = _s3Client.Paginators.ListObjectsV2(listRequest);
+
+            await foreach (var obj in paginator.S3Objects.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                keys.Add(obj.Key);
+                count++;
+
+                if (count % 500 == 0)
+                {
+                    progress?.Report($"Indexed {count} PDF objects so far...");
+                }
+            }
+
+            progress?.Report($"Indexed {count} PDF objects.");
+            return keys;
+        }
+
+        private static List<MissingPdfInfo> FindDesignsWithMissingPdfs(
+            IEnumerable<DesignLocation> designs,
+            IReadOnlySet<string> existingPdfKeys)
+        {
+            var missing = new List<MissingPdfInfo>();
+
+            foreach (var design in designs)
+            {
+                var expectedKeys = BuildExpectedPdfKeys(design);
+                var missingKeys = expectedKeys
+                    .Where(key => !existingPdfKeys.Contains(key))
+                    .ToList();
+
+                if (missingKeys.Count > 0)
+                {
+                    if (design.DesignId == 5366)
+                    {
+                    }
+                    missing.Add(new MissingPdfInfo(design.DesignId, design.AlbumId, missingKeys));
+                }
+            }
+
+            return missing;
+        }
+
+        private static List<string> BuildExpectedPdfKeys(DesignLocation design)
+        {
+            var keys = new List<string>(RequiredPdfVariants.Length + 1);
+            string albumPart = design.AlbumId.ToString();
+            string designPart = design.DesignId.ToString();
+
+            foreach (string variant in RequiredPdfVariants)
+            {
+                keys.Add($"pdfs/{albumPart}/{designPart}/Stitch{designPart}_{variant}_Kit.pdf");
+            }
+
+            keys.Add($"pdfs/{albumPart}/Stitch{designPart}_Kit.pdf");
+            return keys;
+        }
+
+        private static async Task WriteMissingPdfReportAsync(string reportPath, List<MissingPdfInfo> missingDesigns)
+        {
+            var lines = missingDesigns.Count == 0
+                ? new[] { "All required PDFs are present." }
+                : missingDesigns
+                    .OrderBy(m => m.DesignId)
+                    .Select(m => $"{m.DesignId},{m.AlbumId}");
+
+            await File.WriteAllLinesAsync(reportPath, lines).ConfigureAwait(false);
+        }
+
+        private sealed record DesignLocation(int AlbumId, int DesignId);
+
+        private sealed record MissingPdfInfo(int DesignId, int AlbumId, List<string> MissingKeys);
+
+        #endregion
+
+        #region Optional: build DesignToAlbumMap CSV from S3
+
+        private static async Task CreateDesignToAlbumMapAsync(
+            AmazonS3Client s3Client,
+            string bucketName,
+            string s3Prefix)
+        {
+            var dynamoClient = new AmazonDynamoDBClient(RegionEndpoint.USEast1);
+            _ = Table.LoadTable(dynamoClient, "CrossStitchItems"); // loaded but not used currently
+
+            var listRequest = new ListObjectsV2Request
+            {
+                BucketName = bucketName,
+                Prefix = $"{PhotoPrefix}/"
+            };
+
+            var paginator = s3Client.Paginators.ListObjectsV2(listRequest);
+            File.AppendAllLines("DesignToAlbumMap.csv", new[] { "DesignID,AlbumID" });
+
+            string prevDesignStr = string.Empty;
+            string prevAlbum = string.Empty;
+
+            var designToAlbumMap = new SortedDictionary<int, int>();
+
+            await foreach (var obj in paginator.S3Objects.ConfigureAwait(false))
+            {
+                var key = obj.Key;
+                if (key.Contains("by-page", StringComparison.OrdinalIgnoreCase) ||
+                    key.Contains("private", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var parts = key.Split('/');
+                if (parts.Length < 4)
+                    continue;
+
+                var album = parts[1];
+                var designStr = parts[2];
+
+                if (designStr == prevDesignStr && album == prevAlbum)
+                    continue;
+
+                if (!int.TryParse(designStr, out int designId)) continue;
+                if (!int.TryParse(album, out int albumId)) continue;
+
+                designToAlbumMap[designId] = albumId;
+                prevDesignStr = designStr;
+                prevAlbum = album;
+            }
+
+            foreach (var kvp in designToAlbumMap)
+            {
+                File.AppendAllLines("DesignToAlbumMap.csv", new[] { $"{kvp.Key},{kvp.Value}" });
+            }
+        }
+
+        private async void InitializeItemsUserCid_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "Initializing cid fields for CrossStitchItems users...\r\n";
+            try
+            {
+                await InitializeItemsUserCidFieldsAsync();
+                // Back on UI thread
+                txtStatus.Text += "Finished initializing cid fields for CrossStitchItems users.\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Error: {ex.Message}\r\n";
+                MessageBox.Show(ex.ToString(), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void SendAdminUserEmail_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "Sending user-style email to admin using the latest design in DynamoDB (1 email)...\r\n";
+            try
+            {
+                await SendAdminUserStyleEmailAsync().ConfigureAwait(false);
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "Sent user-style email to admin (1/1).\r\n";
+                }));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to send admin user-style email: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        // Reloads the HTML + Text email templates from disk into the in-memory
+        // cache (_cachedHtmlEmailTemplate / _cachedTextEmailTemplate). The
+        // per-recipient send loops re-read this cache each iteration, so
+        // clicking Reload mid-send applies the new template to all subsequent
+        // emails in the in-flight loop. The status block reports the resolved
+        // path, mtime, section count, and Subject so you can verify the file
+        // the app just loaded is the one you intend to send.
+        //
+        // Bin-copy gotcha: HtmlEmailTemplatePath in App.config is a relative
+        // path resolved against the running assembly's directory. The MSBuild
+        // PreserveNewest copy from Uploader/Templates/*.txt to
+        // bin/.../Templates/*.txt only refreshes on rebuild — so if the mtime
+        // shown here looks stale after you edited the source, the project
+        // needs a rebuild (or switch the App.config key to an absolute path
+        // pointing at the source file).
+        private void BtnReloadEmailTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                _cachedHtmlEmailTemplate = LoadHtmlEmailTemplate();
+                _cachedTextEmailTemplate = LoadTextEmailTemplate();
+
+                EmailTemplateDefinition html = _cachedHtmlEmailTemplate;
+                EmailTemplateDefinition text = _cachedTextEmailTemplate;
+
+                string htmlSubject = html.GetRequiredSection("Subject").Trim();
+                string textSubject = text.GetRequiredSection("Subject").Trim();
+                DateTime htmlMtime = File.GetLastWriteTime(html.SourcePath);
+                DateTime textMtime = File.GetLastWriteTime(text.SourcePath);
+
+                txtStatus.Text += "Email templates reloaded (live cache updated; in-flight send loops will pick up these versions on their next iteration).\r\n";
+                txtStatus.Text += $"  HTML: {html.SourcePath}\r\n";
+                txtStatus.Text += $"        mtime {htmlMtime:yyyy-MM-dd HH:mm:ss}, {html.Sections.Count} sections\r\n";
+                txtStatus.Text += $"        Subject: {htmlSubject}\r\n";
+                txtStatus.Text += $"  Text: {text.SourcePath}\r\n";
+                txtStatus.Text += $"        mtime {textMtime:yyyy-MM-dd HH:mm:ss}, {text.Sections.Count} sections\r\n";
+                txtStatus.Text += $"        Subject: {textSubject}\r\n";
+            }
+            catch (Exception ex)
+            {
+                txtStatus.Text += $"Failed to reload email template: {ex.Message}\r\n";
+            }
+        }
+
+        private async void RemoveSuppressedUsers_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "Starting removal of suppressed users...\r\n";
+
+            try
+            {
+                var emails = ReadSuppressedEmails(SuppressedListPath);
+                if (emails.Count == 0)
+                {
+                    txtStatus.Text += "No emails found to remove.\r\n";
+                    return;
+                }
+
+                await RemoveSuppressedUsersAsync(emails).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to remove suppressed users: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        private async void MarkUsersVerified_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "Starting to mark users as verified...\r\n";
+
+            try
+            {
+                await MarkUsersVerifiedAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to mark users verified: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        #endregion
+    }
+}
