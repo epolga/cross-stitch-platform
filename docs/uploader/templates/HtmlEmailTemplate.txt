@@ -1,0 +1,44 @@
+[Subject]
+This horse refused to stand still 🐎
+
+[Greeting]
+Hi [FName],
+
+[BeforeImage]
+Some designs feel calm and quiet…
+and some feel like they're already moving before the stitching even begins.
+
+🐎 Running horse cross-stitch pattern
+Flowing mane, strong movement, and warm earthy colors that make this design feel full of energy.
+
+
+[ImageWithLink]
+<p>
+	<a href="<pattern_url>">
+		<img src="<image_url>" alt="Running horse cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+	</a>
+</p>
+<p>
+	👉 <a href="<pattern_url>">Download the free pattern</a>
+</p>
+
+
+[AfterImage]
+While working on this one, I kept adjusting tiny details to make the motion feel more natural — especially the mane and legs.
+It's always surprising how a few stitches can completely change the feeling of a design.
+
+I'd love to hear your opinion:
+– Do you enjoy dynamic patterns like this?
+– Or do you prefer calmer, more minimal designs?
+
+Just reply and tell me what you think — your feedback truly helps shape future patterns.
+
+[Unsubscribe]
+If you prefer not to receive these emails, you can unsubscribe here:<br/>
+<unsubscribe_url>
+
+[Closing]
+Ann
+
+[Signature]
+cross-stitch.com
