@@ -1,0 +1,7 @@
+# robots.txt - allow all crawlers. Update Sitemap URL to your real site.
+User-agent: *
+Disallow:
+
+# Sitemap (replace with your actual sitemap URL)
+Sitemap: https://cross-stitch.com/sitemap.xml
+Sitemap: https://cross-stitch-pattern.net/sitemap.xml

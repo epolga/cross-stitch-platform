@@ -1,0 +1,46 @@
+{
+  "name": "pinterest-agent",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "init": "tsx scripts/init-history-storage.ts",
+    "setup-ses-iam": "tsx scripts/setup-ses-iam.ts",
+    "daily": "tsx scripts/daily-business-report.ts",
+    "history": "tsx scripts/build-business-history.ts",
+    "ai:trend": "tsx scripts/test-ai-trend-analysis.ts",
+    "ai:history": "tsx scripts/build-recommendation-history.ts",
+    "pinmap": "tsx scripts/export-design-pin-map.ts",
+    "perf": "tsx scripts/build-design-performance.ts",
+    "ai:design": "tsx scripts/test-ai-design-analysis.ts",
+    "backfill": "tsx scripts/backfill-history.ts",
+    "verify-parity": "tsx scripts/verify-history-parity.ts",
+    "anomaly": "tsx scripts/detect-anomalies.ts",
+    "test-email": "tsx scripts/test-email.ts",
+    "notify": "tsx scripts/notify-anomalies.ts",
+    "gsc": "tsx scripts/gsc-report.ts",
+    "seo:backfill": "tsx scripts/backfill-seo-description.ts",
+    "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
+    "setup-token": "tsx scripts/get-google-refresh-token.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
+    "@aws-sdk/client-dynamodb": "^3.1051.0",
+    "@aws-sdk/client-iam": "^3.1053.0",
+    "@aws-sdk/client-s3": "^3.1051.0",
+    "@aws-sdk/client-sesv2": "^3.1053.0",
+    "@aws-sdk/lib-dynamodb": "^3.1051.0",
+    "dotenv": "^17.4.2",
+    "googleapis": "^171.4.0",
+    "open": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  }
+}

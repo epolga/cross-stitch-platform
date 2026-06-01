@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.a5c/
+.a5c_backup/

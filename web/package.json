@@ -1,0 +1,45 @@
+{
+    "name": "cross-stitch",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:e2e": "playwright test",
+        "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts"
+    },
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.803.0",
+        "@aws-sdk/client-s3": "^3.908.0",
+        "@aws-sdk/client-ses": "^3.929.0",
+        "@aws-sdk/lib-dynamodb": "^3.803.0",
+        "@fontsource/geist-mono": "^5.2.6",
+        "@fontsource/geist-sans": "^5.2.5",
+        "@paypal/paypal-js": "^8.4.2",
+        "@paypal/react-paypal-js": "^8.8.3",
+        "aws-sdk": "^2.1692.0",
+        "axios": "^1.12.2",
+        "next": "^15.5.7",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "sitemap": "^8.0.0",
+        "source-map-support": "^0.5.21"
+    },
+    "devDependencies": {
+        "@eslint/eslintrc": "^3",
+        "@playwright/test": "^1.58.2",
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "eslint": "^9",
+        "eslint-config-next": "15.3.1",
+        "tailwindcss": "^4.1.5",
+        "typescript": "^5",
+        "vitest": "^4.0.18"
+    }
+}

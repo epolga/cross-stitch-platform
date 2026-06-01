@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"This project uses FOCUS.md in the repo root to keep long sessions on track. Before your first response to the user, invoke the /loop skill with a 20-minute interval and the prompt: Re-read FOCUS.md and run through the Drift checks. If you have drifted from the Current goal or touched anything in Out of scope, stop and tell Olga. If anything in Done when is finished, report it. If FOCUS.md does not exist, mention it and proceed without the loop.\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

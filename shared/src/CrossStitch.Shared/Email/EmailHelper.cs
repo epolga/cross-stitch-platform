@@ -1,0 +1,121 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Amazon.SimpleEmail;
+using Amazon.SimpleEmail.Model;
+
+namespace CrossStitch.Shared.Email;
+
+/// <summary>
+/// Utility for sending emails through AWS SES. Behaviour-identical with the
+/// original <c>Uploader.Helpers.EmailHelper</c>; only the namespace moved.
+/// </summary>
+public class EmailHelper
+{
+    public async Task SendEmailAsync(
+        AmazonSimpleEmailServiceClient sesClient,
+        string sender,
+        IEnumerable<string> recipients,
+        string subject,
+        string textBody,
+        string? htmlBody = null,
+        IDictionary<string, string>? headers = null,
+        string? configurationSetName = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (headers != null && headers.Count > 0)
+        {
+            await SendRawEmailAsync(
+                    sesClient,
+                    sender,
+                    recipients,
+                    subject,
+                    textBody,
+                    htmlBody,
+                    headers,
+                    configurationSetName,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        var destination = new Destination { ToAddresses = recipients.ToList() };
+
+        var body = new Body { Text = new Content(textBody) };
+        if (!string.IsNullOrWhiteSpace(htmlBody))
+            body.Html = new Content(htmlBody);
+
+        var request = new SendEmailRequest
+        {
+            Source = sender,
+            Destination = destination,
+            ConfigurationSetName = configurationSetName,
+            Message = new Message
+            {
+                Subject = new Content(subject),
+                Body = body,
+            },
+        };
+
+        await sesClient.SendEmailAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task SendRawEmailAsync(
+        AmazonSimpleEmailServiceClient sesClient,
+        string sender,
+        IEnumerable<string> recipients,
+        string subject,
+        string textBody,
+        string? htmlBody,
+        IDictionary<string, string> headers,
+        string? configurationSetName,
+        CancellationToken cancellationToken)
+    {
+        var htmlPart = htmlBody ?? System.Net.WebUtility.HtmlEncode(textBody);
+        var boundary = "NextPart_" + System.Guid.NewGuid().ToString("N");
+        var toHeader = string.Join(", ", recipients);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"From: {sender}");
+        sb.AppendLine($"To: {toHeader}");
+        sb.AppendLine($"Subject: {subject}");
+        foreach (var header in headers)
+            sb.AppendLine($"{header.Key}: {header.Value}");
+        sb.AppendLine("MIME-Version: 1.0");
+        sb.AppendLine($"Content-Type: multipart/alternative; boundary=\"{boundary}\"");
+        sb.AppendLine();
+
+        sb.AppendLine($"--{boundary}");
+        sb.AppendLine("Content-Type: text/plain; charset=\"UTF-8\"");
+        sb.AppendLine("Content-Transfer-Encoding: 7bit");
+        sb.AppendLine();
+        sb.AppendLine(textBody);
+        sb.AppendLine();
+
+        sb.AppendLine($"--{boundary}");
+        sb.AppendLine("Content-Type: text/html; charset=\"UTF-8\"");
+        sb.AppendLine("Content-Transfer-Encoding: 7bit");
+        sb.AppendLine();
+        sb.AppendLine(htmlPart);
+        sb.AppendLine();
+        sb.AppendLine($"--{boundary}--");
+
+        var rawMessage = new RawMessage
+        {
+            Data = new MemoryStream(Encoding.UTF8.GetBytes(sb.ToString())),
+        };
+
+        var request = new SendRawEmailRequest
+        {
+            Source = sender,
+            Destinations = recipients.ToList(),
+            ConfigurationSetName = configurationSetName,
+            RawMessage = rawMessage,
+        };
+
+        await sesClient.SendRawEmailAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+}

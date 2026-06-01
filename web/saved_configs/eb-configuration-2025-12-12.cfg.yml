@@ -1,0 +1,89 @@
+EnvironmentConfigurationMetadata:
+  Description: Configuration created from the EB CLI using "eb config save".
+  DateCreated: '1765549610000'
+  DateModified: '1765549610000'
+Platform:
+  PlatformArn: arn:aws:elasticbeanstalk:us-east-1::platform/Node.js 20 running on
+    64bit Amazon Linux 2023/6.7.0
+OptionSettings:
+  aws:elasticbeanstalk:command:
+    IgnoreHealthCheck: false
+    DeploymentPolicy: AllAtOnce
+  aws:elasticbeanstalk:application:environment:
+    PAYPAL_API_URL: https://api-m.paypal.com
+    NEXT_PUBLIC_BASE_URL: https://www.cross-stitch-pattern.net
+    AWS_REGION: us-east-1
+    NEXT_PUBLIC_PAYPAL_CLIENT_ID: AQin-IMhxWJE8DZwOQRz7w2rVPltgJ6RJ7Z2gs8vaGbSzccSfKwK8swYNGYUzZjiyTc7Bf3YGWBcqdrj
+    PORT: '3000'
+    S3_BUCKET_NAME: cross-stitch-sitemap-cache
+    DDB_USERS_TABLE: CrossStitchUsers
+    PAYPAL_CLIENT_ID: AQin-IMhxWJE8DZwOQRz7w2rVPltgJ6RJ7Z2gs8vaGbSzccSfKwK8swYNGYUzZjiyTc7Bf3YGWBcqdrj
+    AWS_SES_FROM_EMAIL: ann@cross-stitch-pattern.net
+    DDB_RESET_TOKENS_TABLE: PasswordResetTokens
+    DYNAMODB_TABLE_NAME: CrossStitchItems
+    PAYPAL_WEBHOOK_ID: 03297922HC292773V
+    PAYPAL_CLIENT_SECRET: secret
+    NODE_ENV: production
+    ADMIN_EMAIL: olga.epstein@gmail.com
+  AWSEBAutoScalingGroup.aws:ec2:vpc:
+    Subnets: subnet-0c10a08cf49f2c0ba,subnet-03286dbc21b9904be,subnet-082aefa478054687c,subnet-0f98bf5d93b8e84b2,subnet-061daa49ea56c0228,subnet-06944f2885281f1c0
+  AWSEBAutoScalingLaunchConfiguration.aws:ec2:vpc:
+    AssociatePublicIpAddress: true
+  aws:elbv2:listener:443:
+    ListenerEnabled: true
+    SSLPolicy: ELBSecurityPolicy-2016-08
+    SSLCertificateArns: arn:aws:acm:us-east-1:358174257684:certificate/8c0f050c-8a28-442f-83ed-e496eda2f04f
+    DefaultProcess: default
+    Protocol: HTTPS
+  aws:ec2:vpc:
+    ELBSubnets: subnet-03286dbc21b9904be,subnet-061daa49ea56c0228,subnet-06944f2885281f1c0,subnet-082aefa478054687c,subnet-0c10a08cf49f2c0ba,subnet-0f98bf5d93b8e84b2
+  aws:rds:dbinstance:
+    HasCoupledDatabase: false
+  aws:autoscaling:asg:
+    EnableCapacityRebalancing: false
+  aws:elasticbeanstalk:managedactions:
+    ManagedActionsEnabled: false
+  aws:elasticbeanstalk:managedactions:platformupdate:
+    InstanceRefreshEnabled: false
+  aws:ec2:instances:
+    InstanceTypes: t2.small
+    EnableSpot: false
+  aws:elasticbeanstalk:hostmanager:
+    LogPublicationControl: false
+  AWSEBV2LoadBalancer.aws:elbv2:loadbalancer:
+    IpAddressType: ipv4
+    AccessLogsS3Enabled: false
+  aws:elasticbeanstalk:cloudwatch:logs:
+    DeleteOnTerminate: false
+    StreamLogs: false
+  aws:elasticbeanstalk:environment:
+    ServiceRole: arn:aws:iam::358174257684:role/aws-elasticbeanstalk-service-role
+    LoadBalancerIsShared: false
+    LoadBalancerType: application
+  aws:elasticbeanstalk:healthreporting:system:
+    ConfigDocument:
+      Version: 1
+      CloudWatchMetrics:
+        Instance: {}
+        Environment: {}
+      Rules:
+        Environment:
+          ELB:
+            ELBRequests4xx:
+              Enabled: true
+          Application:
+            ApplicationRequests4xx:
+              Enabled: true
+    SystemType: enhanced
+  AWSEBLoadBalancerSecurityGroup.aws:ec2:vpc:
+    VPCId: vpc-0ce5d2e526673f056
+  aws:autoscaling:launchconfiguration:
+    IamInstanceProfile: aws-elasticbeanstalk-ec2-role
+    EC2KeyName: aws-eb2
+  aws:elasticbeanstalk:cloudwatch:logs:health:
+    HealthStreamingEnabled: false
+    DeleteOnTerminate: false
+EnvironmentTier:
+  Type: Standard
+  Name: WebServer
+AWSConfigurationTemplateVersion: 1.1.0.0

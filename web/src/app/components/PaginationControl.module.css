@@ -1,0 +1,55 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.label {
+  font-size: 1.125rem; /* Matches Tailwind text-lg */
+}
+
+.select {
+  border: 1px solid #d1d5db; /* Matches Tailwind border */
+  border-radius: 0.25rem; /* Matches Tailwind rounded */
+  padding: 0.25rem 0.5rem; /* Matches Tailwind px-2 py-1 */
+}
+
+.select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6; /* Matches Tailwind focus:ring-2 focus:ring-blue-500 */
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  color: #4b5563;
+  background: transparent;
+  border: none;
+  border-radius: 0.25rem;
+  transition: color 0.2s;
+}
+
+.iconSmall {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.iconLarge {
+  width: 32px;
+  height: 32px;
+  display: block;
+}
+
+.button:hover:not(.disabled) {
+  color: #3b82f6;
+}
+
+.button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

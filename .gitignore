@@ -1,0 +1,22 @@
+# Node
+node_modules/
+.next/
+.tmp/
+.a5c/
+
+# .NET
+bin/
+obj/
+
+# Secrets & local config
+.env
+.env.local
+App.private.config
+secrets/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

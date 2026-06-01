@@ -1,0 +1,33 @@
+CROSS-STITCH.COM										
+Record name	Type	Routing policy	Differentiator	Alias	Value/Route traffic to	TTL (seconds)	Health check ID	Evaluate target health	Record ID	
+	Record name	Type	Routing policy	Differentiator	Alias	Value/Route traffic to	TTL (seconds)	Health check ID	Evaluate target health	
+	cross-stitch.com	A	Simple	-	Yes	awseb--awseb-rsfxvsqctj7u-1479761218.us-east-1.elb.amazonaws.com.	-	-	Yes	-
+	cross-stitch.com	NS	Simple	-	No	ns-435.awsdns-54.com.	172800	-	-	-
+						ns-1520.awsdns-62.org.				
+						ns-1902.awsdns-45.co.uk.				
+						ns-1008.awsdns-62.net.				
+	cross-stitch.com	SOA	Simple	-	No	ns-435.awsdns-54.com. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400	900	-	-	-
+	_e0d8a72bed1206d35d515686e9135837.cross-stitch.com	CNAME	Simple	-	No	_5f368ae941ffdd18aea8d8675ddbd530.jkddzztszm.acm-validations.aws.	300	-	-	-
+	www.cross-stitch.com	CNAME	Simple	-	No	cross-stitch.com	300	-	-	-
+	_2b5f315cb9288f0ef6d5b65e714d3c1e.www.cross-stitch.com	CNAME	Simple	-	No	_edd7b4dccc60126176ea2b551cd10fca.jkddzztszm.acm-validations.aws.	300	-		
+										
+CROSS-STITCH-PATTERN.NET										
+Record name	Type	Routing policy	Differentiator	Alias	Value/Route traffic to	TTL (seconds)	Health check ID	Evaluate target health	Record ID	
+	Record name	Type	Routing policy	Differentiator	Alias	Value/Route traffic to	TTL (seconds)	Health check ID	Evaluate target health	
+	cross-stitch-pattern.net	A	Simple	-	Yes	awseb--awseb-rsfxvsqctj7u-1479761218.us-east-1.elb.amazonaws.com.	-	-	Yes	-
+	cross-stitch-pattern.net	MX	Simple	-	No	0 crossstitchpattern-net01c1b.mail.protection.outlook.com	300	-	-	-
+	cross-stitch-pattern.net	NS	Simple	-	No	ns-1430.awsdns-50.org.	172800	-	-	-
+						ns-605.awsdns-11.net.				
+						ns-143.awsdns-17.com.				
+						ns-1623.awsdns-10.co.uk.				
+	cross-stitch-pattern.net	SOA	Simple	-	No	ns-1430.awsdns-50.org. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400	900	-	-	-
+	cross-stitch-pattern.net	TXT	Simple	-	No	"NETORGFT19732422.onmicrosoft.com"	300	-	-	-
+						"v=spf1 include:amazonses.com -all"				
+						"google-site-verification=Hxp__cLhHGf7MMe-FlI0DPS1Zco2J7vNvIaUAPOBpvE"				
+						"pinterest-site-verification=2580531f25c20bbb5e2ac0d45872e2b0"				
+	_9e99d5a08fc7f248009e7dc916bb670b.cross-stitch-pattern.net	CNAME	Simple	-	No	_a27002c4f6aee9e316a624bd941a7671.xlfgrmvvlj.acm-validations.aws.	300	-	-	-
+	_dmarc.cross-stitch-pattern.net	TXT	Simple	-	No	"v=DMARC1; p=none; rua=mailto:ann@cross-stitch-pattern.net; ruf=mailto:ann@cross-stitch-pattern.net; fo=1"	300	-	-	-
+	qe37vtuichxx25khcfwhzfwus6kynqb2._domainkey.cross-stitch-pattern.net	CNAME	Simple	-	No	qe37vtuichxx25khcfwhzfwus6kynqb2.dkim.amazonses.com	1800	-	-	-
+	rxzh4oc2umwvtwmat4matji5u34sihu2._domainkey.cross-stitch-pattern.net	CNAME	Simple	-	No	rxzh4oc2umwvtwmat4matji5u34sihu2.dkim.amazonses.com	1800	-	-	-
+	vc4q7cqwcaphkqnif34a4lfbym7udxg2._domainkey.cross-stitch-pattern.net	CNAME	Simple	-	No	vc4q7cqwcaphkqnif34a4lfbym7udxg2.dkim.amazonses.com	1800	-	-	-
+	autodiscover.cross-stitch-pattern.net	CNAME	Simple	-	No	autodiscover.outlook.com	300	-	-	-

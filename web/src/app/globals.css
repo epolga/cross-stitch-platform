@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --background: #ffffff;
+  --foreground: #171717;
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body.ads-enabled {
+  padding-bottom: 140px; /* Reserve space for bottom anchor ads to avoid CLS */
+}
+
+/* Prevent auto-inserted AdSense anchor ads from shifting layout */
+body.ads-enabled ins.adsbygoogle[data-anchor-status="displayed"] {
+  position: fixed !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0 auto;
+  z-index: 50;
+}
+
+.ad-slot {
+  display: block;
+  width: 100%;
+  min-height: var(--ad-min-height, 250px);
+}
+
+@media (min-width: 768px) {
+  .ad-slot {
+    min-height: var(--ad-min-height-md, var(--ad-min-height, 250px));
+  }
+}
+
+.footer {
+  background-color: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem 1rem;
+  color: #4B5563;
+  font-size: 0.875rem;
+  text-align: center;
+}

@@ -1,0 +1,4 @@
+This site uses language models (LLMs) to help generate copy, summarize data, and
+offer suggestions to visitors. The LLMs do not have direct access to user
+accounts or personal files, and all automated responses should be reviewed by a
+human before being considered final or authoritative.

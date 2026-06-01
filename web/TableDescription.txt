@@ -1,0 +1,153 @@
+{
+    "Table": {
+        "AttributeDefinitions": [
+            {
+                "AttributeName": "DesignID",
+                "AttributeType": "N"
+            },
+            {
+                "AttributeName": "EntityType",
+                "AttributeType": "S"
+            },
+            {
+                "AttributeName": "ID",
+                "AttributeType": "S"
+            },
+            {
+                "AttributeName": "NGlobalPage",
+                "AttributeType": "N"
+            },
+            {
+                "AttributeName": "NPage",
+                "AttributeType": "S"
+            }
+        ],
+        "TableName": "CrossStitchItems",
+        "KeySchema": [
+            {
+                "AttributeName": "ID",
+                "KeyType": "HASH"
+            },
+            {
+                "AttributeName": "NPage",
+                "KeyType": "RANGE"
+            }
+        ],
+        "TableStatus": "ACTIVE",
+        "CreationDateTime": "2025-04-29T23:29:38.031000+03:00",
+        "ProvisionedThroughput": {
+            "NumberOfDecreasesToday": 0,
+            "ReadCapacityUnits": 0,
+            "WriteCapacityUnits": 0
+        },
+        "TableSizeBytes": 26299370,
+        "ItemCount": 71691,
+        "TableArn": "arn:aws:dynamodb:us-east-1:358174257684:table/CrossStitchItems",
+        "TableId": "21682248-b7aa-4f15-88a4-eb3e40131f81",
+        "BillingModeSummary": {
+            "BillingMode": "PAY_PER_REQUEST",
+            "LastUpdateToPayPerRequestDateTime": "2025-04-29T23:29:38.031000+03:00"
+        },
+        "GlobalSecondaryIndexes": [
+            {
+                "IndexName": "Designs-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "EntityType",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "NGlobalPage",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "IndexStatus": "ACTIVE",
+                "ProvisionedThroughput": {
+                    "NumberOfDecreasesToday": 0,
+                    "ReadCapacityUnits": 0,
+                    "WriteCapacityUnits": 0
+                },
+                "IndexSizeBytes": 2430005,
+                "ItemCount": 5197,
+                "IndexArn": "arn:aws:dynamodb:us-east-1:358174257684:table/CrossStitchItems/index/Designs-index",
+                "WarmThroughput": {
+                    "ReadUnitsPerSecond": 12000,
+                    "WriteUnitsPerSecond": 4000,
+                    "Status": "ACTIVE"
+                }
+            },
+            {
+                "IndexName": "DesignsByID-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "EntityType",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "DesignID",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "IndexStatus": "ACTIVE",
+                "ProvisionedThroughput": {
+                    "NumberOfDecreasesToday": 0,
+                    "ReadCapacityUnits": 0,
+                    "WriteCapacityUnits": 0
+                },
+                "IndexSizeBytes": 2430005,
+                "ItemCount": 5197,
+                "IndexArn": "arn:aws:dynamodb:us-east-1:358174257684:table/CrossStitchItems/index/DesignsByID-index",
+                "WarmThroughput": {
+                    "ReadUnitsPerSecond": 12000,
+                    "WriteUnitsPerSecond": 4000,
+                    "Status": "ACTIVE"
+                }
+            },
+            {
+                "IndexName": "ID-DesignID-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "ID",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "DesignID",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "IndexStatus": "ACTIVE",
+                "ProvisionedThroughput": {
+                    "NumberOfDecreasesToday": 0,
+                    "ReadCapacityUnits": 0,
+                    "WriteCapacityUnits": 0
+                },
+                "IndexSizeBytes": 2430005,
+                "ItemCount": 5197,
+                "IndexArn": "arn:aws:dynamodb:us-east-1:358174257684:table/CrossStitchItems/index/ID-DesignID-index",
+                "WarmThroughput": {
+                    "ReadUnitsPerSecond": 12000,
+                    "WriteUnitsPerSecond": 4000,
+                    "Status": "ACTIVE"
+                }
+            }
+        ],
+        "TableClassSummary": {
+            "TableClass": "STANDARD"
+        },
+        "DeletionProtectionEnabled": false,
+        "WarmThroughput": {
+            "ReadUnitsPerSecond": 12000,
+            "WriteUnitsPerSecond": 4000,
+            "Status": "ACTIVE"
+        }
+    }
+}

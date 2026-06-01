@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "../Uploader"
+		},
+		{
+			"path": "../cross-stitch"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../AutoPinner"
+		},
+		{
+			"path": "../CrossStitch.Shared"
+		}
+	],
+	"settings": {}
+}
