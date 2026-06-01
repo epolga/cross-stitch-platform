@@ -6,5 +6,5 @@ REM the day-7+ soak-window check. Delete the scheduled task and this file
 REM after the Milestone 5 cutover lands — both are listed in SOAK-WINDOW.md's
 REM cutover checklist.
 
-set LOGFILE=D:\ann\Git\cross-stitch\automation\pinterest-agent\daily-run.log
+set LOGFILE=D:\ann\Git\cross-stitch-platform\automation\pinterest-agent\daily-run.log
 echo [%date% %time%] === SOAK CHECK DUE - REVIEW SOAK-WINDOW.md === >> "%LOGFILE%"

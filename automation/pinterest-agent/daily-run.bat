@@ -1,5 +1,5 @@
 @echo off
-cd /d D:\ann\Git\cross-stitch\automation\pinterest-agent
+cd /d D:\ann\Git\cross-stitch-platform\automation\pinterest-agent
 
 echo [%date% %time%] Starting daily business pipeline >> daily-run.log
 
@@ -52,7 +52,9 @@ if errorlevel 1 (
 )
 
 call npm run verify-parity >> daily-run.log 2>&1
-if errorlevel 1 (
+set PARITY_EC=%ERRORLEVEL%
+echo [%date% %time%] DEBUG verify-parity exit=%PARITY_EC% >> daily-run.log
+if %PARITY_EC% NEQ 0 (
     echo [%date% %time%] ERROR: parity check failed (JSON vs DDB+S3 drift detected) >> daily-run.log
     exit /b 1
 )
