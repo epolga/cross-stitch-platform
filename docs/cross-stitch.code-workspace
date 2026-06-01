@@ -1,19 +1,19 @@
 {
 	"folders": [
 		{
-			"path": "../Uploader"
+			"path": "../uploader"
 		},
 		{
-			"path": "../cross-stitch"
+			"path": "../web"
 		},
 		{
 			"path": "."
 		},
 		{
-			"path": "../AutoPinner"
+			"path": "../automation/autopinner"
 		},
 		{
-			"path": "../CrossStitch.Shared"
+			"path": "../shared"
 		}
 	],
 	"settings": {}

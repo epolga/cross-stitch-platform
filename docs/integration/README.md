@@ -25,7 +25,7 @@ Per [CLAUDE.md](../../CLAUDE.md), these are placed under `docs/` (what exists) r
 | [user-identity.md](./user-identity.md) | PK `USR#<email>`; two coexisting `cid` formats (dashed UUID from cross-stitch vs 32-hex-no-dash from Uploader); two coexisting `UnsubscribeToken` formats; plaintext `Password`/`OpenPwd` storage (with the literal "Storing plain password for migration purposes" code comment); `verifyUser` logs email+password to stdout; PayPal signature can be bypassed via env var | 12 sections, 95 citations |
 | [url-conventions.md](./url-conventions.md) | Design URL `/{Caption}-{AlbumID}-{NPage-1}-Free-Design.aspx` is **triplicated** across 3 builders with subtly different whitespace handling (`Replace(' ', '-')` vs `replace(/\s+/g, '-')`); album URL `/Free-{slug}-Charts.aspx`; site base URL fallback chain in `PatternLinkHelper.cs:46-60` | 12 sections, 98 citations |
 
-See also: [../cross-stitch/architecture-diagram.md](../cross-stitch/architecture-diagram.md) — Mermaid C4-style component view + 4 sequence diagrams that visualize how these contracts connect.
+See also: [../web/architecture-diagram.md](../web/architecture-diagram.md) — Mermaid C4-style component view + 4 sequence diagrams that visualize how these contracts connect.
 
 ## Why these exist
 
@@ -48,6 +48,6 @@ Each draft was authored by an agent reading the cited source files, then indepen
 ## Related
 
 - [../../CLAUDE.md](../../CLAUDE.md) — repo rules of the road and the `do-not-invent` list.
-- [../cross-stitch/platform-architecture-summary.md](../cross-stitch/platform-architecture-summary.md) — system-level description of where each contract fits.
+- [../web/platform-architecture-summary.md](../web/platform-architecture-summary.md) — system-level description of where each contract fits.
 - [../../plan/integration/CONTRACT-TEMPLATE.md](../../plan/integration/CONTRACT-TEMPLATE.md) — the 12-section template every contract here follows.
 - [../../plan/integration/ARCHITECTURE-SUMMARY.md](../../plan/integration/ARCHITECTURE-SUMMARY.md) — older integration-focused summary; complements but does not supersede this folder.

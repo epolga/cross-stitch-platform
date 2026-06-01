@@ -4,14 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository nature
 
-This is a **documentation-only** repository — no source code, no build system, no tests. It is the central docs and planning hub for two sibling projects that live next to it on disk (not in this repo):
+This is the **docs and planning hub** inside the `cross-stitch-platform` monorepo. The monorepo root contains:
 
-- `../cross-stitch/` — the cross-stitch web application
-- `../Uploader/` — the WPF uploader application
+- `../web/` — the cross-stitch Next.js web application
+- `../uploader/` — the WPF uploader application
+- `../automation/` — AutoPinner and Pinterest agent cron scripts
+- `../shared/` — shared C# library
 
-The VS Code workspace at `cross-stitch.code-workspace` opens all three folders together so the docs and both codebases can be edited side-by-side.
+The VS Code workspace at `cross-stitch.code-workspace` opens all folders together so the docs and all codebases can be edited side-by-side.
 
-There are no build, lint, test, or run commands. Work in this repo is editing Markdown, text, spreadsheets, and PDFs.
+There are no build, lint, test, or run commands in this folder. Work here is editing Markdown, text, spreadsheets, and PDFs.
 
 ## The plan/ vs docs/ split (load-bearing)
 
@@ -24,7 +26,7 @@ Both directories use a parallel subfolder structure organized by topic/component
 
 ## Cross-project context
 
-Documents under `plan/cross-stitch/` and `docs/cross-stitch/` describe the cross-stitch web app that lives at `../cross-stitch/`. Documents under `plan/uploader/` and `docs/uploader/` describe the WPF app at `../Uploader/`. Files like the Pinterest AI Agent series under `plan/cross-stitch/` span both projects (WPF integration is documented there).
+Documents under `plan/cross-stitch/` and `docs/web/` describe the cross-stitch web app that lives at `../web/`. Documents under `plan/uploader/` and `docs/uploader/` describe the WPF app at `../uploader/`. Files like the Pinterest AI Agent series under `plan/cross-stitch/` span both projects (WPF integration is documented there).
 
 When a planning doc references a file path, treat unprefixed paths as relative to the relevant sibling project, not this repo.
 
@@ -55,11 +57,13 @@ The documentation directories are considered the source of truth unless explicit
 
 The VS Code workspace includes:
 
-- `cross-stitch-platform-docs/`
-- `../cross-stitch/`
-- `../Uploader/`
+- `docs/` (this folder)
+- `../web/`
+- `../uploader/`
+- `../automation/autopinner/`
+- `../shared/`
 
-The documentation repository coordinates work across both sibling repositories.
+This folder coordinates work across all parts of the monorepo.
 
 When analyzing integrations or workflows:
 

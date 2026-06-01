@@ -3,7 +3,7 @@ import { DesignList } from '@/app/components/DesignList'; // Adjust path
 import type { DesignsResponse } from '@/app/types/design';
 import { buildCanonicalUrl, CreateAlbumUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
-import { getAdjacentAlbums } from '@/lib/data-access';
+import { getAdjacentAlbums, getDesignsByAlbumId } from '@/lib/data-access';
 import Link from 'next/link';
 import AdSlot from '@/app/components/AdSlot';
 
@@ -22,14 +22,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   let designsResponse: DesignsResponse;
   try {
-    const response = await fetch(
-      `http://localhost:3000/api/albums/${albumId}?pageSize=${pageSize}&nPage=${page}`,
-      { cache: 'no-store' }
-    );
-    if (!response.ok) {
-      throw new Error(`Failed to fetch designs: ${response.statusText}`);
-    }
-    designsResponse = await response.json();
+    designsResponse = await getDesignsByAlbumId(albumId, pageSize, page);
   } catch (error) {
     console.error('Error fetching designs for metadata:', error);
     return {
@@ -112,14 +105,7 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
 
   let designsResponse: DesignsResponse;
   try {
-    const response = await fetch(
-      `http://localhost:3000/api/albums/${albumId}?pageSize=${pageSize}&nPage=${page}`,
-      { cache: 'no-store' }
-    );
-    if (!response.ok) {
-      throw new Error(`Failed to fetch designs: ${response.statusText}`);
-    }
-    designsResponse = await response.json();
+    designsResponse = await getDesignsByAlbumId(albumId, pageSize, page);
   } catch (error) {
     console.error('Error fetching designs for album:', error);
     return (

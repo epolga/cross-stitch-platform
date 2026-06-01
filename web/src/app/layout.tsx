@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const supportEmail = `ann@${emailDomain}`;
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="p:domain_verify" content="2580531f25c20bbb5e2ac0d45872e2b0" />
 

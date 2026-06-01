@@ -9,6 +9,7 @@ import { DesignDownloadControls } from './DesignDownloadControls';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
+import { getDesignById } from '@/lib/data-access';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -72,9 +73,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 console.log("Generating metadata for designId:", designId);
   let design: Design;
   try {
-    const response = await fetch(`http://localhost:3000/api/designs/${designId}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Failed to fetch design: ${response.statusText}`);
-    design = await response.json();
+    const id = parseInt(designId, 10);
+    const result = await getDesignById(id);
+    if (!result) throw new Error(`Design ${designId} not found`);
+    design = result;
   } catch (error) {
     console.error('Error fetching design for metadata:', error);
     return {
@@ -159,9 +161,10 @@ export default async function DesignPage({ params }: Props) {
 
   let design: Design;
   try {
-    const response = await fetch(`http://localhost:3000/api/designs/${designId}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Failed to fetch design: ${response.statusText}`);
-    design = await response.json();
+    const id = parseInt(designId, 10);
+    const result = await getDesignById(id);
+    if (!result) throw new Error(`Design ${designId} not found`);
+    design = result;
   } catch (error) {
     console.error('Error fetching design:', error);
     return (
