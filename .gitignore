@@ -13,6 +13,13 @@ obj/
 .env.local
 App.private.config
 secrets/
+*_tokens.json
+*-tokens.json
+google-oauth-client.json
+
+# Generated / runtime data
+reports/
+.a5c_backup/
 
 # Logs
 *.log
