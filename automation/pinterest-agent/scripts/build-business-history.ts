@@ -3,9 +3,8 @@ import fs from "fs";
 import path from "path";
 import { buildHistory } from "../src/services/historyBuilder";
 
-function main() {
-  const reportsDir = path.join(process.cwd(), "reports");
-  const history = buildHistory(reportsDir);
+async function main() {
+  const history = await buildHistory();
 
   console.log(`\n=== Business History (${history.totalDays} days) ===\n`);
   console.log(`  Date range: ${history.dateRange.first} → ${history.dateRange.last}`);
@@ -40,9 +39,14 @@ function main() {
     }
   }
 
+  const reportsDir = path.join(process.cwd(), "reports");
+  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
   const outputPath = path.join(reportsDir, "business-history.json");
   fs.writeFileSync(outputPath, JSON.stringify(history, null, 2) + "\n");
   console.log(`\n  Saved → ${outputPath}\n`);
 }
 
-main();
+main().catch((err) => {
+  console.error("Error:", err instanceof Error ? err.message : err);
+  process.exit(1);
+});

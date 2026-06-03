@@ -1,6 +1,4 @@
 import "dotenv/config";
-import fs from "fs";
-import path from "path";
 import {
   DynamoDBClient,
   ScanCommand,
@@ -133,16 +131,6 @@ async function main() {
   if (unknownAlbum > 0) console.log(`  ${unknownAlbum} reference an album not found in the table`);
   if (skippedNoNPage > 0) console.log(`  ${skippedNoNPage} skipped (missing NPage)`);
 
-  const reportsDir = path.join(process.cwd(), "reports");
-  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
-
-  const outPath = path.join(reportsDir, "design-pin-map.json");
-  fs.writeFileSync(outPath, JSON.stringify(records, null, 2) + "\n");
-  console.log(`Saved → ${outPath}`);
-
-  // Dual-write to DynamoDB. JSON above is the canonical artifact during the
-  // parity-verified soak window; DDB rows are the future source of truth.
-  // Schema reference: plan/integration/business-history-schema.md §4.4.
   try {
     await batchPutDesignPinMap(records);
     console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PIN_MAP × ${records.length}]`);

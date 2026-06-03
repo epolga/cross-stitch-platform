@@ -1,58 +1,53 @@
 import "dotenv/config";
-import fs from "fs";
-import path from "path";
+import { queryRange } from "../src/services/historyStore";
 
-interface Recommendation {
-  date: string;
+interface AiRow {
+  SortKey: string;
+  forDate: string;
   analysisType: string;
-  recommendedAction: string;
-  confidence: number;
-  reasoning: string;
-  sourceHistoryRange: { first: string; last: string };
+  recommendedAction?: string;
+  confidence?: number;
+  reasoning?: string;
+  sourceHistoryRange?: { first: string; last: string };
 }
 
-function main() {
-  const historyPath = path.join(process.cwd(), "reports", "ai-recommendations-history.json");
-
-  if (!fs.existsSync(historyPath)) {
-    console.error("ai-recommendations-history.json not found. Run ai:trend first.");
-    process.exit(1);
-  }
-
-  const records: Recommendation[] = JSON.parse(fs.readFileSync(historyPath, "utf-8"));
+async function main() {
+  const allRows = await queryRange<AiRow>("AI_ANALYSIS");
+  const records = allRows
+    .filter((r) => r.analysisType === "trend" && r.recommendedAction && r.confidence !== undefined)
+    .sort((a, b) => a.forDate.localeCompare(b.forDate));
 
   if (records.length === 0) {
-    console.log("No recommendations recorded yet.");
+    console.log("No trend recommendation records in DDB yet.");
     return;
   }
 
   // Action counts
   const actionCounts: Record<string, number> = {};
   for (const r of records) {
-    actionCounts[r.recommendedAction] = (actionCounts[r.recommendedAction] || 0) + 1;
+    actionCounts[r.recommendedAction!] = (actionCounts[r.recommendedAction!] || 0) + 1;
   }
 
   // Confidence distribution
-  const highConfidence = records.filter((r) => r.confidence >= 0.75).length;
-  const medConfidence = records.filter((r) => r.confidence >= 0.5 && r.confidence < 0.75).length;
-  const lowConfidence = records.filter((r) => r.confidence < 0.5).length;
-  const avgConfidence = records.reduce((sum, r) => sum + r.confidence, 0) / records.length;
+  const highConfidence = records.filter((r) => r.confidence! >= 0.75).length;
+  const medConfidence = records.filter((r) => r.confidence! >= 0.5 && r.confidence! < 0.75).length;
+  const lowConfidence = records.filter((r) => r.confidence! < 0.5).length;
+  const avgConfidence = records.reduce((sum, r) => sum + r.confidence!, 0) / records.length;
 
   // Recommendation changes over time
   const changes: { date: string; from: string; to: string }[] = [];
   for (let i = 1; i < records.length; i++) {
     if (records[i].recommendedAction !== records[i - 1].recommendedAction) {
       changes.push({
-        date: records[i].date,
-        from: records[i - 1].recommendedAction,
-        to: records[i].recommendedAction,
+        date: records[i].forDate,
+        from: records[i - 1].recommendedAction!,
+        to: records[i].recommendedAction!,
       });
     }
   }
 
-  // Print summary
   console.log(`\n=== AI Recommendation History (${records.length} records) ===\n`);
-  console.log(`  Date range: ${records[0].date} → ${records[records.length - 1].date}\n`);
+  console.log(`  Date range: ${records[0].forDate} → ${records[records.length - 1].forDate}\n`);
 
   console.log("  Action breakdown:");
   for (const [action, count] of Object.entries(actionCounts)) {
@@ -75,8 +70,7 @@ function main() {
     console.log(`\n  No recommendation changes — consistent "${records[0].recommendedAction}" throughout.`);
   }
 
-  // Current streak
-  const lastAction = records[records.length - 1].recommendedAction;
+  const lastAction = records[records.length - 1].recommendedAction!;
   let streak = 0;
   for (let i = records.length - 1; i >= 0; i--) {
     if (records[i].recommendedAction === lastAction) streak++;
@@ -86,4 +80,7 @@ function main() {
   console.log();
 }
 
-main();
+main().catch((err) => {
+  console.error("Error:", err instanceof Error ? err.message : err);
+  process.exit(1);
+});

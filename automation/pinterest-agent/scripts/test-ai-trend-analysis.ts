@@ -89,71 +89,16 @@ Keep the analysis concise and data-driven. Focus on patterns, not single-day noi
   console.log(text);
   console.log();
 
-  // Save to reports/ai-analysis/
   const dateStr = yesterdayDateStr();
-  const analysisDir = path.join(process.cwd(), "reports", "ai-analysis");
-  if (!fs.existsSync(analysisDir)) {
-    fs.mkdirSync(analysisDir, { recursive: true });
-  }
 
-  // Save markdown
-  const mdPath = path.join(analysisDir, `${dateStr}-trend-analysis.md`);
-  fs.writeFileSync(mdPath, `# AI Trend Analysis (${dateStr})\n\n${text}\n`);
-
-  // Extract JSON confidence block if present
   const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
   const confidence = jsonMatch ? JSON.parse(jsonMatch[1]) : null;
 
-  // Save confidence block separately
-  if (confidence) {
-    const confidencePath = path.join(analysisDir, `${dateStr}-confidence.json`);
-    fs.writeFileSync(confidencePath, JSON.stringify(confidence, null, 2) + "\n");
-    console.log(`  Saved → ${confidencePath}`);
-  }
-
-  // Save JSON
-  const jsonPath = path.join(analysisDir, `${dateStr}-trend-analysis.json`);
-  const jsonReport = {
-    date: dateStr,
-    totalDays: history.totalDays,
-    dateRange: history.dateRange,
-    analysis: text,
-    confidence,
-  };
-  fs.writeFileSync(jsonPath, JSON.stringify(jsonReport, null, 2) + "\n");
-
-  // Append to recommendations history
-  if (confidence) {
-    const historyFilePath = path.join(process.cwd(), "reports", "ai-recommendations-history.json");
-    const existing: unknown[] = fs.existsSync(historyFilePath)
-      ? JSON.parse(fs.readFileSync(historyFilePath, "utf-8"))
-      : [];
-
-    existing.push({
-      date: dateStr,
-      analysisType: "trend",
-      recommendedAction: confidence.recommendedAction,
-      confidence: confidence.confidence,
-      reasoning: confidence.reasoning,
-      sourceHistoryRange: history.dateRange,
-    });
-
-    fs.writeFileSync(historyFilePath, JSON.stringify(existing, null, 2) + "\n");
-    console.log(`  Saved → ${historyFilePath}`);
-  }
-
-  console.log(`  Saved → ${mdPath}`);
-  console.log(`  Saved → ${jsonPath}\n`);
-
-  // Dual-write to S3 + DynamoDB. JSON above stays as the canonical artifact
-  // during the parity-verified soak window. We only persist a DDB row when
-  // the AI produced a structured confidence block — without it there's no
-  // reasoning/recommendedAction to record, so the row would be incomplete.
-  // Schema reference: plan/integration/business-history-schema.md §4.3, §10.
   if (!confidence) {
     console.log("  (no confidence block in AI output → skipping S3 + DDB dual-write)\n");
     return;
   }
+
   try {
     const mdBody = `# AI Trend Analysis (${dateStr})\n\n${text}\n`;
     const s3Key = await putMarkdown(dateStr, generatedAt, "trend", mdBody);

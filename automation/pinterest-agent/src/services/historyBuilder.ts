@@ -1,17 +1,48 @@
-import fs from "fs";
-import path from "path";
 import { round } from "./dateUtils";
+import { queryRange } from "./historyStore";
 import type { BusinessReport, DayMetrics, TrendWindow, TrendDirection, BusinessHistory } from "./types";
 
-export function loadReports(reportsDir: string): BusinessReport[] {
-  const files = fs.readdirSync(reportsDir)
-    .filter((f) => f.match(/^\d{4}-\d{2}-\d{2}-business-report\.json$/))
-    .sort();
+interface DailyRow {
+  SortKey: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  outboundClicks: number;
+  ga4Sessions: number;
+  ga4PaidSessions: number;
+  ga4OrganicSessions: number;
+  ga4ReferralSessions: number;
+  adsenseRevenue: number;
+  revenuePerHundredSessions?: number;
+  profit: number;
+}
 
-  return files.map((f) => {
-    const content = fs.readFileSync(path.join(reportsDir, f), "utf-8");
-    return JSON.parse(content) as BusinessReport;
-  });
+export async function loadReports(): Promise<BusinessReport[]> {
+  const rows = await queryRange<DailyRow>("DAILY_BUSINESS");
+  return rows.map((row) => ({
+    date: row.SortKey,
+    pinterestAds: {
+      spend: row.spend,
+      impressions: row.impressions,
+      clicks: row.clicks,
+      ctr: row.ctr,
+      cpc: row.cpc,
+      outboundClicks: row.outboundClicks,
+    },
+    ga4PinterestSessions: {
+      paidSocial: row.ga4PaidSessions,
+      organic: row.ga4OrganicSessions,
+      referral: row.ga4ReferralSessions,
+      total: row.ga4Sessions,
+    },
+    adsense: { estimatedEarnings: row.adsenseRevenue },
+    derived: {
+      revenuePerHundredPinterestSessions: row.revenuePerHundredSessions ?? null,
+      roughProfitEstimate: row.profit,
+    },
+  }));
 }
 
 export function toDay(r: BusinessReport): DayMetrics {
@@ -94,11 +125,11 @@ export function computeDirections(days: DayMetrics[]): TrendDirection[] {
   return directions;
 }
 
-export function buildHistory(reportsDir: string): BusinessHistory {
-  const reports = loadReports(reportsDir);
+export async function buildHistory(): Promise<BusinessHistory> {
+  const reports = await loadReports();
 
   if (reports.length === 0) {
-    throw new Error("No business reports found in reports/");
+    throw new Error("No DAILY_BUSINESS rows found in DDB");
   }
 
   const dailyMetrics = reports.map(toDay);

@@ -1,6 +1,4 @@
 import "dotenv/config";
-import fs from "fs";
-import path from "path";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinterestAdMetrics } from "../src/services/pinterestAds";
 import { getGA4PinterestSessions, getAdSenseEarnings } from "../src/services/googleAnalytics";
@@ -53,18 +51,6 @@ async function main() {
   console.log(`  Rough profit estimate:        $${roughProfit.toFixed(2)}`);
   console.log();
 
-  const reportsDir = path.join(process.cwd(), "reports");
-  if (!fs.existsSync(reportsDir)) {
-    fs.mkdirSync(reportsDir, { recursive: true });
-  }
-
-  const reportPath = path.join(reportsDir, `${dateStr}-business-report.json`);
-  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + "\n");
-  console.log(`  Saved → ${reportPath}`);
-
-  // Dual-write to DynamoDB. JSON above is the canonical artifact during the
-  // parity-verified soak window; DDB row is the future source of truth.
-  // Schema reference: plan/integration/business-history-schema.md §4.2.
   try {
     await putDailyBusiness({
       date: dateStr,

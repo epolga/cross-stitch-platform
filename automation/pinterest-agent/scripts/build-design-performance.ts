@@ -4,7 +4,7 @@ import path from "path";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinAnalytics, type PinMetrics } from "../src/services/pinterestPinAnalytics";
 import { getPinCreatedAt } from "../src/services/pinterestPinDetails";
-import { batchPutDesignPerformance } from "../src/services/historyStore";
+import { batchPutDesignPerformance, queryRange } from "../src/services/historyStore";
 
 interface DesignPinRecord {
   designId: number;
@@ -32,7 +32,6 @@ const ZERO_METRICS: PinMetrics = {
 };
 
 const WINDOW_DAYS = 30;
-// Serial requests to stay within Pinterest analytics rate limits.
 const CONCURRENCY = 1;
 
 const CACHE_PATH = path.join(process.cwd(), "reports", "pin-created-at-cache.json");
@@ -77,17 +76,22 @@ async function processInBatches<T, U>(
 }
 
 async function main() {
-  const reportsDir = path.join(process.cwd(), "reports");
-  const inputPath = path.join(reportsDir, "design-pin-map.json");
+  // Read pin map from DDB
+  const pinMapRows = await queryRange<DesignPinRecord & { SortKey: string; EntityType: string; writtenAt: string }>("DESIGN_PIN_MAP");
+  const designs: DesignPinRecord[] = pinMapRows.map((r) => ({
+    designId: r.designId,
+    albumId: r.albumId,
+    albumCaption: r.albumCaption,
+    pinId: r.pinId,
+    designCaption: r.designCaption,
+    designUrl: r.designUrl,
+  }));
 
-  if (!fs.existsSync(inputPath)) {
-    console.error(`Input file not found: ${inputPath}`);
-    console.error(`Run "npm run pinmap" first.`);
+  if (designs.length === 0) {
+    console.error("No DESIGN_PIN_MAP rows found in DDB. Run `npm run pinmap` first.");
     process.exit(1);
   }
-
-  const designs: DesignPinRecord[] = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-  console.log(`Loaded ${designs.length} design-pin records`);
+  console.log(`Loaded ${designs.length} design-pin records from DDB`);
 
   // Load created_at cache and fetch missing entries from Pinterest
   const cache = loadCreatedAtCache();
@@ -152,28 +156,28 @@ async function main() {
   const errorCount = enriched.length - successCount;
   console.log(`  ${successCount} succeeded, ${errorCount} failed`);
 
-  const output = {
-    generatedAt: new Date().toISOString(),
-    window: { label: `${WINDOW_DAYS}d`, startDate: startStr, endDate: endStr },
-    totalPins: designs.length,
-    successCount,
-    errorCount,
-    designs: enriched,
-  };
-
-  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
-  const outPath = path.join(reportsDir, "design-performance.json");
-  fs.writeFileSync(outPath, JSON.stringify(output, null, 2) + "\n");
-  console.log(`Saved → ${outPath}`);
-
-  // Dual-write to DynamoDB.
   try {
-    const ddbInputs = enriched.map(({ error, ...rest }) => ({
+    const ddbInputs = enriched.map((r) => ({
       snapshotDate: endStr,
       windowLabel: `${WINDOW_DAYS}d`,
       windowStartDate: startStr,
       windowEndDate: endStr,
-      ...rest,
+      designId: r.designId,
+      albumId: r.albumId,
+      albumCaption: r.albumCaption,
+      pinId: r.pinId,
+      designCaption: r.designCaption,
+      designUrl: r.designUrl,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      outboundClicks: r.outboundClicks,
+      ctr: r.ctr,
+      saves: r.saves,
+      pinCreatedAt: r.pinCreatedAt,
+      daysSinceCreation: r.daysSinceCreation,
+      savesPerDay: r.savesPerDay,
+      impressionsPerDay: r.impressionsPerDay,
+      error: r.error,
     }));
     await batchPutDesignPerformance(ddbInputs);
     console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PERFORMANCE × ${ddbInputs.length}] (snapshotDate=${endStr})`);

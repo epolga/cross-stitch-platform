@@ -2,23 +2,11 @@
 
 ## Current goal
 
-Milestone 5 cutover (read cutover + strip JSON writes), then Milestone 8 daily summary email.
+Milestone 8 — daily summary email.
 
 ## Active work
 
-### Milestone 5 — cutover (soak complete ✓ 2026-06-03)
-Soak window done — 8 days all ✓. Ready for cutover:
-
-1. Re-run `npm run verify-parity` manually one last time (confirm still green)
-2. Read cutover — switch `historyBuilder.ts` `loadReports` from
-   `fs.readdirSync(reports/)` to `historyStore.queryRange("DAILY_BUSINESS", ...)`
-3. Strip JSON writes from: `daily-business-report.ts`, `export-design-pin-map.ts`,
-   `build-design-performance.ts`, `test-ai-trend-analysis.ts`, `test-ai-design-analysis.ts`
-4. Clean up: delete `soak-reminder.bat`, remove MilestoneFiveSoakReminder task,
-   remove the soak section from `web/CLAUDE.md`, delete `web/SOAK-WINDOW.md`
-5. Mark Milestone 5 complete in this file and `docs/plan/web/Pinterest AI Agent — Milestones and Roadmap.md`
-
-### Milestone 8 — Daily summary email (next after cutover)
+### Milestone 8 — Daily summary email
 SES is already wired. Build the daily summary email: yesterday's KPIs +
 latest AI trend recommendation, sent at the end of every cron run.
 Estimated ~1 day of work.
@@ -55,6 +43,6 @@ Estimated ~1 day of work.
 ## Done when
 
 - [x] SOAK-WINDOW.md days 1–8 all ✓ (completed 2026-06-03)
-- [ ] Read cutover: historyBuilder reads from DDB, not local JSON
-- [ ] JSON writes stripped from daily pipeline scripts
+- [x] Read cutover: historyBuilder reads from DDB, not local JSON (2026-06-03)
+- [x] JSON writes stripped from daily pipeline scripts (2026-06-03)
 - [ ] Daily summary email sent and verified end-to-end via SES

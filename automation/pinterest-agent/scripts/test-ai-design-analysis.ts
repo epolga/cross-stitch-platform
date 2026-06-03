@@ -1,10 +1,8 @@
 import "dotenv/config";
-import fs from "fs";
-import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { yesterdayDateStr } from "../src/services/dateUtils";
 import { putMarkdown } from "../src/services/aiArtifactStore";
-import { putAiAnalysis } from "../src/services/historyStore";
+import { putAiAnalysis, queryRange } from "../src/services/historyStore";
 
 interface DesignPerformance {
   designId: number;
@@ -89,13 +87,48 @@ function aggregateByAlbum(designs: DesignPerformance[]): AlbumAggregate[] {
 }
 
 async function main() {
-  const perfPath = path.join(process.cwd(), "reports", "design-performance.json");
-  if (!fs.existsSync(perfPath)) {
-    console.error("design-performance.json not found. Run `npm run perf` first.");
+  // Read design performance from DDB (latest snapshotDate = yesterday)
+  const endStr = yesterdayDateStr();
+  const perfRows = await queryRange<DesignPerformance & { SortKey: string; EntityType: string; snapshotDate: string; windowLabel: string; windowStartDate: string; windowEndDate: string; writtenAt: string }>("DESIGN_PERFORMANCE", {
+    startKey: `${endStr}#00000`,
+    endKey: `${endStr}#99999`,
+  });
+
+  if (perfRows.length === 0) {
+    console.error(`No DESIGN_PERFORMANCE rows for snapshotDate=${endStr}. Run \`npm run perf\` first.`);
     process.exit(1);
   }
 
-  const perf: PerformanceFile = JSON.parse(fs.readFileSync(perfPath, "utf-8"));
+  const windowStartDate = perfRows[0].windowStartDate ?? endStr;
+  const windowEndDate = perfRows[0].windowEndDate ?? endStr;
+  const windowLabel = perfRows[0].windowLabel ?? "30d";
+
+  const perf: PerformanceFile = {
+    generatedAt: new Date().toISOString(),
+    window: { label: windowLabel, startDate: windowStartDate, endDate: windowEndDate },
+    totalPins: perfRows.length,
+    successCount: perfRows.filter((r) => !r.error).length,
+    errorCount: perfRows.filter((r) => r.error).length,
+    designs: perfRows.map((r) => ({
+      designId: r.designId,
+      albumId: r.albumId,
+      albumCaption: r.albumCaption,
+      pinId: r.pinId,
+      designCaption: r.designCaption,
+      designUrl: r.designUrl,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      outboundClicks: r.outboundClicks,
+      ctr: r.ctr,
+      saves: r.saves,
+      pinCreatedAt: r.pinCreatedAt,
+      daysSinceCreation: r.daysSinceCreation,
+      savesPerDay: r.savesPerDay,
+      impressionsPerDay: r.impressionsPerDay,
+      error: r.error,
+    })),
+  };
+
   const albumAggregates = aggregateByAlbum(perf.designs);
 
   const designSummary = perf.designs
@@ -167,17 +200,12 @@ Keep it concrete and data-grounded. Cite savesPerDay numbers, not just vibes.`;
   const client = new Anthropic({ apiKey });
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    // Bumped 4000 → 8000 on 2026-05-27 after the 2026-05-26 run cut off
-    // mid-recommendation block ("Stylized cartoon-adjacent nursery animals"
-    // with no closing quote/bracket/brace), which caused the parser to skip
-    // the S3+DDB dual-write and the next-day verify-parity to log a "no
-    // structured block in JSON" warning. Same shape of bug as the documented
-    // trend@2026-05-21 historical gap that was previously bumped 1500 → 3000.
     max_tokens: 8000,
     messages: [{ role: "user", content: prompt }],
   });
 
   const generatedAt = new Date().toISOString();
+  const dateStr = yesterdayDateStr();
 
   const text = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -187,78 +215,16 @@ Keep it concrete and data-grounded. Cite savesPerDay numbers, not just vibes.`;
   console.log(text);
   console.log();
 
-  const dateStr = yesterdayDateStr();
-  const analysisDir = path.join(process.cwd(), "reports", "ai-analysis");
-  if (!fs.existsSync(analysisDir)) fs.mkdirSync(analysisDir, { recursive: true });
-
-  const mdBody = `# AI Design Analysis (${dateStr})\n\nWindow: ${perf.window.startDate} → ${perf.window.endDate}\nDesigns analyzed: ${perf.successCount}\n\n${text}\n`;
-
-  const mdPath = path.join(analysisDir, `${dateStr}-design-analysis.md`);
-  fs.writeFileSync(mdPath, mdBody);
-
-  const latestMdPath = path.join(process.cwd(), "reports", "design-insights.md");
-  fs.writeFileSync(latestMdPath, mdBody);
-
   const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
   const recommendation = jsonMatch ? JSON.parse(jsonMatch[1]) : null;
 
-  const jsonBody =
-    JSON.stringify(
-      {
-        date: dateStr,
-        window: perf.window,
-        totalDesignsAnalyzed: perf.successCount,
-        analysis: text,
-        recommendation,
-      },
-      null,
-      2
-    ) + "\n";
-
-  const jsonPath = path.join(analysisDir, `${dateStr}-design-analysis.json`);
-  fs.writeFileSync(jsonPath, jsonBody);
-
-  const latestJsonPath = path.join(process.cwd(), "reports", "design-insights.json");
-  fs.writeFileSync(latestJsonPath, jsonBody);
-
-  if (recommendation) {
-    const historyFilePath = path.join(
-      process.cwd(),
-      "reports",
-      "ai-recommendations-history.json"
-    );
-    const existing: unknown[] = fs.existsSync(historyFilePath)
-      ? JSON.parse(fs.readFileSync(historyFilePath, "utf-8"))
-      : [];
-    existing.push({
-      date: dateStr,
-      analysisType: "design",
-      topAlbums: recommendation.topAlbums,
-      underperformingAlbums: recommendation.underperformingAlbums,
-      designDirectionsToCreate: recommendation.designDirectionsToCreate,
-      confidence: recommendation.confidence,
-      reasoning: recommendation.reasoning,
-      sourceWindow: perf.window,
-    });
-    fs.writeFileSync(historyFilePath, JSON.stringify(existing, null, 2) + "\n");
-    console.log(`  Saved → ${historyFilePath}`);
-  }
-
-  console.log(`  Saved → ${mdPath}`);
-  console.log(`  Saved → ${jsonPath}`);
-  console.log(`  Saved → ${latestMdPath}`);
-  console.log(`  Saved → ${latestJsonPath}\n`);
-
-  // Dual-write to S3 + DynamoDB. JSON above stays as the canonical artifact
-  // during the parity-verified soak window. Only persist a DDB row when the
-  // AI produced a structured recommendation — without topAlbums/reasoning
-  // the row would be incomplete.
-  // Schema reference: plan/integration/business-history-schema.md §4.3, §10.
   if (!recommendation) {
     console.log("  (no recommendation block in AI output → skipping S3 + DDB dual-write)\n");
     return;
   }
+
   try {
+    const mdBody = `# AI Design Analysis (${dateStr})\n\nWindow: ${perf.window.startDate} → ${perf.window.endDate}\nDesigns analyzed: ${perf.successCount}\n\n${text}\n`;
     const s3Key = await putMarkdown(dateStr, generatedAt, "design", mdBody);
     await putAiAnalysis({
       generatedAt,

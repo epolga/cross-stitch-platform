@@ -114,6 +114,11 @@ export interface DesignPerformanceInput {
   outboundClicks: number;
   ctr: number;
   saves: number;
+  pinCreatedAt?: string;
+  daysSinceCreation?: number;
+  savesPerDay?: number;
+  impressionsPerDay?: number;
+  error?: string;
 }
 
 export interface AnomalyEventInput {

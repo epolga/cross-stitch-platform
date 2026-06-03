@@ -127,7 +127,7 @@ Future versions should also reason about:
 
 # Milestone 5 — Historical Memory System
 
-Status: Partially completed — dual-write + soak window done; read cutover + JSON write removal remaining.
+Status: **Completed 2026-06-03.** All dual-write, soak, read cutover, and JSON write removal steps done.
 
 Completed work:
 * aggregate historical reports (`build-business-history.ts` → `reports/business-history.json`)
@@ -174,9 +174,9 @@ New S3 bucket: **`cross-stitch-ai-reports`** for AI markdown bodies. DDB items h
    * [x] `build-recommendation-history.ts` — confirmed pure read-only summarizer (2026-05-23); no dual-write needed. To be repointed at `queryRange("AI_ANALYSIS")` as part of the post-soak read cutover (step 8).
 6. `scripts/backfill-history.ts` — one-shot walk of every existing `reports/*.json` + AI markdown into DDB/S3. Idempotent. **(Done 2026-05-23; 6 DAILY_BUSINESS + 3 AI_ANALYSIS rows backfilled.)**
 7. `scripts/verify-history-parity.ts` — daily diff between DDB-reconstructed JSON and on-disk JSON during the soak window; fail-fast on diff. **(Done 2026-05-23; wired into `daily-run.bat` as the final step. Soak window log: [SOAK-WINDOW.md](../../../web/SOAK-WINDOW.md).)**
-8. Switch reads in `historyBuilder.ts` (`loadReports`) and the analysis scripts from `fs.readdirSync` to `historyStore.queryRange`.
-9. ~~One-week dual-write soak with daily parity check.~~ **(Done 2026-06-03; 8 days all ✓. See [SOAK-WINDOW.md](../../../web/SOAK-WINDOW.md).)**
-10. Delete JSON writes — strip `fs.writeFileSync` calls; stop generating `reports/` content; markdown lives in S3 only.
+8. ~~Switch reads in `historyBuilder.ts` (`loadReports`) and the analysis scripts from `fs.readdirSync` to `historyStore.queryRange`.~~ **(Done 2026-06-03)**
+9. ~~One-week dual-write soak with daily parity check.~~ **(Done 2026-06-03; 8 days all ✓)**
+10. ~~Delete JSON writes — strip `fs.writeFileSync` calls; stop generating `reports/` content; markdown lives in S3 only.~~ **(Done 2026-06-03)**
 11. `src/services/anomalyDetector.ts` — query last 30 `DAILY_BUSINESS` rows, flag >2σ deviations from trailing-7-day mean (CTR, revenue/session, profit, sessions), write `ANOMALY_EVENT` rows. Wire into `daily-run.bat` after `npm run history`. Notifications deferred to Milestone 8. **(Done 2026-05-23; first real detection runs once ≥8 DAILY_BUSINESS rows exist — expected 2026-05-30.)**
 12. IAM — add `dynamodb:PutItem/GetItem/Query/BatchWriteItem` on `CrossStitchBusinessHistory` and `s3:PutObject/GetObject` on `cross-stitch-ai-reports/*`. Becomes a Lambda role in Milestone 7.
 13. Update this section to "Completed" once steps 1–12 ship.
@@ -415,7 +415,6 @@ The original large planning document has been split into specialized thematic do
 # Next Planned Milestones
 
 In active priority order:
-* **Milestone 5 cutover** — read cutover + strip JSON writes (steps 8 + 10 above; ~1 day)
 * **Milestone 8** — daily summary email: yesterday's KPIs + latest AI recommendation, sent at end of every cron run (~1 day)
 * Milestone 7 — AWS Lambda + EventBridge migration off the local Task Scheduler (~1 day)
 * Milestone 8 remainder — AI recommendation change alerts, Telegram bot for phone notifications
