@@ -51,4 +51,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
+call npm run summary >> daily-run.log 2>&1
+if errorlevel 1 (
+    echo [%date% %time%] ERROR: daily summary email failed >> daily-run.log
+    exit /b 1
+)
+
 echo [%date% %time%] Pipeline complete >> daily-run.log

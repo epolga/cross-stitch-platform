@@ -18,6 +18,7 @@
     "anomaly": "tsx scripts/detect-anomalies.ts",
     "test-email": "tsx scripts/test-email.ts",
     "notify": "tsx scripts/notify-anomalies.ts",
+    "summary": "tsx scripts/send-daily-summary.ts",
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
