@@ -2,8 +2,15 @@ import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import { buildHistory } from "../src/services/historyBuilder";
+import type { BusinessHistory } from "../src/services/types";
 
-async function main() {
+// In Lambda, set REPORTS_DIR=/tmp so the file lands in writable ephemeral storage.
+function getReportsDir(override?: string): string {
+  return override ?? process.env.REPORTS_DIR ?? path.join(process.cwd(), "reports");
+}
+
+export async function run(reportsDir?: string): Promise<BusinessHistory> {
+  const dir = getReportsDir(reportsDir);
   const history = await buildHistory();
 
   console.log(`\n=== Business History (${history.totalDays} days) ===\n`);
@@ -39,11 +46,16 @@ async function main() {
     }
   }
 
-  const reportsDir = path.join(process.cwd(), "reports");
-  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
-  const outputPath = path.join(reportsDir, "business-history.json");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const outputPath = path.join(dir, "business-history.json");
   fs.writeFileSync(outputPath, JSON.stringify(history, null, 2) + "\n");
   console.log(`\n  Saved → ${outputPath}\n`);
+
+  return history;
+}
+
+async function main() {
+  await run();
 }
 
 main().catch((err) => {

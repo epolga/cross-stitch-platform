@@ -86,17 +86,15 @@ function aggregateByAlbum(designs: DesignPerformance[]): AlbumAggregate[] {
   return [...byAlbum.values()].sort((a, b) => b.impressions - a.impressions);
 }
 
-async function main() {
-  // Read design performance from DDB (latest snapshotDate = yesterday)
+export async function run(): Promise<void> {
   const endStr = yesterdayDateStr();
-  const perfRows = await queryRange<DesignPerformance & { SortKey: string; EntityType: string; snapshotDate: string; windowLabel: string; windowStartDate: string; windowEndDate: string; writtenAt: string }>("DESIGN_PERFORMANCE", {
+  const perfRows = await queryRange<DesignPerformance & { SortKey: string; snapshotDate: string; windowLabel: string; windowStartDate: string; windowEndDate: string }>("DESIGN_PERFORMANCE", {
     startKey: `${endStr}#00000`,
     endKey: `${endStr}#99999`,
   });
 
   if (perfRows.length === 0) {
-    console.error(`No DESIGN_PERFORMANCE rows for snapshotDate=${endStr}. Run \`npm run perf\` first.`);
-    process.exit(1);
+    throw new Error(`No DESIGN_PERFORMANCE rows for snapshotDate=${endStr}. Run \`npm run perf\` first.`);
   }
 
   const windowStartDate = perfRows[0].windowStartDate ?? endStr;
@@ -223,28 +221,27 @@ Keep it concrete and data-grounded. Cite savesPerDay numbers, not just vibes.`;
     return;
   }
 
-  try {
-    const mdBody = `# AI Design Analysis (${dateStr})\n\nWindow: ${perf.window.startDate} → ${perf.window.endDate}\nDesigns analyzed: ${perf.successCount}\n\n${text}\n`;
-    const s3Key = await putMarkdown(dateStr, generatedAt, "design", mdBody);
-    await putAiAnalysis({
-      generatedAt,
-      analysisType: "design",
-      forDate: dateStr,
-      reasoning: recommendation.reasoning,
-      markdownS3Key: s3Key,
-      topAlbums: recommendation.topAlbums,
-      underperformingAlbums: recommendation.underperformingAlbums,
-      designDirectionsToCreate: recommendation.designDirectionsToCreate,
-      totalDesignsAnalyzed: perf.successCount,
-      confidence: recommendation.confidence,
-      sourceWindow: perf.window,
-    });
-    console.log(`  Saved → S3 cross-stitch-ai-reports/${s3Key}`);
-    console.log(`  Saved → DDB CrossStitchBusinessHistory[AI_ANALYSIS#${generatedAt}#design]\n`);
-  } catch (err) {
-    console.error(`  S3/DDB dual-write failed:`, err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+  const mdBody = `# AI Design Analysis (${dateStr})\n\nWindow: ${perf.window.startDate} → ${perf.window.endDate}\nDesigns analyzed: ${perf.successCount}\n\n${text}\n`;
+  const s3Key = await putMarkdown(dateStr, generatedAt, "design", mdBody);
+  await putAiAnalysis({
+    generatedAt,
+    analysisType: "design",
+    forDate: dateStr,
+    reasoning: recommendation.reasoning,
+    markdownS3Key: s3Key,
+    topAlbums: recommendation.topAlbums,
+    underperformingAlbums: recommendation.underperformingAlbums,
+    designDirectionsToCreate: recommendation.designDirectionsToCreate,
+    totalDesignsAnalyzed: perf.successCount,
+    confidence: recommendation.confidence,
+    sourceWindow: perf.window,
+  });
+  console.log(`  Saved → S3 cross-stitch-ai-reports/${s3Key}`);
+  console.log(`  Saved → DDB CrossStitchBusinessHistory[AI_ANALYSIS#${generatedAt}#design]\n`);
+}
+
+async function main() {
+  await run();
 }
 
 main().catch((err) => {

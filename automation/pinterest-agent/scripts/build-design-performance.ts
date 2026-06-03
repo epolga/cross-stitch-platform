@@ -1,6 +1,4 @@
 import "dotenv/config";
-import fs from "fs";
-import path from "path";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinAnalytics, type PinMetrics } from "../src/services/pinterestPinAnalytics";
 import { getPinCreatedAt } from "../src/services/pinterestPinDetails";
@@ -34,19 +32,24 @@ const ZERO_METRICS: PinMetrics = {
 const WINDOW_DAYS = 30;
 const CONCURRENCY = 1;
 
-const CACHE_PATH = path.join(process.cwd(), "reports", "pin-created-at-cache.json");
+// Load the created_at cache from the most recent DESIGN_PERFORMANCE snapshot in DDB.
+// This replaces the local file cache so the pipeline works in Lambda (no persistent filesystem).
+async function loadCreatedAtFromDDB(): Promise<Record<string, string>> {
+  const rows = await queryRange<{ SortKey: string; pinId: string; pinCreatedAt?: string; snapshotDate: string }>(
+    "DESIGN_PERFORMANCE",
+    { scanForward: false, limit: 500 }
+  );
+  if (rows.length === 0) return {};
 
-function loadCreatedAtCache(): Record<string, string> {
-  if (!fs.existsSync(CACHE_PATH)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(CACHE_PATH, "utf-8"));
-  } catch {
-    return {};
+  const latestDate = rows[0].snapshotDate;
+  const cache: Record<string, string> = {};
+  for (const row of rows) {
+    if (row.snapshotDate !== latestDate) break; // only most recent snapshot
+    if (row.pinId && row.pinCreatedAt) {
+      cache[row.pinId] = row.pinCreatedAt;
+    }
   }
-}
-
-function saveCreatedAtCache(cache: Record<string, string>): void {
-  fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2) + "\n");
+  return cache;
 }
 
 function daysBefore(date: Date, n: number): Date {
@@ -75,9 +78,9 @@ async function processInBatches<T, U>(
   return out;
 }
 
-async function main() {
+export async function run(): Promise<void> {
   // Read pin map from DDB
-  const pinMapRows = await queryRange<DesignPinRecord & { SortKey: string; EntityType: string; writtenAt: string }>("DESIGN_PIN_MAP");
+  const pinMapRows = await queryRange<DesignPinRecord & { SortKey: string }>("DESIGN_PIN_MAP");
   const designs: DesignPinRecord[] = pinMapRows.map((r) => ({
     designId: r.designId,
     albumId: r.albumId,
@@ -88,16 +91,15 @@ async function main() {
   }));
 
   if (designs.length === 0) {
-    console.error("No DESIGN_PIN_MAP rows found in DDB. Run `npm run pinmap` first.");
-    process.exit(1);
+    throw new Error("No DESIGN_PIN_MAP rows found in DDB. Run `npm run pinmap` first.");
   }
   console.log(`Loaded ${designs.length} design-pin records from DDB`);
 
-  // Load created_at cache and fetch missing entries from Pinterest
-  const cache = loadCreatedAtCache();
+  // Load created_at cache from DDB (most recent DESIGN_PERFORMANCE snapshot)
+  const cache = await loadCreatedAtFromDDB();
   const missing = designs.filter((d) => !cache[d.pinId]);
   if (missing.length > 0) {
-    console.log(`Fetching created_at for ${missing.length} pins from Pinterest...`);
+    console.log(`Fetching created_at for ${missing.length} new pins from Pinterest...`);
     let done = 0;
     for (const d of missing) {
       const createdAt = await getPinCreatedAt(d.pinId);
@@ -106,10 +108,8 @@ async function main() {
       process.stdout.write(`  ${done}/${missing.length} fetched\r`);
     }
     process.stdout.write("\n");
-    saveCreatedAtCache(cache);
-    console.log(`  Saved → ${CACHE_PATH}`);
   } else {
-    console.log(`created_at cache is complete (${Object.keys(cache).length} entries)`);
+    console.log(`created_at cache is complete (${Object.keys(cache).length} entries from DDB)`);
   }
 
   const endDate = yesterdayDate();
@@ -156,37 +156,36 @@ async function main() {
   const errorCount = enriched.length - successCount;
   console.log(`  ${successCount} succeeded, ${errorCount} failed`);
 
-  try {
-    const ddbInputs = enriched.map((r) => ({
-      snapshotDate: endStr,
-      windowLabel: `${WINDOW_DAYS}d`,
-      windowStartDate: startStr,
-      windowEndDate: endStr,
-      designId: r.designId,
-      albumId: r.albumId,
-      albumCaption: r.albumCaption,
-      pinId: r.pinId,
-      designCaption: r.designCaption,
-      designUrl: r.designUrl,
-      impressions: r.impressions,
-      clicks: r.clicks,
-      outboundClicks: r.outboundClicks,
-      ctr: r.ctr,
-      saves: r.saves,
-      pinCreatedAt: r.pinCreatedAt,
-      daysSinceCreation: r.daysSinceCreation,
-      savesPerDay: r.savesPerDay,
-      impressionsPerDay: r.impressionsPerDay,
-      error: r.error,
-    }));
-    await batchPutDesignPerformance(ddbInputs);
-    console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PERFORMANCE × ${ddbInputs.length}] (snapshotDate=${endStr})`);
-  } catch (err) {
-    console.error(`  DDB write failed:`, err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+  const ddbInputs = enriched.map((r) => ({
+    snapshotDate: endStr,
+    windowLabel: `${WINDOW_DAYS}d`,
+    windowStartDate: startStr,
+    windowEndDate: endStr,
+    designId: r.designId,
+    albumId: r.albumId,
+    albumCaption: r.albumCaption,
+    pinId: r.pinId,
+    designCaption: r.designCaption,
+    designUrl: r.designUrl,
+    impressions: r.impressions,
+    clicks: r.clicks,
+    outboundClicks: r.outboundClicks,
+    ctr: r.ctr,
+    saves: r.saves,
+    pinCreatedAt: r.pinCreatedAt,
+    daysSinceCreation: r.daysSinceCreation,
+    savesPerDay: r.savesPerDay,
+    impressionsPerDay: r.impressionsPerDay,
+    error: r.error,
+  }));
+  await batchPutDesignPerformance(ddbInputs);
+  console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PERFORMANCE × ${ddbInputs.length}] (snapshotDate=${endStr})`);
 
   process.exit(0);
+}
+
+async function main() {
+  await run();
 }
 
 main().catch((err) => {

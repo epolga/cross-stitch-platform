@@ -10,11 +10,6 @@ import { batchPutDesignPinMap } from "../src/services/historyStore";
 const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || "CrossStitchItems";
 const REGION = process.env.AWS_REGION || "us-east-1";
 
-if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-  console.error("Missing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env");
-  process.exit(1);
-}
-
 const client = new DynamoDBClient({ region: REGION });
 
 interface DesignPinRecord {
@@ -38,7 +33,6 @@ function readNumber(v?: AttributeValue): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Pin IDs are stored under several historical attribute names — see src/lib/data-access.ts
 function getPinId(item: Record<string, AttributeValue>): string | null {
   return (
     readString(item.PinterestPinId) ||
@@ -50,7 +44,6 @@ function getPinId(item: Record<string, AttributeValue>): string | null {
   );
 }
 
-// Mirrors CreateDesignUrl in src/lib/url-helper.ts
 function buildDesignUrl(caption: string, albumId: number, nPage: number): string {
   const slug = caption.replace(/\s+/g, "-");
   return `/${slug}-${albumId}-${nPage - 1}-Free-Design.aspx`;
@@ -73,7 +66,11 @@ async function scanAll(): Promise<Record<string, AttributeValue>[]> {
   return items;
 }
 
-async function main() {
+export async function run(): Promise<DesignPinRecord[]> {
+  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+    throw new Error("Missing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in env");
+  }
+
   console.log(`Scanning ${TABLE_NAME} in ${REGION} ...`);
   const items = await scanAll();
 
@@ -131,13 +128,14 @@ async function main() {
   if (unknownAlbum > 0) console.log(`  ${unknownAlbum} reference an album not found in the table`);
   if (skippedNoNPage > 0) console.log(`  ${skippedNoNPage} skipped (missing NPage)`);
 
-  try {
-    await batchPutDesignPinMap(records);
-    console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PIN_MAP × ${records.length}]`);
-  } catch (err) {
-    console.error(`  DDB write failed:`, err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+  await batchPutDesignPinMap(records);
+  console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PIN_MAP × ${records.length}]`);
+
+  return records;
+}
+
+async function main() {
+  await run();
 }
 
 main().catch((err) => {

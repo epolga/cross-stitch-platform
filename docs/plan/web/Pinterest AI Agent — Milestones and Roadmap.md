@@ -225,7 +225,7 @@ Remaining work for V2:
 
 # Milestone 7 — Automated Scheduling
 
-Status: Partially completed (local scheduling done; AWS Lambda still planned).
+Status: Partially completed — Lambda + EventBridge infrastructure built (2026-06-03); awaiting deployment and Windows task disable.
 
 Completed work:
 * automatic daily execution via Windows Task Scheduler
@@ -262,7 +262,7 @@ Note: distinct from Milestone 7. M7 moves the *cron agent* off the developer mac
 
 # Milestone 8 — Email / Notification Layer
 
-Status: Partially completed (anomaly notifications shipped 2026-05-23; SES delivery, daily summaries, and AI recommendation alerts remain).
+Status: Partially completed — anomaly notifications shipped 2026-05-23; daily summary email shipped 2026-06-03; AI recommendation alerts and Telegram bot remain.
 
 Completed work:
 * SES wiring: `CrossStitch-SES-Send` IAM policy attached to `CrossStitch-Agents`; `src/services/sesClient.ts` thin wrapper over `@aws-sdk/client-sesv2`; reuses the Uploader's verified sender `ann@cross-stitch.com` and configuration set `my-first-configuration-set`.

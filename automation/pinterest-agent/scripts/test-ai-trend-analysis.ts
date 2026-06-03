@@ -13,19 +13,22 @@ if (!apiKey || apiKey === "your-key-here") {
   process.exit(1);
 }
 
-async function main() {
-  const historyPath = path.join(process.cwd(), "reports", "business-history.json");
+function getReportsDir(override?: string): string {
+  return override ?? process.env.REPORTS_DIR ?? path.join(process.cwd(), "reports");
+}
+
+export async function run(reportsDir?: string): Promise<void> {
+  const dir = getReportsDir(reportsDir);
+  const historyPath = path.join(dir, "business-history.json");
 
   if (!fs.existsSync(historyPath)) {
-    console.error("business-history.json not found. Run build-business-history.ts first.");
-    process.exit(1);
+    throw new Error(`business-history.json not found at ${historyPath}. Run build-business-history first.`);
   }
 
   const history: BusinessHistory = JSON.parse(fs.readFileSync(historyPath, "utf-8"));
 
   if (history.totalDays < 2) {
-    console.error("Need at least 2 days of data for trend analysis.");
-    process.exit(1);
+    throw new Error("Need at least 2 days of data for trend analysis.");
   }
 
   const summary = {
@@ -80,6 +83,7 @@ Keep the analysis concise and data-driven. Focus on patterns, not single-day noi
   });
 
   const generatedAt = new Date().toISOString();
+  const dateStr = yesterdayDateStr();
 
   const text = message.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -89,8 +93,6 @@ Keep the analysis concise and data-driven. Focus on patterns, not single-day noi
   console.log(text);
   console.log();
 
-  const dateStr = yesterdayDateStr();
-
   const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
   const confidence = jsonMatch ? JSON.parse(jsonMatch[1]) : null;
 
@@ -99,26 +101,25 @@ Keep the analysis concise and data-driven. Focus on patterns, not single-day noi
     return;
   }
 
-  try {
-    const mdBody = `# AI Trend Analysis (${dateStr})\n\n${text}\n`;
-    const s3Key = await putMarkdown(dateStr, generatedAt, "trend", mdBody);
-    await putAiAnalysis({
-      generatedAt,
-      analysisType: "trend",
-      forDate: dateStr,
-      reasoning: confidence.reasoning,
-      markdownS3Key: s3Key,
-      recommendedAction: confidence.recommendedAction,
-      sourceHistoryRange: history.dateRange,
-      totalDaysAnalyzed: history.totalDays,
-      confidence: confidence.confidence,
-    });
-    console.log(`  Saved → S3 cross-stitch-ai-reports/${s3Key}`);
-    console.log(`  Saved → DDB CrossStitchBusinessHistory[AI_ANALYSIS#${generatedAt}#trend]\n`);
-  } catch (err) {
-    console.error(`  S3/DDB dual-write failed:`, err instanceof Error ? err.message : err);
-    process.exit(1);
-  }
+  const mdBody = `# AI Trend Analysis (${dateStr})\n\n${text}\n`;
+  const s3Key = await putMarkdown(dateStr, generatedAt, "trend", mdBody);
+  await putAiAnalysis({
+    generatedAt,
+    analysisType: "trend",
+    forDate: dateStr,
+    reasoning: confidence.reasoning,
+    markdownS3Key: s3Key,
+    recommendedAction: confidence.recommendedAction,
+    sourceHistoryRange: history.dateRange,
+    totalDaysAnalyzed: history.totalDays,
+    confidence: confidence.confidence,
+  });
+  console.log(`  Saved → S3 cross-stitch-ai-reports/${s3Key}`);
+  console.log(`  Saved → DDB CrossStitchBusinessHistory[AI_ANALYSIS#${generatedAt}#trend]\n`);
+}
+
+async function main() {
+  await run();
 }
 
 main().catch((err) => {

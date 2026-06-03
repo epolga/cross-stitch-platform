@@ -22,7 +22,8 @@
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
-    "setup-token": "tsx scripts/get-google-refresh-token.ts"
+    "setup-token": "tsx scripts/get-google-refresh-token.ts",
+    "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node20 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
   "author": "",
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.8.0",
+    "esbuild": "^0.25.0",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3"
   }
