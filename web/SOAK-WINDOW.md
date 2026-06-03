@@ -17,7 +17,7 @@
 | 5        | 2026-05-31 | ✓           | Parity passed (35 passed, 1 warning, 0 failed). Cron exit code 1 due to `verify-history-parity.ts` missing `process.exit(0)` — Node.js hung on open DynamoDB connections after printing the summary, Task Scheduler killed the process. Bug was always present; previous days exited before the kill. Fixed (process.exit(0) added, pushed). No data integrity issue — no reset. |
 | 6        | 2026-06-01 | ✓           | Parity passed (38 passed, 1 warning, 0 failed). Cron exit code 1 again — process.exit(0) fix didn't resolve the bat-level failure; investigating. No data integrity issue — no reset. created_at cache built (381 pins, 376 with data). |
 | 7        | 2026-06-02 | ✓           | Parity cron failed (39 passed, 1 warning, 2 failed) — 2026-05-31 design/trend entries drifted. Root cause: monorepo refactoring on 6/1 evening caused the pipeline to run twice for May 31 (5 AM old repo + 8 PM old repo), leaving conflicting DDB entries; local files copied during migration match neither. No pipeline code bug — dual-write for new data is correct. Treated as benign migration artifact; no reset. |
-| 8        | 2026-06-03 | ⏳ pending   | Extra confirmation day after monorepo migration. If green, proceed to cutover.                                       |
+| 8        | 2026-06-03 | ✓           | 42 passed, 1 warning, 0 failed. Parity exit=0. Soak complete — proceed to cutover.                                  |
 
 Mark each row as `✓` (passed) or `✗` (failed, with a short root-cause note) after reviewing `daily-run.log` the morning after the cron runs.
 

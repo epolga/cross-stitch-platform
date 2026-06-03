@@ -2,21 +2,14 @@
 
 ## Current goal
 
-Finish Milestone 5 soak window (day 7 tomorrow), then build Milestone 8 daily summary email.
+Milestone 5 cutover (read cutover + strip JSON writes), then Milestone 8 daily summary email.
 
 ## Active work
 
-### Milestone 5 — DynamoDB soak window
-Soak restarted from 2026-05-27 after two pipeline failures (5/25 and 5/26)
-caused by duplicate DESIGN_PIN_MAP DDB keys. Root cause fixed in AutoPinner
-(`GetLatestUnpinnedAsync` now skips DesignIDs already pinned on another row).
+### Milestone 5 — cutover (soak complete ✓ 2026-06-03)
+Soak window done — 8 days all ✓. Ready for cutover:
 
-Days 1–6 all ✓. **Day 7 runs 2026-06-02 at 5 AM.**
-
-Check `automation/pinterest-agent/daily-run.log` after the 5 AM cron.
-If parity passes, proceed to the cutover checklist in SOAK-WINDOW.md:
-
-1. Re-run `npm run verify-parity` manually one last time
+1. Re-run `npm run verify-parity` manually one last time (confirm still green)
 2. Read cutover — switch `historyBuilder.ts` `loadReports` from
    `fs.readdirSync(reports/)` to `historyStore.queryRange("DAILY_BUSINESS", ...)`
 3. Strip JSON writes from: `daily-business-report.ts`, `export-design-pin-map.ts`,
@@ -25,7 +18,7 @@ If parity passes, proceed to the cutover checklist in SOAK-WINDOW.md:
    remove the soak section from `web/CLAUDE.md`, delete `web/SOAK-WINDOW.md`
 5. Mark Milestone 5 complete in this file and `docs/plan/web/Pinterest AI Agent — Milestones and Roadmap.md`
 
-### Milestone 8 — Daily summary email (next after soak)
+### Milestone 8 — Daily summary email (next after cutover)
 SES is already wired. Build the daily summary email: yesterday's KPIs +
 latest AI trend recommendation, sent at the end of every cron run.
 Estimated ~1 day of work.
@@ -61,7 +54,7 @@ Estimated ~1 day of work.
 
 ## Done when
 
-- [ ] SOAK-WINDOW.md days 1–7 all ✓ (target 2026-06-02)
+- [x] SOAK-WINDOW.md days 1–8 all ✓ (completed 2026-06-03)
 - [ ] Read cutover: historyBuilder reads from DDB, not local JSON
 - [ ] JSON writes stripped from daily pipeline scripts
 - [ ] Daily summary email sent and verified end-to-end via SES
