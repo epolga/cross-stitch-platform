@@ -2,7 +2,7 @@ import "dotenv/config";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinAnalytics, type PinMetrics } from "../src/services/pinterestPinAnalytics";
 import { getPinCreatedAt } from "../src/services/pinterestPinDetails";
-import { batchPutDesignPerformance, queryRange } from "../src/services/historyStore";
+import { putDesignPerformance, queryRange, type DesignPerformanceInput } from "../src/services/historyStore";
 
 interface DesignPinRecord {
   designId: number;
@@ -117,78 +117,77 @@ export async function run(): Promise<void> {
   const startStr = formatDate(startDate);
   const endStr = formatDate(endDate);
 
-  console.log(`Fetching Pinterest metrics for window ${startStr} to ${endStr} (${WINDOW_DAYS}d)`);
+  // Load analytics already written for this snapshot — lets us skip re-fetching on
+  // re-runs and Lambda retries after a timeout.
+  const cachedRows = await queryRange<{ pinId: string }>(
+    "DESIGN_PERFORMANCE",
+    { startKey: `${endStr}#00000`, endKey: `${endStr}#99999` }
+  );
+  const cachedPinIds = new Set(cachedRows.map((r) => r.pinId));
+  const toFetch = designs.filter((d) => !cachedPinIds.has(d.pinId));
 
-  let done = 0;
-  const enriched = await processInBatches(designs, CONCURRENCY, async (d) => {
-    try {
-      const metrics = await getPinAnalytics(d.pinId, startStr, endStr);
+  if (cachedPinIds.size > 0) {
+    console.log(`  ${cachedPinIds.size} pins already cached for ${endStr}, fetching ${toFetch.length} remaining`);
+  }
+
+  let successCount = cachedPinIds.size;
+  let errorCount = 0;
+
+  if (toFetch.length > 0) {
+    console.log(`Fetching Pinterest metrics for window ${startStr} to ${endStr} (${WINDOW_DAYS}d)`);
+    let done = 0;
+    await processInBatches(toFetch, CONCURRENCY, async (d) => {
+      let record: DesignPerformanceInput;
+      try {
+        const metrics = await getPinAnalytics(d.pinId, startStr, endStr);
+        const pinCreatedAt = cache[d.pinId];
+        const daysSinceCreation = pinCreatedAt ? daysSince(pinCreatedAt, endDate) : undefined;
+        const effectiveDays = daysSinceCreation ? Math.min(daysSinceCreation, WINDOW_DAYS) : WINDOW_DAYS;
+        record = {
+          snapshotDate: endStr,
+          windowLabel: `${WINDOW_DAYS}d`,
+          windowStartDate: startStr,
+          windowEndDate: endStr,
+          ...d,
+          ...metrics,
+          pinCreatedAt,
+          daysSinceCreation,
+          savesPerDay: Math.round((metrics.saves / effectiveDays) * 1000) / 1000,
+          impressionsPerDay: Math.round((metrics.impressions / effectiveDays) * 10) / 10,
+        };
+        successCount++;
+      } catch (err) {
+        record = {
+          snapshotDate: endStr,
+          windowLabel: `${WINDOW_DAYS}d`,
+          windowStartDate: startStr,
+          windowEndDate: endStr,
+          ...d,
+          ...ZERO_METRICS,
+          error: err instanceof Error ? err.message : String(err),
+        };
+        errorCount++;
+      }
+      // Write immediately so a Lambda timeout doesn't lose progress
+      await putDesignPerformance(record);
       done++;
-      process.stdout.write(`  ${done}/${designs.length} fetched\r`);
+      process.stdout.write(`  ${done}/${toFetch.length} fetched\r`);
+      return record;
+    });
+    process.stdout.write("\n");
+  }
 
-      const pinCreatedAt = cache[d.pinId];
-      const daysSinceCreation = pinCreatedAt ? daysSince(pinCreatedAt, endDate) : undefined;
-      const effectiveDays = daysSinceCreation ? Math.min(daysSinceCreation, WINDOW_DAYS) : WINDOW_DAYS;
-      const savesPerDay = Math.round((metrics.saves / effectiveDays) * 1000) / 1000;
-      const impressionsPerDay = Math.round((metrics.impressions / effectiveDays) * 10) / 10;
-
-      return {
-        ...d,
-        ...metrics,
-        pinCreatedAt,
-        daysSinceCreation,
-        savesPerDay,
-        impressionsPerDay,
-      } as DesignPerformanceRecord;
-    } catch (err) {
-      done++;
-      process.stdout.write(`  ${done}/${designs.length} fetched\r`);
-      return {
-        ...d,
-        ...ZERO_METRICS,
-        error: err instanceof Error ? err.message : String(err),
-      } as DesignPerformanceRecord;
-    }
-  });
-  process.stdout.write("\n");
-
-  const successCount = enriched.filter((r) => !r.error).length;
-  const errorCount = enriched.length - successCount;
   console.log(`  ${successCount} succeeded, ${errorCount} failed`);
-
-  const ddbInputs = enriched.map((r) => ({
-    snapshotDate: endStr,
-    windowLabel: `${WINDOW_DAYS}d`,
-    windowStartDate: startStr,
-    windowEndDate: endStr,
-    designId: r.designId,
-    albumId: r.albumId,
-    albumCaption: r.albumCaption,
-    pinId: r.pinId,
-    designCaption: r.designCaption,
-    designUrl: r.designUrl,
-    impressions: r.impressions,
-    clicks: r.clicks,
-    outboundClicks: r.outboundClicks,
-    ctr: r.ctr,
-    saves: r.saves,
-    pinCreatedAt: r.pinCreatedAt,
-    daysSinceCreation: r.daysSinceCreation,
-    savesPerDay: r.savesPerDay,
-    impressionsPerDay: r.impressionsPerDay,
-    error: r.error,
-  }));
-  await batchPutDesignPerformance(ddbInputs);
-  console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PERFORMANCE × ${ddbInputs.length}] (snapshotDate=${endStr})`);
-
-  process.exit(0);
+  console.log(`Saved → DDB CrossStitchBusinessHistory[DESIGN_PERFORMANCE × ${successCount + errorCount}] (snapshotDate=${endStr})`);
 }
 
 async function main() {
   await run();
 }
 
-main().catch((err) => {
-  console.error("Error:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  main().catch((err) => {
+    console.error("Error:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

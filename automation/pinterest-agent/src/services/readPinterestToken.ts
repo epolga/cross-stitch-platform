@@ -10,6 +10,10 @@ interface PinterestTokenFile {
 }
 
 export function readPinterestAccessToken(): string {
+  if (process.env.PINTEREST_ACCESS_TOKEN) {
+    return process.env.PINTEREST_ACCESS_TOKEN;
+  }
+
   const tokenPath = resolvePinterestTokenPath();
   if (!fs.existsSync(tokenPath)) {
     throw new Error(`Pinterest token file not found at ${tokenPath}`);

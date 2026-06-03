@@ -8,7 +8,7 @@ import { putMarkdown } from "../src/services/aiArtifactStore";
 import { putAiAnalysis } from "../src/services/historyStore";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
-if (!apiKey || apiKey === "your-key-here") {
+if ((!apiKey || apiKey === "your-key-here") && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   console.error("Set ANTHROPIC_API_KEY in .env");
   process.exit(1);
 }
@@ -122,7 +122,9 @@ async function main() {
   await run();
 }
 
-main().catch((err) => {
-  console.error("Error:", err.message || err);
-  process.exit(1);
-});
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  main().catch((err) => {
+    console.error("Error:", err.message || err);
+    process.exit(1);
+  });
+}

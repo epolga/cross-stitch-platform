@@ -2,18 +2,8 @@
 # Run from automation/pinterest-agent/:  .\lambda\deploy.ps1
 #
 # Prerequisites:
-#   - AWS CLI configured (aws configure) with a profile that can create/update Lambda + EventBridge + IAM
-#   - npm run build:lambda must succeed first (or this script does it for you)
-#
-# What this does:
-#   1. Builds the esbuild bundle
-#   2. Creates the Lambda execution role (once; idempotent)
-#   3. Zips the bundle
-#   4. Creates or updates the Lambda function
-#   5. Creates or updates the EventBridge rule (daily at 02:00 UTC = 05:00 UTC+3)
-#   6. Adds Lambda permission for EventBridge to invoke it
-
-$ErrorActionPreference = "Stop"
+#   - AWS CLI installed and credentials configured (used by pipeline .env)
+#   - Node.js / npm available
 
 $FUNCTION_NAME  = "cross-stitch-daily-pipeline"
 $ROLE_NAME      = "cross-stitch-lambda-pipeline"
@@ -25,116 +15,83 @@ $MEMORY_MB      = 1024
 # ── 1. Build bundle ───────────────────────────────────────────────────────────
 Write-Host "Building Lambda bundle..." -ForegroundColor Cyan
 npm run "build:lambda"
-if ($LASTEXITCODE -ne 0) { throw "esbuild failed" }
+if ($LASTEXITCODE -ne 0) { Write-Error "esbuild failed"; exit 1 }
 
 # ── 2. Ensure IAM execution role exists ──────────────────────────────────────
 Write-Host "Checking IAM role $ROLE_NAME..." -ForegroundColor Cyan
 
-$roleArn = aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text 2>$null
-if ($LASTEXITCODE -ne 0) {
+# Capture both stdout and stderr; check exit code separately
+$roleCheckOut = (aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text 2>&1)
+$roleExists   = ($LASTEXITCODE -eq 0)
+
+if (-not $roleExists) {
     Write-Host "  Creating role..." -ForegroundColor Yellow
 
-    $trustPolicy = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+    # Write policies to temp files — PowerShell 5.1 mangles inline JSON with braces when passed to native exes
+    $tmpDir = [System.IO.Path]::GetTempPath()
+
+    # Write policies to temp files without BOM — PowerShell 5.1 -Encoding utf8 adds a BOM that
+    # breaks AWS CLI JSON parsing; [System.IO.File]::WriteAllText writes plain UTF-8.
+    $tmpDir = [System.IO.Path]::GetTempPath()
+    $toFile = { param($path, $content) [System.IO.File]::WriteAllText($path, $content) }
+
+    $trustFile = Join-Path $tmpDir "trust.json"
+    & $toFile $trustFile '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+    $trustUri = "file://" + $trustFile.Replace("\", "/")
     aws iam create-role `
         --role-name $ROLE_NAME `
-        --assume-role-policy-document $trustPolicy `
+        --assume-role-policy-document $trustUri `
         --description "Execution role for cross-stitch daily pipeline Lambda" | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Error "create-role failed"; exit 1 }
 
-    # Basic Lambda logs
     aws iam attach-role-policy `
         --role-name $ROLE_NAME `
         --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" | Out-Null
 
-    # DynamoDB — CrossStitchBusinessHistory (read + write) and CrossStitchItems (read/scan)
-    $ddbPolicy = @"
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "dynamodb:PutItem","dynamodb:GetItem","dynamodb:Query",
-        "dynamodb:BatchWriteItem","dynamodb:UpdateItem"
-      ],
-      "Resource": "arn:aws:dynamodb:$REGION:*:table/CrossStitchBusinessHistory"
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["dynamodb:Scan","dynamodb:Query"],
-      "Resource": [
-        "arn:aws:dynamodb:$REGION:*:table/CrossStitchItems",
-        "arn:aws:dynamodb:$REGION:*:table/CrossStitchItems/index/*"
-      ]
-    }
-  ]
-}
-"@
-    aws iam put-role-policy `
-        --role-name $ROLE_NAME `
-        --policy-name "CrossStitchDynamoDB" `
-        --policy-document $ddbPolicy | Out-Null
+    # DynamoDB
+    $acctId  = (aws sts get-caller-identity --query Account --output text)
+    $ddbArn1 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchBusinessHistory"
+    $ddbArn2 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchItems"
+    $ddbArn3 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchItems/index/*"
+    $ddbFile = Join-Path $tmpDir "policy-ddb.json"
+    & $toFile $ddbFile "{`"Version`":`"2012-10-17`",`"Statement`":[{`"Effect`":`"Allow`",`"Action`":[`"dynamodb:PutItem`",`"dynamodb:GetItem`",`"dynamodb:Query`",`"dynamodb:BatchWriteItem`",`"dynamodb:UpdateItem`"],`"Resource`":`"$ddbArn1`"},{`"Effect`":`"Allow`",`"Action`":[`"dynamodb:Scan`",`"dynamodb:Query`"],`"Resource`":[`"$ddbArn2`",`"$ddbArn3`"]}]}"
+    $ddbUri = "file://" + $ddbFile.Replace("\", "/")
+    aws iam put-role-policy --role-name $ROLE_NAME --policy-name "CrossStitchDynamoDB" --policy-document $ddbUri | Out-Null
 
-    # S3 — cross-stitch-ai-reports
-    $s3Policy = @"
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["s3:PutObject","s3:GetObject"],
-    "Resource": "arn:aws:s3:::cross-stitch-ai-reports/*"
-  }]
-}
-"@
-    aws iam put-role-policy `
-        --role-name $ROLE_NAME `
-        --policy-name "CrossStitchS3" `
-        --policy-document $s3Policy | Out-Null
+    # S3
+    $s3File = Join-Path $tmpDir "policy-s3.json"
+    & $toFile $s3File '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject","s3:GetObject"],"Resource":"arn:aws:s3:::cross-stitch-ai-reports/*"}]}'
+    $s3Uri = "file://" + $s3File.Replace("\", "/")
+    aws iam put-role-policy --role-name $ROLE_NAME --policy-name "CrossStitchS3" --policy-document $s3Uri | Out-Null
 
-    # SES — send from ann@cross-stitch.com
-    $sesPolicy = @"
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": "ses:SendEmail",
-    "Resource": "*",
-    "Condition": {
-      "StringEquals": {"ses:FromAddress": "ann@cross-stitch.com"}
-    }
-  }]
-}
-"@
-    aws iam put-role-policy `
-        --role-name $ROLE_NAME `
-        --policy-name "CrossStitchSES" `
-        --policy-document $sesPolicy | Out-Null
+    # SES
+    $sesFile = Join-Path $tmpDir "policy-ses.json"
+    & $toFile $sesFile '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"ses:SendEmail","Resource":"*","Condition":{"StringEquals":{"ses:FromAddress":"ann@cross-stitch.com"}}}]}'
+    $sesUri = "file://" + $sesFile.Replace("\", "/")
+    aws iam put-role-policy --role-name $ROLE_NAME --policy-name "CrossStitchSES" --policy-document $sesUri | Out-Null
 
     Write-Host "  Role created. Waiting 10s for IAM propagation..." -ForegroundColor Yellow
     Start-Sleep -Seconds 10
-
-    $roleArn = aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text
 }
 
+$roleArn = (aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
 Write-Host "  Role ARN: $roleArn" -ForegroundColor Green
 
 # ── 3. Zip the bundle ─────────────────────────────────────────────────────────
 Write-Host "Zipping bundle..." -ForegroundColor Cyan
 $zipPath = "lambda\dist\handler.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath }
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path "lambda\dist\handler.js" -DestinationPath $zipPath
 Write-Host "  $zipPath created" -ForegroundColor Green
 
 # ── 4. Create or update Lambda function ──────────────────────────────────────
 Write-Host "Deploying Lambda function $FUNCTION_NAME..." -ForegroundColor Cyan
 
-$exists = aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  Creating function (first deploy)..." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  ACTION REQUIRED: Set environment variables in the Lambda console before the first run." -ForegroundColor Red
-    Write-Host "  See lambda\env-vars.md for the full list." -ForegroundColor Red
-    Write-Host ""
+$fnCheck = (aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>&1)
+$fnExists = ($LASTEXITCODE -eq 0)
 
+if (-not $fnExists) {
+    Write-Host "  Creating function..." -ForegroundColor Yellow
     aws lambda create-function `
         --function-name $FUNCTION_NAME `
         --runtime "nodejs20.x" `
@@ -144,13 +101,15 @@ if ($LASTEXITCODE -ne 0) {
         --timeout $TIMEOUT_SEC `
         --memory-size $MEMORY_MB `
         --region $REGION `
-        --description "Cross-stitch daily pipeline: reports, AI analysis, Pinterest metrics, SES summary" | Out-Null
+        --description "Cross-stitch daily pipeline" | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Error "create-function failed"; exit 1 }
 } else {
-    Write-Host "  Updating existing function code..." -ForegroundColor Yellow
+    Write-Host "  Updating function code..." -ForegroundColor Yellow
     aws lambda update-function-code `
         --function-name $FUNCTION_NAME `
         --zip-file "fileb://$zipPath" `
         --region $REGION | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Error "update-function-code failed"; exit 1 }
 
     aws lambda update-function-configuration `
         --function-name $FUNCTION_NAME `
@@ -159,33 +118,25 @@ if ($LASTEXITCODE -ne 0) {
         --region $REGION | Out-Null
 }
 
-$functionArn = aws lambda get-function --function-name $FUNCTION_NAME --region $REGION --query "Configuration.FunctionArn" --output text
+$functionArn = (aws lambda get-function --function-name $FUNCTION_NAME --region $REGION --query "Configuration.FunctionArn" --output text)
 Write-Host "  Function ARN: $functionArn" -ForegroundColor Green
 
 # ── 5. EventBridge rule — daily at 02:00 UTC (05:00 UTC+3) ───────────────────
 Write-Host "Setting up EventBridge rule $RULE_NAME..." -ForegroundColor Cyan
 
-$ruleArn = aws events put-rule `
+$ruleArn = (aws events put-rule `
     --name $RULE_NAME `
     --schedule-expression "cron(0 2 * * ? *)" `
     --state ENABLED `
     --description "Triggers cross-stitch daily pipeline at 05:00 local (02:00 UTC)" `
     --region $REGION `
-    --query "RuleArn" --output text
-
+    --query "RuleArn" --output text)
 Write-Host "  Rule ARN: $ruleArn" -ForegroundColor Green
 
-# ── 6. Add Lambda as EventBridge target ──────────────────────────────────────
-aws events put-targets `
-    --rule $RULE_NAME `
-    --targets "Id=1,Arn=$functionArn" `
-    --region $REGION | Out-Null
+# ── 6. Wire EventBridge → Lambda ─────────────────────────────────────────────
+aws events put-targets --rule $RULE_NAME --targets "Id=1,Arn=$functionArn" --region $REGION | Out-Null
 
-# Grant EventBridge permission to invoke Lambda (idempotent via statement ID)
-aws lambda remove-permission `
-    --function-name $FUNCTION_NAME `
-    --statement-id "AllowEventBridge" `
-    --region $REGION 2>$null
+aws lambda remove-permission --function-name $FUNCTION_NAME --statement-id "AllowEventBridge" --region $REGION 2>&1 | Out-Null
 aws lambda add-permission `
     --function-name $FUNCTION_NAME `
     --statement-id "AllowEventBridge" `
@@ -197,7 +148,5 @@ aws lambda add-permission `
 Write-Host ""
 Write-Host "Deployment complete." -ForegroundColor Green
 Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1. Set environment variables in Lambda console (see lambda\env-vars.md)"
-Write-Host "  2. Test manually: aws lambda invoke --function-name $FUNCTION_NAME --payload '{}' --region $REGION /tmp/out.json && cat /tmp/out.json"
-Write-Host "  3. Once verified, disable the Windows Task Scheduler task: schtasks /Change /TN PinterestDailyReport /Disable"
+Write-Host "Next: set env vars, then test:" -ForegroundColor Cyan
+Write-Host "  aws lambda invoke --function-name $FUNCTION_NAME --payload '{}' --region $REGION out.json"

@@ -80,7 +80,9 @@ async function main() {
   console.log();
 }
 
-main().catch((err) => {
-  console.error("Error:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  main().catch((err) => {
+    console.error("Error:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

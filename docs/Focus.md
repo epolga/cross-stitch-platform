@@ -2,20 +2,33 @@
 
 ## Current goal
 
-Milestone 7 — deploy Lambda pipeline and disable Windows Task Scheduler task.
+Verify tomorrow's Lambda scheduled run (02:00 UTC / 05:00 local), then disable Windows Task Scheduler and mark Milestone 7 complete.
 
 ## Active work
 
-### Milestone 7 — Lambda deployment
-Lambda infrastructure is built. Steps to go live:
+### Milestone 7 — Lambda deployed, pending first scheduled run
 
-1. `cd automation/pinterest-agent && npm run build:lambda` (already done — produces `lambda/dist/handler.js`)
-2. Run `.\lambda\deploy.ps1` to create IAM role + Lambda function + EventBridge rule
-3. Set all env vars in Lambda console (see `lambda/env-vars.md`)
-4. Test manually: `aws lambda invoke --function-name cross-stitch-daily-pipeline --payload '{}' --region us-east-1 out.json`
-5. Verify email arrives and DDB looks correct
-6. Disable Windows Task Scheduler: `schtasks /Change /TN PinterestDailyReport /Disable`
-7. Mark Milestone 7 complete in this file and milestones doc
+**Lambda is live.** Function `cross-stitch-daily-pipeline`, EventBridge rule `cross-stitch-daily-5am` (02:00 UTC). All env vars set.
+
+**What was tested (2026-06-03):** Manual invocations confirmed steps 1–7 pass. Steps 8 (AI design analysis) and 9 (daily summary email) were not reached because Pinterest rate limiting on step 7 consumed most of the 15-minute Lambda timeout.
+
+**Bug fixes applied during Lambda migration:**
+- All 7 pipeline scripts had bare `main()` call at module top level → wrapped with `if (!process.env.AWS_LAMBDA_FUNCTION_NAME)`
+- `build-design-performance.ts` had `process.exit(0)` inside `run()` → removed
+- `test-ai-trend-analysis.ts` and `test-ai-design-analysis.ts` had top-level `process.exit(1)` for missing API key → guarded same way
+- `readPinterestToken.ts` read token from file only → now checks `PINTEREST_ACCESS_TOKEN` env var first
+- `deploy.ps1` passed JSON inline to AWS CLI → PowerShell 5.1 adds UTF-8 BOM which AWS CLI rejects as invalid JSON → fixed by writing temp files via `[System.IO.File]::WriteAllText`
+
+**Analytics cache added to `build-design-performance.ts`:**
+- Before fetching, queries DDB for pins already written for today's `snapshotDate`
+- Skips cached pins → zero API calls on re-runs the same day
+- Writes each pin to DDB immediately after fetch (checkpoint pattern) → Lambda auto-retries resume from where a timeout left off
+
+**Tomorrow morning — what to check:**
+1. CloudWatch Logs → `/aws/lambda/cross-stitch-daily-pipeline` — look for `[pipeline] complete for date=2026-06-03`
+2. Inbox (olga.epstein@gmail.com) — daily summary email should arrive
+3. If both green: `schtasks /Change /TN PinterestDailyReport /Disable` and tick the Done when item
+4. If step 7 still times out: the cache means the Lambda auto-retry will complete steps 8–9
 
 ## Session 2026-06-01 — completed housekeeping
 
