@@ -210,6 +210,21 @@ export async function putAnomaly(input: AnomalyEventInput): Promise<void> {
   );
 }
 
+// Mark an AI_ANALYSIS row as having had its recommendation-change alert sent.
+export async function markAiAnalysisChangeNotified(sk: string): Promise<void> {
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE,
+      Key: { EntityType: "AI_ANALYSIS", SortKey: sk },
+      UpdateExpression: "SET changeNotified = :t, changeNotifiedAt = :n",
+      ExpressionAttributeValues: {
+        ":t": true,
+        ":n": new Date().toISOString(),
+      },
+    })
+  );
+}
+
 // Mark a single ANOMALY_EVENT row as notified — called by the alerter after
 // the email send succeeds. Stamps notifiedAt so the row carries its own audit
 // trail without a separate journal.
