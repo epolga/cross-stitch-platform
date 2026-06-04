@@ -4,6 +4,7 @@
 
 import { queryRange, markAiAnalysisChangeNotified } from "./historyStore";
 import { sendEmail } from "./sesClient";
+import { sendTelegramMessage } from "./telegramClient";
 
 interface TrendRow {
   SortKey: string;
@@ -86,6 +87,13 @@ export async function notifyRecommendationChange(): Promise<ChangeNotifyResult> 
     textBody: textLines.join("\n") + "\n",
     htmlBody,
   });
+
+  const tgText = [
+    `📊 <b>Recommendation changed</b> — ${latest.forDate}`,
+    `${fromEmoji} ${actionLabel(from)} → ${toEmoji} <b>${actionLabel(to)}</b>`,
+    ...(confPct ? [`Confidence: ${confPct}`] : []),
+  ].join("\n");
+  await sendTelegramMessage(tgText).catch(() => {/* non-fatal */});
 
   await markAiAnalysisChangeNotified(latest.SortKey);
 

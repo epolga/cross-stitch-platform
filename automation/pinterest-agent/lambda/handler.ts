@@ -18,6 +18,7 @@ import { runAnomalyDetection } from "../src/services/anomalyDetector";
 import { notifyAnomalies } from "../src/services/anomalyNotifier";
 import { notifyRecommendationChange } from "../src/services/recommendationChangeNotifier";
 import { sendDailySummary } from "../src/services/dailySummary";
+import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
 export interface PipelineEvent {
@@ -73,6 +74,9 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   console.log("[10/10] daily summary email");
   const { messageId, date } = await sendDailySummary();
   console.log(`  sent → SES MessageId=${messageId} (date=${date})`);
+
+  const tokenReminderSent = await sendGoogleTokenReminderIfDue();
+  if (tokenReminderSent) console.log("  Google token refresh reminder sent via Telegram");
 
   console.log(`[pipeline] complete for date=${dateStr}`);
 };

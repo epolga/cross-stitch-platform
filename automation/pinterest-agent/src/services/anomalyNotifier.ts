@@ -12,6 +12,7 @@ import {
   type AnomalyMetric,
 } from "./historyStore";
 import { sendEmail } from "./sesClient";
+import { sendTelegramMessage } from "./telegramClient";
 
 interface AnomalyRow {
   SortKey: string;
@@ -151,6 +152,15 @@ export async function notifyAnomalies(): Promise<NotifyResult> {
     textBody: formatTextBody(unnotified),
     htmlBody: formatHtmlBody(unnotified),
   });
+
+  const telegramLines = [
+    `⚠️ <b>${unnotified.length} anomaly alert(s)</b> — ${latestForDate}`,
+    ...unnotified.map((r) => {
+      const arrow = r.direction === "above" ? "▲" : "▼";
+      return `${arrow} ${r.metric}: ${r.observedValue.toFixed(2)} (${r.deviationSigmas.toFixed(1)}σ)`;
+    }),
+  ];
+  await sendTelegramMessage(telegramLines.join("\n")).catch(() => {/* non-fatal */});
 
   const markFailures: NotifyResult["markFailures"] = [];
   let marked = 0;

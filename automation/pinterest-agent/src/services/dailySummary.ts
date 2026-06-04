@@ -4,6 +4,7 @@
 
 import { queryRange } from "./historyStore";
 import { sendEmail } from "./sesClient";
+import { sendTelegramMessage } from "./telegramClient";
 
 interface DailyRow {
   SortKey: string; // date YYYY-MM-DD
@@ -174,6 +175,18 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
     textBody: formatTextBody(today, prev7, trend),
     htmlBody: formatHtmlBody(today, prev7, trend),
   });
+
+  const profitSign = today.profit >= 0 ? "+" : "";
+  const trendLine = trend
+    ? `${actionEmoji(trend.recommendedAction ?? "")} ${actionLabel(trend.recommendedAction ?? "—")}`
+    : "—";
+  const tgText = [
+    `📈 <b>Daily report</b> — ${today.SortKey}`,
+    `Spend: ${usd(today.spend)}  Revenue: ${usd(today.adsenseRevenue)}  Profit: <b>${profitSign}${usd(today.profit)}</b>`,
+    `Sessions: ${today.ga4Sessions}  Clicks: ${today.clicks}`,
+    `AI: ${trendLine}`,
+  ].join("\n");
+  await sendTelegramMessage(tgText).catch(() => {/* non-fatal */});
 
   return { messageId, date: today.SortKey };
 }
