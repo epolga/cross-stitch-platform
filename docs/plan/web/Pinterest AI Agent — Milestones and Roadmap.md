@@ -308,6 +308,15 @@ Implementation:
 
 ## Planned remaining work
 
+* **AdSense URL channels setup** — create one URL channel per promoted page in the AdSense dashboard (8 channels, ~5 min). Once set up, the AdSense API returns revenue broken down by page, enabling exact revenue-per-promoted-pin reporting instead of session-share estimates. Pages to add:
+  - /Horse-16-70-Free-Design.aspx
+  - /Donkey-48-37-Free-Design.aspx
+  - /Kitten-15-204-Free-Design.aspx
+  - /Cups-14-383-Free-Design.aspx
+  - /Bird-9-290-Free-Design.aspx
+  - /Butterfly-59-72-Free-Design.aspx
+  - /Basketball-28-1-Free-Design.aspx
+  - /Horse-16-72-Free-Design.aspx
 * A/B test comparison report: join `PinLinkType` (DESIGN/ALBUM) from `CrossStitchItems` with `DESIGN_PERFORMANCE` data to compare avg impressions/saves/clicks for design-page pins vs album-page pins
 
 Estimated effort:
