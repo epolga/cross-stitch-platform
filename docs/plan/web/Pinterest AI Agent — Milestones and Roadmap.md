@@ -225,20 +225,16 @@ Remaining work for V2:
 
 # Milestone 7 — Automated Scheduling
 
-Status: Partially completed — Lambda + EventBridge infrastructure built (2026-06-03); awaiting deployment and Windows task disable.
+Status: **Completed 2026-06-04.** Lambda + EventBridge running; Windows Task Scheduler disabled.
 
 Completed work:
 * automatic daily execution via Windows Task Scheduler
 * `daily-run.bat` orchestrating the full daily pipeline with fail-fast logging to `daily-run.log`
 * automated report generation
-
-Remaining work:
-* AWS Lambda automation
-* EventBridge scheduling
-* migration off the developer machine
-
-Estimated effort:
-1 focused development day remaining (AWS migration)
+* AWS Lambda function `cross-stitch-daily-pipeline` (nodejs20.x, 1024 MB, 15 min timeout)
+* EventBridge rule `cross-stitch-daily-5am` firing at 02:00 UTC daily
+* Lambda retry pattern: first invocation warms Pinterest metrics cache; auto-retry completes in ~2.5 min
+* Windows Task Scheduler `PinterestDailyReport` disabled 2026-06-04
 
 ---
 
@@ -262,23 +258,19 @@ Note: distinct from Milestone 7. M7 moves the *cron agent* off the developer mac
 
 # Milestone 8 — Email / Notification Layer
 
-Status: Partially completed — anomaly notifications shipped 2026-05-23; daily summary email shipped 2026-06-03; AI recommendation alerts and Telegram bot remain.
+Status: **Completed 2026-06-04.**
 
 Completed work:
-* SES wiring: `CrossStitch-SES-Send` IAM policy attached to `CrossStitch-Agents`; `src/services/sesClient.ts` thin wrapper over `@aws-sdk/client-sesv2`; reuses the Uploader's verified sender `ann@cross-stitch.com` and configuration set `my-first-configuration-set`.
-* Test path: `scripts/test-email.ts` + `npm run test-email` for one-shot SES smoke tests after env or IAM changes.
-* Anomaly notifications: `src/services/anomalyNotifier.ts` queries unnotified `ANOMALY_EVENT` rows, formats a multipart text+HTML email, sends via SES, marks each row `notified=true` + `notifiedAt`. Idempotent. Wired into `daily-run.bat` as the step right after `npm run anomaly`. End-to-end verified with a synthetic row.
-* DDB schema: `markAnomalyNotified(detectedAt, metric)` added to `src/services/historyStore.ts`.
+* SES wiring: `CrossStitch-SES-Send` IAM policy; `src/services/sesClient.ts`; verified sender `ann@cross-stitch.com`.
+* Anomaly notifications via SES + Telegram: `src/services/anomalyNotifier.ts`, idempotent, `notified=true` flag in DDB.
+* Daily summary email + Telegram digest: `src/services/dailySummary.ts` — KPIs, 7-day averages, AI action — sent at end of every pipeline run (step 10/10).
+* AI recommendation change alerts via SES + Telegram: `src/services/recommendationChangeNotifier.ts` — fires when `recommendedAction` flips between consecutive trend runs; `changeNotified=true` flag prevents duplicate sends.
+* Telegram bot `@cross_stitch_automation_bot`: `src/services/telegramClient.ts` thin fetch wrapper; credentials in `.env` + Lambda env vars.
+* Google OAuth token refresh reminder via Telegram every Saturday: `src/services/googleTokenReminder.ts`; replaces Windows MessageBox popup. `lambda/push-google-token.ps1` updates Lambda env var after local refresh.
 
-Remaining work:
-* daily summary email (yesterday's KPIs + latest AI trend recommendation, sent every cron run)
-* AI recommendation alerts (notify on action changes — hold → decrease, etc.)
+Deferred (out of scope for this milestone):
 * SES bounce / complaint handling
-* operational summaries
-* Telegram bot for operator alerts — alternate channel that reaches the phone, not just the desk. Initial scope: create the bot via BotFather, capture the bot token + Olga's chat id (both into `.env`), add `src/services/telegramClient.ts` with a `sendTelegramMessage(text)` helper, and route the Google-token weekly refresh reminder through it (currently a local Windows MessageBox at `automation/pinterest-agent/google-token-refresh-popup.ps1` — only useful when Olga is at the desk on Saturday morning). Follow-on: add anomaly alerts and the daily summary to the same bot.
-
-Estimated effort:
-~1 focused development day remaining.
+* `GoogleTokenRefreshReminder` Windows task disable (Telegram covers the notification; task left enabled as fallback)
 
 ---
 
@@ -415,6 +407,6 @@ The original large planning document has been split into specialized thematic do
 # Next Planned Milestones
 
 In active priority order:
-* **Milestone 8** — daily summary email: yesterday's KPIs + latest AI recommendation, sent at end of every cron run (~1 day)
-* Milestone 7 — AWS Lambda + EventBridge migration off the local Task Scheduler (~1 day)
-* Milestone 8 remainder — AI recommendation change alerts, Telegram bot for phone notifications
+* **Milestone 7b** — EB platform upgrade for cross-stitch.com (~0.5 day)
+* **Milestone 9** — Better attribution: landing page analysis, returning users, monetization depth (~2-3 days)
+* **Milestone 10** — WPF Uploader integration: AI title/board/keyword suggestions (~3-5 days)
