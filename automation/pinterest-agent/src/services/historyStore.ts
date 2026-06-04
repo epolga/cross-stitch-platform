@@ -23,7 +23,9 @@ export type EntityType =
   | "AI_ANALYSIS"
   | "DESIGN_PIN_MAP"
   | "DESIGN_PERFORMANCE"
-  | "ANOMALY_EVENT";
+  | "ANOMALY_EVENT"
+  | "PROMOTED_AD_STATS"
+  | "LANDING_PAGE_STATS";
 
 export type AnalysisType = "trend" | "design";
 
@@ -47,6 +49,8 @@ export const sortKey = {
     `${snapshotDate}#${padDesignId(designId)}`,
   anomalyEvent: (detectedAt: string, metric: AnomalyMetric) =>
     `${detectedAt}#${metric}`,
+  promotedAdStats: (date: string, adId: string) => `${date}#${adId}`,
+  landingPageStats: (date: string, page: string) => `${date}#${page}`,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -291,6 +295,50 @@ export async function batchPutDesignPerformance(
     inputs.map((input) => ({
       EntityType: "DESIGN_PERFORMANCE",
       SortKey: sortKey.designPerformance(input.snapshotDate, input.designId),
+      ...input,
+      writtenAt: now,
+    }))
+  );
+}
+
+export interface PromotedAdStatsInput {
+  date: string;
+  adId: string;
+  destinationUrl: string;
+  title: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  outboundClicks: number;
+  ctr: number;
+}
+
+export interface LandingPageStatsInput {
+  date: string;
+  page: string;           // path only, e.g. /Horse-16-70-Free-Design.aspx
+  paidSessions: number;
+  organicSessions: number;
+  referralSessions: number;
+}
+
+export async function batchPutPromotedAdStats(inputs: PromotedAdStatsInput[]): Promise<void> {
+  const now = new Date().toISOString();
+  await batchPutRows(
+    inputs.map((input) => ({
+      EntityType: "PROMOTED_AD_STATS",
+      SortKey: sortKey.promotedAdStats(input.date, input.adId),
+      ...input,
+      writtenAt: now,
+    }))
+  );
+}
+
+export async function batchPutLandingPageStats(inputs: LandingPageStatsInput[]): Promise<void> {
+  const now = new Date().toISOString();
+  await batchPutRows(
+    inputs.map((input) => ({
+      EntityType: "LANDING_PAGE_STATS",
+      SortKey: sortKey.landingPageStats(input.date, input.page),
       ...input,
       writtenAt: now,
     }))

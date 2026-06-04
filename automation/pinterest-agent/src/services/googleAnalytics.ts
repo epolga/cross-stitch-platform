@@ -1,6 +1,7 @@
 import { analyticsData, adsense, GA4_PROPERTY_ID } from "./googleClient";
 import { yesterdayDate } from "./dateUtils";
 import type { GA4PinterestSessions } from "./types";
+import type { LandingPageStatsInput } from "./historyStore";
 
 export async function getGA4PinterestSessions(): Promise<GA4PinterestSessions> {
   const response = await analyticsData.properties.runReport({
@@ -36,6 +37,51 @@ export async function getGA4PinterestSessions(): Promise<GA4PinterestSessions> {
   }
 
   return { paidSocial, organic, referral, total: paidSocial + organic + referral };
+}
+
+export async function getGA4LandingPageStats(date: string): Promise<Omit<LandingPageStatsInput, "date">[]> {
+  const response = await analyticsData.properties.runReport({
+    property: `properties/${GA4_PROPERTY_ID}`,
+    requestBody: {
+      dateRanges: [{ startDate: date, endDate: date }],
+      dimensions: [
+        { name: "sessionSource" },
+        { name: "sessionMedium" },
+        { name: "landingPage" },
+      ],
+      metrics: [{ name: "sessions" }],
+      dimensionFilter: {
+        filter: {
+          fieldName: "sessionSource",
+          stringFilter: { matchType: "CONTAINS", value: "pinterest", caseSensitive: false },
+        },
+      },
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+      limit: 50,
+    },
+  });
+
+  // Aggregate per landing page across paid/organic/referral
+  const pageMap = new Map<string, { paid: number; organic: number; referral: number }>();
+
+  for (const row of response.data.rows ?? []) {
+    const medium = (row.dimensionValues?.[1]?.value ?? "").toLowerCase();
+    const page   = row.dimensionValues?.[2]?.value ?? "(unknown)";
+    const n      = parseInt(row.metricValues?.[0]?.value ?? "0", 10);
+
+    if (!pageMap.has(page)) pageMap.set(page, { paid: 0, organic: 0, referral: 0 });
+    const entry = pageMap.get(page)!;
+    if (medium === "paidsocial")    entry.paid     += n;
+    else if (medium === "organic")  entry.organic  += n;
+    else                            entry.referral += n;
+  }
+
+  return Array.from(pageMap.entries()).map(([page, s]) => ({
+    page,
+    paidSessions:     s.paid,
+    organicSessions:  s.organic,
+    referralSessions: s.referral,
+  }));
 }
 
 export async function getAdSenseEarnings(): Promise<number> {

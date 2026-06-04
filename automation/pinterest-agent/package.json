@@ -19,6 +19,8 @@
     "test-email": "tsx scripts/test-email.ts",
     "notify": "tsx scripts/notify-anomalies.ts",
     "summary": "tsx scripts/send-daily-summary.ts",
+    "promoted": "tsx scripts/build-promoted-ads-report.ts",
+    "landing": "tsx scripts/build-landing-page-report.ts",
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
