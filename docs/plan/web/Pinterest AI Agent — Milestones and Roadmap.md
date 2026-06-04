@@ -285,31 +285,30 @@ Implementation:
 
 ## Promoted pins — destination URL audit (2026-06-04)
 
-8 manually promoted pins (paid ads). All link to design pages. **Issue found:** 5 of 8 link to `cross-stitch-pattern.net` instead of `cross-stitch.com`:
+8 manually promoted pins (paid ads). All link to design pages. Issue found and **fixed 2026-06-04**: 5 of 8 were linking to `cross-stitch-pattern.net` instead of `cross-stitch.com` — corrected in Pinterest Ads Manager and verified via API.
 
 | Pin ID | Title | Destination | Status |
 |--------|-------|-------------|--------|
-| 257127459971086016 | Horse | cross-stitch.com/Horse-16-70-Free-Design.aspx | ✓ correct |
-| 257127459971134481 | Donkey | cross-stitch-pattern.net/Donkey-48-37-Free-Design.aspx | ✗ fix in Ads Manager |
-| 257127459971131605 | Kitten | cross-stitch-pattern.net/Kitten-15-204-Free-Design.aspx | ✗ fix in Ads Manager |
-| 257127459971150107 | Cups | cross-stitch-pattern.net/Cups-14-383-Free-Design.aspx | ✗ fix in Ads Manager |
-| 257127459971125344 | Bird | cross-stitch-pattern.net/Bird-9-290-Free-Design.aspx | ✗ fix in Ads Manager |
-| 257127459971158709 | Butterfly | cross-stitch-pattern.net/Butterfly-59-72-Free-Design.aspx | ✗ fix in Ads Manager |
-| 257127459971676617 | Basketball | cross-stitch.com/Basketball-28-1-Free-Design.aspx | ✓ correct |
-| 257127459971643285 | Horse | cross-stitch.com/Horse-16-72-Free-Design.aspx | ✓ correct |
+| 257127459971086016 | Horse | cross-stitch.com/Horse-16-70-Free-Design.aspx | ✓ |
+| 257127459971134481 | Donkey | cross-stitch.com/Donkey-48-37-Free-Design.aspx | ✓ fixed |
+| 257127459971131605 | Kitten | cross-stitch.com/Kitten-15-204-Free-Design.aspx | ✓ fixed |
+| 257127459971150107 | Cups | cross-stitch.com/Cups-14-383-Free-Design.aspx | ✓ fixed |
+| 257127459971125344 | Bird | cross-stitch.com/Bird-9-290-Free-Design.aspx | ✓ fixed |
+| 257127459971158709 | Butterfly | cross-stitch.com/Butterfly-59-72-Free-Design.aspx | ✓ fixed |
+| 257127459971676617 | Basketball | cross-stitch.com/Basketball-28-1-Free-Design.aspx | ✓ |
+| 257127459971643285 | Horse | cross-stitch.com/Horse-16-72-Free-Design.aspx | ✓ |
 
-`cross-stitch-pattern.net` does a 308 redirect to `cross-stitch.com` preserving the path, so users land correctly — but the extra hop causes GA4 to misattribute paid sessions, and the domain should not appear in promoted ads.
-**Action: fix destination URLs for 5 pins in Pinterest Ads Manager.**
+## Landing page traffic (done 2026-06-04)
 
-## Landing page traffic (to build)
+`LANDING_PAGE_STATS` entity added to DDB. `build-landing-page-report.ts` queries GA4 daily with `landingPage` dimension filtered by Pinterest source, storing paid/organic/referral session counts per page. Wired as step [4/12] in Lambda pipeline.
 
-GA4 already tracks Pinterest sessions but only as a total. Need to add `landingPage` dimension to the GA4 query (filtered by Pinterest source) to see which pages each Pinterest click lands on — especially for the 8 promoted pins.
+## Per-promoted-ad daily metrics (done 2026-06-04)
+
+`PROMOTED_AD_STATS` entity added to DDB. `build-promoted-ads-report.ts` fetches all active ads and their daily analytics (spend, clicks, outbound clicks, CTR) from Pinterest Ads API. Wired as step [3/12] in Lambda pipeline.
 
 ## Planned remaining work
 
-* Per-pin daily metrics for the 8 promoted pins via Pinterest Ads API (`pin_id` breakdown)
-* Landing page breakdown from GA4 (`landingPage` dimension, Pinterest source filter)
-* A/B test comparison report: design-page pins vs album-page pins by impressions/saves/clicks
+* A/B test comparison report: join `PinLinkType` (DESIGN/ALBUM) from `CrossStitchItems` with `DESIGN_PERFORMANCE` data to compare avg impressions/saves/clicks for design-page pins vs album-page pins
 
 Estimated effort:
 2 focused development days
