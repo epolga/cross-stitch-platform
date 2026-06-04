@@ -264,19 +264,55 @@ Deferred (out of scope for this milestone):
 
 # Milestone 9 — Better Attribution
 
-Status: Planned.
+Status: In progress.
 
-Planned work:
-Improve:
-traffic quality understanding
-including:
-* landing-page analysis
-* returning users
-* monetization depth
-* newsletter conversion quality
+## A/B test — design page vs album page destination (organic pins)
+
+AutoPinner and Uploader create organic Pinterest pins with a configurable destination split:
+* **80% design page links** — pin links to the individual design page e.g. `cross-stitch.com/Horse-16-70-Free-Design.aspx`
+* **20% album page links** — pin links to the album page e.g. `cross-stitch.com/Free-Horses-Charts.aspx`
+
+Implementation:
+* Controlled by `ALBUM_LINK_RATIO=0.20` in AutoPinner `.env` (and `PinterestAlbumLinkRatio` in Uploader `App.config`)
+* `PinLinkAbTracker.cs` (shared library) uses deficit tracking — not random — so the ratio stays exact across sessions
+* State persisted in `Uploader/secrets/pin-ab-stats.json` (shared between Uploader and AutoPinner)
+* DynamoDB `CrossStitchItems` table stores `PinLinkType = DESIGN | ALBUM` per pin
+* As of 2026-06-04: ~65 design pins, ~16 album pins created by AutoPinner
+
+**Remaining work:**
+* Pull per-pin Pinterest analytics and join with `PinLinkType` from DDB to compare design vs album pin performance (impressions, saves, clicks, saves-per-day)
+* Report comparison in daily AI design analysis
+
+## Promoted pins — destination URL audit (2026-06-04)
+
+8 manually promoted pins (paid ads). All link to design pages. **Issue found:** 5 of 8 link to `cross-stitch-pattern.net` instead of `cross-stitch.com`:
+
+| Pin ID | Title | Destination | Status |
+|--------|-------|-------------|--------|
+| 257127459971086016 | Horse | cross-stitch.com/Horse-16-70-Free-Design.aspx | ✓ correct |
+| 257127459971134481 | Donkey | cross-stitch-pattern.net/Donkey-48-37-Free-Design.aspx | ✗ fix in Ads Manager |
+| 257127459971131605 | Kitten | cross-stitch-pattern.net/Kitten-15-204-Free-Design.aspx | ✗ fix in Ads Manager |
+| 257127459971150107 | Cups | cross-stitch-pattern.net/Cups-14-383-Free-Design.aspx | ✗ fix in Ads Manager |
+| 257127459971125344 | Bird | cross-stitch-pattern.net/Bird-9-290-Free-Design.aspx | ✗ fix in Ads Manager |
+| 257127459971158709 | Butterfly | cross-stitch-pattern.net/Butterfly-59-72-Free-Design.aspx | ✗ fix in Ads Manager |
+| 257127459971676617 | Basketball | cross-stitch.com/Basketball-28-1-Free-Design.aspx | ✓ correct |
+| 257127459971643285 | Horse | cross-stitch.com/Horse-16-72-Free-Design.aspx | ✓ correct |
+
+`cross-stitch-pattern.net` does a 308 redirect to `cross-stitch.com` preserving the path, so users land correctly — but the extra hop causes GA4 to misattribute paid sessions, and the domain should not appear in promoted ads.
+**Action: fix destination URLs for 5 pins in Pinterest Ads Manager.**
+
+## Landing page traffic (to build)
+
+GA4 already tracks Pinterest sessions but only as a total. Need to add `landingPage` dimension to the GA4 query (filtered by Pinterest source) to see which pages each Pinterest click lands on — especially for the 8 promoted pins.
+
+## Planned remaining work
+
+* Per-pin daily metrics for the 8 promoted pins via Pinterest Ads API (`pin_id` breakdown)
+* Landing page breakdown from GA4 (`landingPage` dimension, Pinterest source filter)
+* A/B test comparison report: design-page pins vs album-page pins by impressions/saves/clicks
 
 Estimated effort:
-2–3 focused development days
+2 focused development days
 
 ---
 
