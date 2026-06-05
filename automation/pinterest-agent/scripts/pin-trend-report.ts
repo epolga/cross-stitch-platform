@@ -16,6 +16,11 @@ interface PinRow {
   profit: number;
 }
 
+function ils(n: number): string {
+  const sign = n < 0 ? "-₪" : "₪";
+  return sign + Math.abs(n).toFixed(2);
+}
+
 function usd(n: number): string {
   const sign = n < 0 ? "-$" : "$";
   return sign + Math.abs(n).toFixed(2);
@@ -50,14 +55,14 @@ async function run() {
     pin.days.sort((a, b) => a.date.localeCompare(b.date));
 
     console.log(`\n── ${pin.title} ──`);
-    console.log("Date        Clicks  Spend    Revenue  Profit");
-    console.log("──────────  ──────  ───────  ───────  ───────");
+    console.log("Date        Clicks  Spend($)  Revenue(₪)  Profit(₪)");
+    console.log("──────────  ──────  ────────  ──────────  ─────────");
 
     let totClicks = 0, totSpend = 0, totRev = 0, totProfit = 0;
     for (const d of pin.days) {
       const sign = d.profit >= 0 ? "+" : "";
       console.log(
-        `${d.date}  ${String(d.clicks).padStart(6)}  ${usd(d.spend).padStart(7)}  ~${usd(d.attributedRevenue).padStart(6)}  ~${sign}${usd(d.profit)}`
+        `${d.date}  ${String(d.clicks).padStart(6)}  ${usd(d.spend).padStart(8)}  ~${ils(d.attributedRevenue).padStart(9)}  ~${sign}${ils(d.profit)}`
       );
       totClicks += d.clicks;
       totSpend += d.spend;
@@ -66,9 +71,9 @@ async function run() {
     }
     if (pin.days.length > 1) {
       const sign = totProfit >= 0 ? "+" : "";
-      console.log("──────────  ──────  ───────  ───────  ───────");
+      console.log("──────────  ──────  ────────  ──────────  ─────────");
       console.log(
-        `TOTAL       ${String(totClicks).padStart(6)}  ${usd(totSpend).padStart(7)}  ~${usd(totRev).padStart(6)}  ~${sign}${usd(totProfit)}`
+        `TOTAL       ${String(totClicks).padStart(6)}  ${usd(totSpend).padStart(8)}  ~${ils(totRev).padStart(9)}  ~${sign}${ils(totProfit)}`
       );
     }
   }

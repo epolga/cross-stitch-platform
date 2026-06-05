@@ -60,6 +60,7 @@ export const sortKey = {
 
 export interface DailyBusinessInput {
   date: string;
+  usdIlsRate?: number;
   spend: number;
   impressions: number;
   clicks: number;

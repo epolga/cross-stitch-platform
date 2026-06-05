@@ -23,6 +23,7 @@ interface LandingPageRow {
 interface DailyBusinessRow {
   adsenseRevenue: number;
   ga4Sessions: number;
+  usdIlsRate?: number;
 }
 
 export async function run(dateStr?: string): Promise<void> {
@@ -52,8 +53,9 @@ export async function run(dateStr?: string): Promise<void> {
     return;
   }
 
-  const totalRevenue = bizRows[0].adsenseRevenue;
+  const totalRevenue = bizRows[0].adsenseRevenue;   // ILS
   const totalAllSessions = bizRows[0].ga4Sessions;
+  const usdIlsRate = bizRows[0].usdIlsRate ?? 3.65; // fallback for old rows without rate
 
   const pageSessionMap = new Map<string, number>();
   let totalPaidSessions = 0;
@@ -71,6 +73,7 @@ export async function run(dateStr?: string): Promise<void> {
       totalAllSessions > 0
         ? (paidSessions / totalAllSessions) * totalRevenue
         : 0;
+    const spendIls = ad.spend * usdIlsRate; // convert USD → ILS
 
     return {
       date,
@@ -82,20 +85,20 @@ export async function run(dateStr?: string): Promise<void> {
       spend: ad.spend,
       paidSessions,
       attributedRevenue,
-      profit: attributedRevenue - ad.spend,
+      profit: attributedRevenue - spendIls, // both ILS
     };
   });
 
   await batchPutPinAttribution(inputs);
 
   console.log(
-    `  ${inputs.length} pins — total revenue $${totalRevenue.toFixed(2)}, all sessions: ${totalAllSessions}, paid sessions: ${totalPaidSessions}`
+    `  ${inputs.length} pins — total revenue ₪${totalRevenue.toFixed(2)}, all sessions: ${totalAllSessions}, paid sessions: ${totalPaidSessions}`
   );
   for (const r of [...inputs].sort((a, b) => b.profit - a.profit)) {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
     const sign = r.profit >= 0 ? "+" : "";
     console.log(
-      `    ${r.clicks}c  $${r.spend.toFixed(2)}sp  ~$${r.attributedRevenue.toFixed(2)}rev  ~${sign}$${r.profit.toFixed(2)}profit  ${page}`
+      `    ${r.clicks}c  ₪${r.spend.toFixed(2)}sp  ~₪${r.attributedRevenue.toFixed(2)}rev  ~${sign}₪${r.profit.toFixed(2)}profit  ${page}`
     );
   }
 }

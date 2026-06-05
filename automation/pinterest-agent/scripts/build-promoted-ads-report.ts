@@ -78,10 +78,10 @@ export async function run(dateStr?: string): Promise<void> {
 
   const totalSpend = inputs.reduce((s, r) => s + r.spend, 0);
   const totalClicks = inputs.reduce((s, r) => s + r.clicks, 0);
-  console.log(`  ${inputs.length} ads — total spend $${totalSpend.toFixed(2)}, ${totalClicks} clicks`);
+  console.log(`  ${inputs.length} ads — total spend ₪${totalSpend.toFixed(2)}, ${totalClicks} clicks`);
   for (const r of inputs.sort((a, b) => b.clicks - a.clicks)) {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
-    console.log(`    ${r.clicks}c / ${r.outboundClicks}oc  $${r.spend.toFixed(2)}  ${page}`);
+    console.log(`    ${r.clicks}c / ${r.outboundClicks}oc  ₪${r.spend.toFixed(2)}  ${page}`);
   }
 }
 

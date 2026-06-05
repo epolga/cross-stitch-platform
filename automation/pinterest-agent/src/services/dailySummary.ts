@@ -8,7 +8,8 @@ import { sendTelegramMessage } from "./telegramClient";
 
 interface DailyRow {
   SortKey: string; // date YYYY-MM-DD
-  spend: number;
+  usdIlsRate?: number;
+  spend: number; // USD
   impressions: number;
   clicks: number;
   ctr: number;
@@ -64,6 +65,11 @@ function pct(n: number): string {
   return (n * 100).toFixed(2) + "%";
 }
 
+function ils(n: number): string {
+  const sign = n < 0 ? "-₪" : "₪";
+  return sign + Math.abs(n).toFixed(2);
+}
+
 function usd(n: number): string {
   const sign = n < 0 ? "-$" : "$";
   return sign + Math.abs(n).toFixed(2);
@@ -116,25 +122,25 @@ function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
   lines.push(`Cross-stitch daily report — ${today.SortKey}`, "");
 
   lines.push("KPIs (yesterday)");
-  lines.push(`  Spend:       ${usd(today.spend)}`);
+  lines.push(`  Spend:       ${usd(today.spend)} USD`);
   lines.push(`  Clicks:      ${today.clicks}  (outbound: ${today.outboundClicks})`);
   lines.push(`  Impressions: ${today.impressions}  (CTR: ${pct(today.ctr)})`);
   lines.push(`  Sessions:    ${today.ga4Sessions}  (paid: ${today.ga4PaidSessions}, organic: ${today.ga4OrganicSessions})`);
-  lines.push(`  Revenue:     ${usd(today.adsenseRevenue)}`);
-  lines.push(`  Profit:      ${usd(today.profit)}`);
+  lines.push(`  Revenue:     ${ils(today.adsenseRevenue)}`);
+  lines.push(`  Profit:      ${ils(today.profit)}`);
   if (today.revenuePerHundredSessions != null) {
-    lines.push(`  Rev/100s:    ${usd(today.revenuePerHundredSessions)}`);
+    lines.push(`  Rev/100s:    ${ils(today.revenuePerHundredSessions)}`);
   }
 
   if (prev7.length >= 3) {
     const avg = (fn: (r: DailyRow) => number) =>
       prev7.reduce((s, r) => s + fn(r), 0) / prev7.length;
     lines.push("", `7-day averages (${prev7.length} days)`);
-    lines.push(`  Spend:    ${usd(avg((r) => r.spend))}`);
+    lines.push(`  Spend:    ${usd(avg((r) => r.spend))} USD`);
     lines.push(`  Clicks:   ${avg((r) => r.clicks).toFixed(0)}`);
     lines.push(`  Sessions: ${avg((r) => r.ga4Sessions).toFixed(0)}`);
-    lines.push(`  Revenue:  ${usd(avg((r) => r.adsenseRevenue))}`);
-    lines.push(`  Profit:   ${usd(avg((r) => r.profit))}`);
+    lines.push(`  Revenue:  ${ils(avg((r) => r.adsenseRevenue))}`);
+    lines.push(`  Profit:   ${ils(avg((r) => r.profit))}`);
   }
 
   if (trend) {
@@ -154,17 +160,17 @@ function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
     lines.push("", "Per-pin trend (revenue estimated by paid sessions)");
     for (const pin of pinTrends) {
       lines.push("", `  ${pin.title}`);
-      lines.push("  Date        Clicks  Spend    Revenue  Profit");
+      lines.push("  Date        Clicks  Spend($)  Revenue(₪)  Profit(₪)");
       for (const d of pin.days) {
         const sign = d.profit >= 0 ? "+" : "";
         lines.push(
-          `  ${d.date}  ${String(d.clicks).padStart(5)}  ${usd(d.spend).padStart(7)}  ~${usd(d.attributedRevenue).padStart(6)}  ~${sign}${usd(d.profit)}`
+          `  ${d.date}  ${String(d.clicks).padStart(5)}  ${usd(d.spend).padStart(8)}  ~${ils(d.attributedRevenue).padStart(9)}  ~${sign}${ils(d.profit)}`
         );
       }
       if (pin.days.length > 1) {
         const sign = pin.totals.profit >= 0 ? "+" : "";
         lines.push(
-          `  TOTAL          ${String(pin.totals.clicks).padStart(5)}  ${usd(pin.totals.spend).padStart(7)}  ~${usd(pin.totals.attributedRevenue).padStart(6)}  ~${sign}${usd(pin.totals.profit)}`
+          `  TOTAL          ${String(pin.totals.clicks).padStart(5)}  ${usd(pin.totals.spend).padStart(8)}  ~${ils(pin.totals.attributedRevenue).padStart(9)}  ~${sign}${ils(pin.totals.profit)}`
         );
       }
     }
@@ -176,14 +182,14 @@ function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
 
 function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[]): string {
   const kpiRows = [
-    ["Spend", usd(today.spend)],
+    ["Spend", `${usd(today.spend)} <span style="color:#888">USD</span>`],
     ["Clicks", `${today.clicks} <span style="color:#888">(outbound: ${today.outboundClicks})</span>`],
     ["Impressions", `${today.impressions} <span style="color:#888">(CTR: ${pct(today.ctr)})</span>`],
     ["Sessions", `${today.ga4Sessions} <span style="color:#888">(paid: ${today.ga4PaidSessions}, organic: ${today.ga4OrganicSessions})</span>`],
-    ["Revenue", usd(today.adsenseRevenue)],
-    ["Profit", `<b style="color:${today.profit >= 0 ? "#2a7" : "#c33"}">${usd(today.profit)}</b>`],
+    ["Revenue", ils(today.adsenseRevenue)],
+    ["Profit", `<b style="color:${today.profit >= 0 ? "#2a7" : "#c33"}">${ils(today.profit)}</b>`],
     ...(today.revenuePerHundredSessions != null
-      ? [["Rev / 100 sessions", usd(today.revenuePerHundredSessions)]]
+      ? [["Rev / 100 sessions", ils(today.revenuePerHundredSessions)]]
       : []),
   ]
     .map(([label, value]) => `<tr><td style="padding:5px 14px;border-bottom:1px solid #eee;color:#555">${label}</td><td style="padding:5px 14px;border-bottom:1px solid #eee">${value}</td></tr>`)
@@ -195,11 +201,11 @@ function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
       (prev7.reduce((s, r) => s + fn(r), 0) / prev7.length);
     const avgProfit = avg((r) => r.profit);
     const avgRows = [
-      ["Spend", usd(avg((r) => r.spend))],
+      ["Spend", `${usd(avg((r) => r.spend))} <span style="color:#888">USD</span>`],
       ["Clicks", avg((r) => r.clicks).toFixed(0)],
       ["Sessions", avg((r) => r.ga4Sessions).toFixed(0)],
-      ["Revenue", usd(avg((r) => r.adsenseRevenue))],
-      ["Profit", `<b style="color:${avgProfit >= 0 ? "#2a7" : "#c33"}">${usd(avgProfit)}</b>`],
+      ["Revenue", ils(avg((r) => r.adsenseRevenue))],
+      ["Profit", `<b style="color:${avgProfit >= 0 ? "#2a7" : "#c33"}">${ils(avgProfit)}</b>`],
     ]
       .map(([label, value]) => `<tr><td style="padding:5px 14px;border-bottom:1px solid #eee;color:#555">${label}</td><td style="padding:5px 14px;border-bottom:1px solid #eee">${value}</td></tr>`)
       .join("\n");
@@ -234,8 +240,8 @@ function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
           <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${d.clicks}</td>
           <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${d.outboundClicks}</td>
           <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${usd(d.spend)}</td>
-          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:#888">~${usd(d.attributedRevenue)}</td>
-          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:${profitColor}"><b>~${sign}${usd(d.profit)}</b></td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:#888">~${ils(d.attributedRevenue)}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:${profitColor}"><b>~${sign}${ils(d.profit)}</b></td>
         </tr>`;
       }).join("\n");
 
@@ -248,8 +254,8 @@ function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
           <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${pin.totals.clicks}</td>
           <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${pin.totals.outboundClicks}</td>
           <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${usd(pin.totals.spend)}</td>
-          <td style="padding:4px 12px;text-align:right;font-size:13px;color:#888;font-weight:bold">~${usd(pin.totals.attributedRevenue)}</td>
-          <td style="padding:4px 12px;text-align:right;font-size:13px;color:${profitColor};font-weight:bold">~${sign}${usd(pin.totals.profit)}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;color:#888;font-weight:bold">~${ils(pin.totals.attributedRevenue)}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;color:${profitColor};font-weight:bold">~${sign}${ils(pin.totals.profit)}</td>
         </tr>`;
       }
 
@@ -328,7 +334,7 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
     : "—";
   const tgLines = [
     `📈 <b>Daily report</b> — ${today.SortKey}`,
-    `Spend: ${usd(today.spend)}  Revenue: ${usd(today.adsenseRevenue)}  Profit: <b>${profitSign}${usd(today.profit)}</b>`,
+    `Spend: ${usd(today.spend)} USD  Revenue: ${ils(today.adsenseRevenue)}  Profit: <b>${profitSign}${ils(today.profit)}</b>`,
     `Sessions: ${today.ga4Sessions}  Clicks: ${today.clicks}`,
     `AI: ${trendLine}`,
   ];
@@ -345,7 +351,7 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
       if (!d || i >= 3) continue;
       const name = pin.title.length > 22 ? pin.title.slice(0, 21) + "…" : pin.title;
       const sign = d.profit >= 0 ? "+" : "";
-      tgLines.push(`  ${name}: ${d.clicks}c  ${usd(d.spend)}sp  ~${usd(d.attributedRevenue)}rev  ~<b>${sign}${usd(d.profit)}</b>`);
+      tgLines.push(`  ${name}: ${d.clicks}c  ${usd(d.spend)}sp  ~${ils(d.attributedRevenue)}rev  ~<b>${sign}${ils(d.profit)}</b>`);
     }
   }
   await sendTelegramMessage(tgLines.join("\n")).catch(() => {/* non-fatal */});
