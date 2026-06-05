@@ -22,11 +22,11 @@ interface AdAnalyticsRow {
   CTR: string;
 }
 
-async function getActiveAds(): Promise<AdItem[]> {
+async function getNonArchivedAds(): Promise<AdItem[]> {
   const resp = await pinterestGet<{ items: AdItem[] }>(
-    `/ad_accounts/${AD_ACCOUNT}/ads?page_size=50`
+    `/ad_accounts/${AD_ACCOUNT}/ads?page_size=50&entity_statuses=ACTIVE,PAUSED,ARCHIVED`
   );
-  return (resp.items ?? []).filter((a) => a.status === "ACTIVE");
+  return (resp.items ?? []).filter((a) => a.status !== "ARCHIVED");
 }
 
 async function getAdAnalytics(adIds: string[], dateStr: string): Promise<AdAnalyticsRow[]> {
@@ -41,9 +41,9 @@ async function getAdAnalytics(adIds: string[], dateStr: string): Promise<AdAnaly
 export async function run(dateStr?: string): Promise<void> {
   const date = dateStr ?? formatDate(yesterdayDate());
 
-  const ads = await getActiveAds();
+  const ads = await getNonArchivedAds();
   if (ads.length === 0) {
-    console.log("  no active ads found");
+    console.log("  no ads found");
     return;
   }
 
@@ -78,7 +78,7 @@ export async function run(dateStr?: string): Promise<void> {
 
   const totalSpend = inputs.reduce((s, r) => s + r.spend, 0);
   const totalClicks = inputs.reduce((s, r) => s + r.clicks, 0);
-  console.log(`  ${inputs.length} active ads — total spend $${totalSpend.toFixed(2)}, ${totalClicks} clicks`);
+  console.log(`  ${inputs.length} ads — total spend $${totalSpend.toFixed(2)}, ${totalClicks} clicks`);
   for (const r of inputs.sort((a, b) => b.clicks - a.clicks)) {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
     console.log(`    ${r.clicks}c / ${r.outboundClicks}oc  $${r.spend.toFixed(2)}  ${page}`);

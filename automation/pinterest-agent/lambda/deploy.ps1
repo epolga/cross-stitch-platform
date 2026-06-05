@@ -94,7 +94,7 @@ if (-not $fnExists) {
     Write-Host "  Creating function..." -ForegroundColor Yellow
     aws lambda create-function `
         --function-name $FUNCTION_NAME `
-        --runtime "nodejs20.x" `
+        --runtime "nodejs22.x" `
         --role $roleArn `
         --handler "handler.handler" `
         --zip-file "fileb://$zipPath" `
@@ -113,6 +113,7 @@ if (-not $fnExists) {
 
     aws lambda update-function-configuration `
         --function-name $FUNCTION_NAME `
+        --runtime "nodejs22.x" `
         --timeout $TIMEOUT_SEC `
         --memory-size $MEMORY_MB `
         --region $REGION | Out-Null

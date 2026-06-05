@@ -21,11 +21,13 @@
     "summary": "tsx scripts/send-daily-summary.ts",
     "promoted": "tsx scripts/build-promoted-ads-report.ts",
     "landing": "tsx scripts/build-landing-page-report.ts",
+    "attribution": "tsx scripts/build-pin-attribution-report.ts",
+    "pin-trend": "tsx scripts/pin-trend-report.ts",
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
     "setup-token": "tsx scripts/get-google-refresh-token.ts",
-    "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node20 --outfile=lambda/dist/handler.js --minify"
+    "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
   "author": "",

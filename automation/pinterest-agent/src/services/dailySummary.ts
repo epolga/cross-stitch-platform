@@ -32,6 +32,34 @@ interface AiRow {
   reasoning?: string;
 }
 
+interface PinAttributionRow {
+  SortKey: string;
+  date: string;
+  adId: string;
+  title: string;
+  clicks: number;
+  outboundClicks: number;
+  spend: number;
+  attributedRevenue: number;
+  profit: number;
+}
+
+interface PinDay {
+  date: string;
+  clicks: number;
+  outboundClicks: number;
+  spend: number;
+  attributedRevenue: number;
+  profit: number;
+}
+
+interface PinTrend {
+  adId: string;
+  title: string;
+  days: PinDay[];           // ascending by date
+  totals: PinDay;
+}
+
 function pct(n: number): string {
   return (n * 100).toFixed(2) + "%";
 }
@@ -51,7 +79,39 @@ function actionLabel(action: string): string {
   return action.replace(/_/g, " ");
 }
 
-function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null): string {
+function groupByPin(rows: PinAttributionRow[]): PinTrend[] {
+  const map = new Map<string, PinTrend>();
+  for (const r of rows) {
+    if (!map.has(r.adId)) {
+      map.set(r.adId, {
+        adId: r.adId,
+        title: r.title,
+        days: [],
+        totals: { date: "", clicks: 0, outboundClicks: 0, spend: 0, attributedRevenue: 0, profit: 0 },
+      });
+    }
+    const pin = map.get(r.adId)!;
+    pin.days.push({
+      date: r.date,
+      clicks: r.clicks,
+      outboundClicks: r.outboundClicks,
+      spend: r.spend,
+      attributedRevenue: r.attributedRevenue,
+      profit: r.profit,
+    });
+    pin.totals.clicks += r.clicks;
+    pin.totals.outboundClicks += r.outboundClicks;
+    pin.totals.spend += r.spend;
+    pin.totals.attributedRevenue += r.attributedRevenue;
+    pin.totals.profit += r.profit;
+  }
+  for (const pin of map.values()) {
+    pin.days.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  return [...map.values()].sort((a, b) => b.totals.profit - a.totals.profit);
+}
+
+function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[]): string {
   const lines: string[] = [];
   lines.push(`Cross-stitch daily report — ${today.SortKey}`, "");
 
@@ -90,11 +150,31 @@ function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null)
     lines.push(`  For date:   ${trend.forDate}`);
   }
 
+  if (pinTrends.length > 0) {
+    lines.push("", "Per-pin trend (revenue estimated by paid sessions)");
+    for (const pin of pinTrends) {
+      lines.push("", `  ${pin.title}`);
+      lines.push("  Date        Clicks  Spend    Revenue  Profit");
+      for (const d of pin.days) {
+        const sign = d.profit >= 0 ? "+" : "";
+        lines.push(
+          `  ${d.date}  ${String(d.clicks).padStart(5)}  ${usd(d.spend).padStart(7)}  ~${usd(d.attributedRevenue).padStart(6)}  ~${sign}${usd(d.profit)}`
+        );
+      }
+      if (pin.days.length > 1) {
+        const sign = pin.totals.profit >= 0 ? "+" : "";
+        lines.push(
+          `  TOTAL          ${String(pin.totals.clicks).padStart(5)}  ${usd(pin.totals.spend).padStart(7)}  ~${usd(pin.totals.attributedRevenue).padStart(6)}  ~${sign}${usd(pin.totals.profit)}`
+        );
+      }
+    }
+  }
+
   lines.push("", "Schema: CrossStitchBusinessHistory[DAILY_BUSINESS / AI_ANALYSIS].");
   return lines.join("\n") + "\n";
 }
 
-function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null): string {
+function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[]): string {
   const kpiRows = [
     ["Spend", usd(today.spend)],
     ["Clicks", `${today.clicks} <span style="color:#888">(outbound: ${today.outboundClicks})</span>`],
@@ -143,17 +223,74 @@ function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null)
 </table>`;
   }
 
+  let pinsBlock = "";
+  if (pinTrends.length > 0) {
+    const pinSections = pinTrends.map((pin) => {
+      const dayRows = pin.days.map((d) => {
+        const sign = d.profit >= 0 ? "+" : "";
+        const profitColor = d.profit >= 0 ? "#2a7" : "#c33";
+        return `<tr>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;color:#888;font-size:13px">${d.date}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${d.clicks}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${d.outboundClicks}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px">${usd(d.spend)}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:#888">~${usd(d.attributedRevenue)}</td>
+          <td style="padding:4px 12px;border-bottom:1px solid #f0f0f0;text-align:right;font-size:13px;color:${profitColor}"><b>~${sign}${usd(d.profit)}</b></td>
+        </tr>`;
+      }).join("\n");
+
+      let totalRow = "";
+      if (pin.days.length > 1) {
+        const sign = pin.totals.profit >= 0 ? "+" : "";
+        const profitColor = pin.totals.profit >= 0 ? "#2a7" : "#c33";
+        totalRow = `<tr style="background:#f9f9f9">
+          <td style="padding:4px 12px;font-size:13px;font-weight:bold">Total</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${pin.totals.clicks}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${pin.totals.outboundClicks}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;font-weight:bold">${usd(pin.totals.spend)}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;color:#888;font-weight:bold">~${usd(pin.totals.attributedRevenue)}</td>
+          <td style="padding:4px 12px;text-align:right;font-size:13px;color:${profitColor};font-weight:bold">~${sign}${usd(pin.totals.profit)}</td>
+        </tr>`;
+      }
+
+      return `
+<h4 style="margin:16px 0 4px;font-size:13px;color:#444">${pin.title}</h4>
+<table style="border-collapse:collapse;width:100%">
+  <thead><tr style="color:#555;font-size:12px;background:#f5f5f5">
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:left">Date</th>
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:right">Clicks</th>
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:right">Out</th>
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:right">Spend</th>
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:right">Revenue</th>
+    <th style="padding:4px 12px;border-bottom:1px solid #ddd;text-align:right">Profit</th>
+  </tr></thead>
+  <tbody>${dayRows}${totalRow}</tbody>
+</table>`;
+    }).join("\n");
+
+    pinsBlock = `
+<h3 style="margin:24px 0 4px;font-size:15px">Per-pin trend <span style="font-weight:normal;color:#888;font-size:13px">(last 7 days · revenue estimated by paid sessions)</span></h3>
+${pinSections}`;
+  }
+
   return `<!doctype html>
-<html><body style="font-family:system-ui,-apple-system,sans-serif;color:#222;max-width:640px;margin:24px">
+<html><body style="font-family:system-ui,-apple-system,sans-serif;color:#222;max-width:680px;margin:24px">
 <h2 style="margin-bottom:4px">Cross-stitch daily report</h2>
 <p style="color:#888;margin-top:0">${today.SortKey}</p>
 <h3 style="margin:0 0 8px;font-size:15px">KPIs (yesterday)</h3>
 <table style="border-collapse:collapse">${kpiRows}</table>
 ${avgBlock}
 ${trendBlock}
+${pinsBlock}
 <p style="color:#999;font-size:12px;margin-top:24px">Schema: <code>CrossStitchBusinessHistory[DAILY_BUSINESS / AI_ANALYSIS]</code>.</p>
 </body></html>
 `;
+}
+
+function sevenDaysAgo(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 6); // include today → 7 days total
+  return d.toISOString().slice(0, 10);
 }
 
 export async function sendDailySummary(): Promise<{ messageId: string; date: string }> {
@@ -162,31 +299,56 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
   if (rows.length === 0) throw new Error("No DAILY_BUSINESS rows found in DDB");
 
   const [today, ...prev6] = rows;
-  const prev7 = [today, ...prev6]; // all 7 for averages; today is most recent
+  const prev7 = [today, ...prev6];
 
   // Latest AI trend recommendation (scan descending, pick first trend row)
   const aiRows = await queryRange<AiRow>("AI_ANALYSIS", { scanForward: false, limit: 30 });
   const trend = aiRows.find((r) => r.analysisType === "trend") ?? null;
 
+  // Per-pin attribution for last 7 days, grouped by pin, sorted by total profit desc
+  const pinStart = sevenDaysAgo(today.SortKey);
+  const pinRows = await queryRange<PinAttributionRow>("PIN_ATTRIBUTION", {
+    startKey: `${pinStart}#`,
+    endKey: `${today.SortKey}#~`,
+  });
+  const pinTrends = groupByPin(pinRows);
+
   const subject = `[cross-stitch] Daily report — ${today.SortKey}  ${usd(today.profit)} profit`;
 
   const { messageId } = await sendEmail({
     subject,
-    textBody: formatTextBody(today, prev7, trend),
-    htmlBody: formatHtmlBody(today, prev7, trend),
+    textBody: formatTextBody(today, prev7, trend, pinTrends),
+    htmlBody: formatHtmlBody(today, prev7, trend, pinTrends),
   });
 
+  // Telegram: top-3 pins by today's profit
   const profitSign = today.profit >= 0 ? "+" : "";
   const trendLine = trend
     ? `${actionEmoji(trend.recommendedAction ?? "")} ${actionLabel(trend.recommendedAction ?? "—")}`
     : "—";
-  const tgText = [
+  const tgLines = [
     `📈 <b>Daily report</b> — ${today.SortKey}`,
     `Spend: ${usd(today.spend)}  Revenue: ${usd(today.adsenseRevenue)}  Profit: <b>${profitSign}${usd(today.profit)}</b>`,
     `Sessions: ${today.ga4Sessions}  Clicks: ${today.clicks}`,
     `AI: ${trendLine}`,
-  ].join("\n");
-  await sendTelegramMessage(tgText).catch(() => {/* non-fatal */});
+  ];
+  // today's pins = last day in each pin's days array (already sorted ascending)
+  const todayPins = pinTrends
+    .map((p) => p.days.at(-1)!)
+    .filter((d) => d.date === today.SortKey)
+    .sort((a, b) => b.profit - a.profit);
+  if (todayPins.length > 0) {
+    tgLines.push("");
+    tgLines.push("🔝 <b>Top pins today</b>:");
+    for (const [i, pin] of pinTrends.entries()) {
+      const d = pin.days.find((x) => x.date === today.SortKey);
+      if (!d || i >= 3) continue;
+      const name = pin.title.length > 22 ? pin.title.slice(0, 21) + "…" : pin.title;
+      const sign = d.profit >= 0 ? "+" : "";
+      tgLines.push(`  ${name}: ${d.clicks}c  ${usd(d.spend)}sp  ~${usd(d.attributedRevenue)}rev  ~<b>${sign}${usd(d.profit)}</b>`);
+    }
+  }
+  await sendTelegramMessage(tgLines.join("\n")).catch(() => {/* non-fatal */});
 
   return { messageId, date: today.SortKey };
 }

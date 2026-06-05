@@ -25,7 +25,8 @@ export type EntityType =
   | "DESIGN_PERFORMANCE"
   | "ANOMALY_EVENT"
   | "PROMOTED_AD_STATS"
-  | "LANDING_PAGE_STATS";
+  | "LANDING_PAGE_STATS"
+  | "PIN_ATTRIBUTION";
 
 export type AnalysisType = "trend" | "design";
 
@@ -51,6 +52,7 @@ export const sortKey = {
     `${detectedAt}#${metric}`,
   promotedAdStats: (date: string, adId: string) => `${date}#${adId}`,
   landingPageStats: (date: string, page: string) => `${date}#${page}`,
+  pinAttribution: (date: string, adId: string) => `${date}#${adId}`,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -339,6 +341,31 @@ export async function batchPutLandingPageStats(inputs: LandingPageStatsInput[]):
     inputs.map((input) => ({
       EntityType: "LANDING_PAGE_STATS",
       SortKey: sortKey.landingPageStats(input.date, input.page),
+      ...input,
+      writtenAt: now,
+    }))
+  );
+}
+
+export interface PinAttributionInput {
+  date: string;
+  adId: string;
+  title: string;
+  destinationUrl: string;
+  clicks: number;
+  outboundClicks: number;
+  spend: number;
+  paidSessions: number;
+  attributedRevenue: number;
+  profit: number;
+}
+
+export async function batchPutPinAttribution(inputs: PinAttributionInput[]): Promise<void> {
+  const now = new Date().toISOString();
+  await batchPutRows(
+    inputs.map((input) => ({
+      EntityType: "PIN_ATTRIBUTION",
+      SortKey: sortKey.pinAttribution(input.date, input.adId),
       ...input,
       writtenAt: now,
     }))

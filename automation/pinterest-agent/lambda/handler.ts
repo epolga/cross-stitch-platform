@@ -12,6 +12,7 @@ import { run as runDailyReport } from "../scripts/daily-business-report";
 import { run as runBuildHistory } from "../scripts/build-business-history";
 import { run as runPromotedAds } from "../scripts/build-promoted-ads-report";
 import { run as runLandingPages } from "../scripts/build-landing-page-report";
+import { run as runPinAttribution } from "../scripts/build-pin-attribution-report";
 import { run as runPinMap } from "../scripts/export-design-pin-map";
 import { run as runPerf } from "../scripts/build-design-performance";
 import { run as runAiTrend } from "../scripts/test-ai-trend-analysis";
@@ -31,19 +32,22 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   const dateStr = event.date ?? formatDate(yesterdayDate());
   console.log(`[pipeline] starting for date=${dateStr}`);
 
-  console.log("[1/12] daily business report");
+  console.log("[1/13] daily business report");
   await runDailyReport(dateStr);
 
-  console.log("[2/12] build business history");
+  console.log("[2/13] build business history");
   await runBuildHistory("/tmp");
 
-  console.log("[3/12] promoted ads report");
+  console.log("[3/13] promoted ads report");
   await runPromotedAds(dateStr);
 
-  console.log("[4/12] landing page report");
+  console.log("[4/13] landing page report");
   await runLandingPages(dateStr);
 
-  console.log("[5/12] anomaly detection");
+  console.log("[5/13] pin attribution");
+  await runPinAttribution(dateStr);
+
+  console.log("[6/13] anomaly detection");
   const anomalyResult = await runAnomalyDetection();
   if (!anomalyResult.checked) {
     console.log(`  skipped: ${anomalyResult.reason}`);
@@ -51,7 +55,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log(`  checked ${anomalyResult.forDate}, ${anomalyResult.anomalies.length} anomaly(s)`);
   }
 
-  console.log("[6/12] anomaly notifications");
+  console.log("[7/13] anomaly notifications");
   const notifyResult = await notifyAnomalies();
   if (notifyResult.unnotifiedFound === 0) {
     console.log("  no unnotified anomalies");
@@ -59,10 +63,10 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log(`  sent email for ${notifyResult.unnotifiedFound} anomaly(s)`);
   }
 
-  console.log("[7/12] AI trend analysis");
+  console.log("[8/13] AI trend analysis");
   await runAiTrend("/tmp");
 
-  console.log("[8/12] recommendation change alert");
+  console.log("[9/13] recommendation change alert");
   const changeResult = await notifyRecommendationChange();
   if (changeResult.sent) {
     console.log(`  recommendation changed: ${changeResult.from} → ${changeResult.to}`);
@@ -70,16 +74,16 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log("  no recommendation change");
   }
 
-  console.log("[9/12] design pin map export");
+  console.log("[10/13] design pin map export");
   await runPinMap();
 
-  console.log("[10/12] design performance build");
+  console.log("[11/13] design performance build");
   await runPerf();
 
-  console.log("[11/12] AI design analysis");
+  console.log("[12/13] AI design analysis");
   await runAiDesign();
 
-  console.log("[12/12] daily summary email");
+  console.log("[13/13] daily summary email");
   const { messageId, date } = await sendDailySummary();
   console.log(`  sent → SES MessageId=${messageId} (date=${date})`);
 
