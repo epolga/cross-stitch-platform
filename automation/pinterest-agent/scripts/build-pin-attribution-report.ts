@@ -22,6 +22,7 @@ interface LandingPageRow {
 
 interface DailyBusinessRow {
   adsenseRevenue: number;
+  ga4Sessions: number;
 }
 
 export async function run(dateStr?: string): Promise<void> {
@@ -52,6 +53,7 @@ export async function run(dateStr?: string): Promise<void> {
   }
 
   const totalRevenue = bizRows[0].adsenseRevenue;
+  const totalAllSessions = bizRows[0].ga4Sessions;
 
   const pageSessionMap = new Map<string, number>();
   let totalPaidSessions = 0;
@@ -66,8 +68,8 @@ export async function run(dateStr?: string): Promise<void> {
 
     const paidSessions = pageSessionMap.get(page) ?? 0;
     const attributedRevenue =
-      totalPaidSessions > 0
-        ? (paidSessions / totalPaidSessions) * totalRevenue
+      totalAllSessions > 0
+        ? (paidSessions / totalAllSessions) * totalRevenue
         : 0;
 
     return {
@@ -87,7 +89,7 @@ export async function run(dateStr?: string): Promise<void> {
   await batchPutPinAttribution(inputs);
 
   console.log(
-    `  ${inputs.length} pins — total revenue $${totalRevenue.toFixed(2)}, paid sessions: ${totalPaidSessions}`
+    `  ${inputs.length} pins — total revenue $${totalRevenue.toFixed(2)}, all sessions: ${totalAllSessions}, paid sessions: ${totalPaidSessions}`
   );
   for (const r of [...inputs].sort((a, b) => b.profit - a.profit)) {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
