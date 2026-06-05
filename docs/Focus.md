@@ -2,65 +2,72 @@
 
 ## Current goal
 
-Verify tomorrow's Lambda scheduled run (02:00 UTC / 05:00 local), then disable Windows Task Scheduler and mark Milestone 7 complete.
+Milestone 10 — WPF Uploader AI integration.
 
 ## Active work
 
-### Milestone 7 — Lambda deployed, pending first scheduled run
+Nothing in flight. All 2026-06-05 session work committed and deployed.
 
-**Lambda is live.** Function `cross-stitch-daily-pipeline`, EventBridge rule `cross-stitch-daily-5am` (02:00 UTC). All env vars set.
+## What was built (sessions through 2026-06-05)
 
-**What was tested (2026-06-03):** Manual invocations confirmed steps 1–7 pass. Steps 8 (AI design analysis) and 9 (daily summary email) were not reached because Pinterest rate limiting on step 7 consumed most of the 15-minute Lambda timeout.
+### Milestone 7 — Lambda pipeline
+- Single Lambda `cross-stitch-daily-pipeline`, EventBridge at 02:00 UTC (05:00 local)
+- 13-step pipeline: daily business → history → promoted ads → landing pages → pin attribution → anomaly detection → anomaly notifications → AI trend → recommendation change alert → design pin map → design performance → AI design analysis → daily summary email
+- Node.js 20 → 22 everywhere (Lambda runtime, esbuild target, EB platform, local nvm)
+- `\PinterestDailyReport` and `\GoogleTokenRefreshReminder` Windows tasks disabled
 
-**Bug fixes applied during Lambda migration:**
-- All 7 pipeline scripts had bare `main()` call at module top level → wrapped with `if (!process.env.AWS_LAMBDA_FUNCTION_NAME)`
-- `build-design-performance.ts` had `process.exit(0)` inside `run()` → removed
-- `test-ai-trend-analysis.ts` and `test-ai-design-analysis.ts` had top-level `process.exit(1)` for missing API key → guarded same way
-- `readPinterestToken.ts` read token from file only → now checks `PINTEREST_ACCESS_TOKEN` env var first
-- `deploy.ps1` passed JSON inline to AWS CLI → PowerShell 5.1 adds UTF-8 BOM which AWS CLI rejects as invalid JSON → fixed by writing temp files via `[System.IO.File]::WriteAllText`
+### Milestone 8 — Alerts & Telegram
+- Anomaly detection + email alerts
+- Recommendation change alert email
+- Telegram bot: daily summary, anomaly alerts, recommendation changes, Google token reminder
 
-**Analytics cache added to `build-design-performance.ts`:**
-- Before fetching, queries DDB for pins already written for today's `snapshotDate`
-- Skips cached pins → zero API calls on re-runs the same day
-- Writes each pin to DDB immediately after fetch (checkpoint pattern) → Lambda auto-retries resume from where a timeout left off
+### Milestone 9 — Per-pin attribution + A/B test
+**PIN_ATTRIBUTION DDB entity** — written daily by Lambda step 5
+- Fields: date, adId, title, destinationUrl, clicks, outboundClicks, spend (USD), paidSessions, attributedRevenue (ILS), profit (ILS), usdIlsRate
 
-**Tomorrow morning — what to check:**
-1. CloudWatch Logs → `/aws/lambda/cross-stitch-daily-pipeline` — look for `[pipeline] complete for date=2026-06-03`
-2. Inbox (olga.epstein@gmail.com) — daily summary email should arrive
-3. If both green: `schtasks /Change /TN PinterestDailyReport /Disable` and tick the Done when item
-4. If step 7 still times out: the cache means the Lambda auto-retry will complete steps 8–9
+**Currency fix** — spend is USD, revenue/profit are ILS
+- Live USD→ILS rate from Bank of Israel API; fallback: last known rate from DDB
+- `scripts/daily-business-report.ts` stores `usdIlsRate` in DAILY_BUSINESS rows
 
-## Session 2026-06-01 — completed housekeeping
+**Daily email** — per-pin 7-day trend table + A/B test section (DESIGN vs ALBUM)
+**Telegram** — top-3 pins by today's profit
 
-- Fixed website dev server: replaced hardcoded `localhost:3000` API fetches
-  with direct `getDesignById` / `getDesignsByAlbumId` calls in
-  `designs/[designId]/page.tsx` and `albums/[albumId]/page.tsx`
-- Added `suppressHydrationWarning` to `<html>` in `layout.tsx` (browser extension interference)
-- Created `web/.env.local` (copied from old `cross-stitch` repo)
-- Renamed branch `master` → `main`
-- Renamed `docs/plan/cross-stitch/` → `docs/plan/web/`
-- Updated `docs/CLAUDE.md`, `docs/cross-stitch.code-workspace`,
-  `docs/integration/README.md` — replaced old `../cross-stitch/` paths with `../web/`
-- Pointed all three bat files and all four Task Scheduler tasks to monorepo paths:
-  - AutoPinner: `automation/autopinner/autopinner-run.bat` (interval 30 → 20 min, cap 50 → 75)
-  - PinterestDailyReport: `automation/pinterest-agent/daily-run.bat`
-- Built Release binary for AutoPinner at monorepo path
-- Added `uploader/.claude/skills/email-template-usage/SKILL.md`
+**A/B test report** (`npm run ab-test`) — `scripts/ab-test-report.ts`
+- Reads DESIGN_PIN_MAP (now stores `pinLinkType`) + latest DESIGN_PERFORMANCE snapshot
+- Groups by DESIGN vs ALBUM, shows per-pin avg impressions/saves/CTR/saves-per-day
+- A/B section also added to daily email (text + HTML)
+- `export-design-pin-map.ts` now reads `PinLinkType` from CrossStitchItems
 
-## Pending / lower priority
+## Pending
 
-- Milestone 8 remainder: AI recommendation change alerts, Telegram bot for phone notifications
+### Tomorrow (2026-06-06) — after Lambda run confirmed
+- Check daily email: A/B section present + all 13 steps in CloudWatch logs
+- If green: uninstall `\PinterestDailyReport` from Task Scheduler (currently disabled, not deleted)
+- Delete `automation/pinterest-agent/daily-run.bat` (superseded by Lambda)
+- Mark done below
+
+### Milestone 10 — WPF Uploader AI integration (~3–5 days)
+- AI title, board, and keyword suggestions when creating a new Pinterest pin in the WPF uploader
+- Entry point: `uploader/` project
+
+### Milestone 9 — skipped item (low priority)
+- AdSense URL channels / per-page revenue — session-based proportional attribution is good enough for now
 
 ## Out of scope (do not touch)
 
-- Uploader WPF app (Milestone 10 — planned, not started)
 - Meta / Reddit / TikTok expansion (Milestone 11 — future)
+- Semi-autonomous assistant (Milestone 12 — future)
 - Controlled automation (Milestone 13 — long-term)
 
 ## Done when
 
-- [x] SOAK-WINDOW.md days 1–8 all ✓ (completed 2026-06-03)
-- [x] Read cutover: historyBuilder reads from DDB, not local JSON (2026-06-03)
-- [x] JSON writes stripped from daily pipeline scripts (2026-06-03)
-- [x] Daily summary email sent and verified end-to-end via SES (2026-06-03)
-- [ ] Lambda deployed, EventBridge rule active, Windows task disabled
+- [x] Lambda pipeline (Milestone 7) — deployed 2026-06-03, Windows tasks disabled 2026-06-05
+- [x] EB platform upgrade — 6.9.0 → 6.11.1, completed 2026-06-04
+- [x] Recommendation change alert email (Milestone 8) — deployed 2026-06-04
+- [x] Telegram bot — daily summary, anomaly alerts, recommendation changes, Google token reminder — 2026-06-04
+- [x] Per-pin profit trend in daily email (PIN_ATTRIBUTION, 7-day trend, top-3 Telegram) — 2026-06-05
+- [x] Currency fix: spend USD / revenue ILS / profit ILS with live Bank of Israel rate — 2026-06-05
+- [x] Node.js 20 → 22 everywhere — 2026-06-05
+- [x] A/B test report: DESIGN vs ALBUM pin destination, in daily email + standalone script — 2026-06-05
+- [ ] Remove local service: uninstall Windows task + delete daily-run.bat — after 2026-06-06 Lambda confirms
+- [ ] Milestone 10: WPF Uploader AI integration
