@@ -23,6 +23,7 @@
     "landing": "tsx scripts/build-landing-page-report.ts",
     "attribution": "tsx scripts/build-pin-attribution-report.ts",
     "pin-trend": "tsx scripts/pin-trend-report.ts",
+    "ab-test": "tsx scripts/ab-test-report.ts",
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",

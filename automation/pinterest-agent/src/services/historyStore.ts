@@ -103,6 +103,7 @@ export interface DesignPinMapInput {
   pinId: string;
   designCaption: string;
   designUrl: string;
+  pinLinkType?: string;
 }
 
 export interface DesignPerformanceInput {

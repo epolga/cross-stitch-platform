@@ -19,6 +19,7 @@ interface DesignPinRecord {
   pinId: string;
   designCaption: string;
   designUrl: string;
+  pinLinkType?: string;
 }
 
 function readString(v?: AttributeValue): string | null {
@@ -112,6 +113,7 @@ export async function run(): Promise<DesignPinRecord[]> {
     const albumCaption = albumCaptions.get(albumId);
     if (!albumCaption) unknownAlbum++;
 
+    const pinLinkType = readString(item.PinLinkType) ?? undefined;
     records.push({
       designId,
       albumId,
@@ -119,6 +121,7 @@ export async function run(): Promise<DesignPinRecord[]> {
       pinId,
       designCaption,
       designUrl: buildDesignUrl(designCaption, albumId, nPage),
+      pinLinkType,
     });
   }
 
