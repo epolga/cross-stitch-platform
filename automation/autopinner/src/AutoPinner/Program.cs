@@ -205,8 +205,18 @@ async Task ProcessOneAsync(Design design, CancellationToken ct)
     {
         stats.Failed++;
         consecutiveFailures++;
-        await repo.MarkFailedAsync(design, $"Pinterest {(int)papi.Status}: {papi.ResponseBodySnippet}", ct);
-        await AlertAsync("CreatePin", $"HTTP {(int)papi.Status}", papi.Status.ToString(), papi.ResponseBodySnippet, design, attempts: design.PinterestAttemptCount + 1);
+        var papiAttempts = design.PinterestAttemptCount + 1;
+        var papiError = $"Pinterest {(int)papi.Status}: {papi.ResponseBodySnippet}";
+        if (papiAttempts >= config.MaxPinterestAttempts)
+        {
+            await repo.MarkExhaustedAsync(design, papiError, ct);
+            await AlertExhaustedAsync(design, papiError, papiAttempts);
+        }
+        else
+        {
+            await repo.MarkFailedAsync(design, papiError, ct);
+            await AlertAsync("CreatePin", $"HTTP {(int)papi.Status}", papi.Status.ToString(), papi.ResponseBodySnippet, design, attempts: papiAttempts);
+        }
         await MaybeAlertConsecutiveAsync(design);
         return;
     }
@@ -214,8 +224,18 @@ async Task ProcessOneAsync(Design design, CancellationToken ct)
     {
         stats.Failed++;
         consecutiveFailures++;
-        await repo.MarkFailedAsync(design, $"UploadPin: {ex.Message}", ct);
-        await AlertAsync("CreatePin", "Unexpected", ex.GetType().Name, ex.Message, design, attempts: design.PinterestAttemptCount + 1);
+        var exAttempts = design.PinterestAttemptCount + 1;
+        var exError = $"UploadPin: {ex.Message}";
+        if (exAttempts >= config.MaxPinterestAttempts)
+        {
+            await repo.MarkExhaustedAsync(design, exError, ct);
+            await AlertExhaustedAsync(design, exError, exAttempts);
+        }
+        else
+        {
+            await repo.MarkFailedAsync(design, exError, ct);
+            await AlertAsync("CreatePin", "Unexpected", ex.GetType().Name, ex.Message, design, attempts: exAttempts);
+        }
         await MaybeAlertConsecutiveAsync(design);
         return;
     }
@@ -501,6 +521,23 @@ async Task AlertAsync(string operation, string statusOrClass, string errorClass,
 
     var fingerprint = $"{operation}|{statusOrClass}|{errorClass}";
     await dedup.SendIfNotDuplicateAsync(notifier, fingerprint, subject, body);
+}
+
+async Task AlertExhaustedAsync(Design design, string lastError, int attempts)
+{
+    if (!notifier.IsConfigured) return;
+    var subject = $"[AutoPinner][{config.EnvironmentName.ToUpperInvariant()}][ERROR] Pin exhausted after {attempts} attempts — DesignID={design.DesignId}";
+    var body =
+        $"AutoPinner has given up on a pin after {attempts} failed attempts.\n" +
+        $"The pin will NOT be retried automatically. Manual review required.\n\n" +
+        $"Run ID:    {runId}\n" +
+        $"Timestamp: {DateTime.UtcNow:o}\n" +
+        $"DesignID:  {design.DesignId}\n" +
+        $"AlbumID:   {design.AlbumId}\n" +
+        $"Attempts:  {attempts}\n\n" +
+        $"Last error:\n{Truncate(lastError, 500)}\n\n" +
+        $"To re-enable: set PinterestStatus=NEW in DDB for this design.\n";
+    await notifier.SendAsync(subject, body);
 }
 
 async Task TrySendConfigFailureAsync(Exception ex, string id)

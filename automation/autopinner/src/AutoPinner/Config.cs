@@ -22,6 +22,7 @@ public sealed class Config
     public int PostIntervalSeconds { get; }
     public int DailyCap { get; }
     public int MaxBatchPerRun { get; }
+    public int MaxPinterestAttempts { get; }
     public string BaseUrl { get; }
     public string ImageBaseUrl { get; }
     public string PhotoPrefix { get; }
@@ -60,6 +61,7 @@ public sealed class Config
         PostIntervalSeconds = EnvInt("POST_INTERVAL_SECONDS", 300);
         DailyCap = EnvInt("DAILY_CAP", 200);
         MaxBatchPerRun = EnvInt("MAX_BATCH_PER_RUN", 1);
+        MaxPinterestAttempts = EnvInt("MAX_PINTEREST_ATTEMPTS", 10);
         BaseUrl = Env("BASE_URL", "https://cross-stitch.com").TrimEnd('/');
         ImageBaseUrl = Env("IMAGE_BASE_URL", "https://d2o1uvvg91z7o4.cloudfront.net").TrimEnd('/');
         PhotoPrefix = Env("PHOTO_PREFIX", "photos");
@@ -91,6 +93,8 @@ public sealed class Config
             throw new InvalidOperationException($"DAILY_CAP must be ≥ 1 (got {DailyCap}).");
         if (MaxBatchPerRun < 1)
             throw new InvalidOperationException($"MAX_BATCH_PER_RUN must be ≥ 1 (got {MaxBatchPerRun}).");
+        if (MaxPinterestAttempts < 1)
+            throw new InvalidOperationException($"MAX_PINTEREST_ATTEMPTS must be ≥ 1 (got {MaxPinterestAttempts}).");
     }
 
     public override string ToString() =>

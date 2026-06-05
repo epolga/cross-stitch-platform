@@ -23,6 +23,7 @@ public sealed class DynamoDbDesignRepository : IDisposable
     private const string Status_Posting = "POSTING";
     private const string Status_Posted = "POSTED";
     private const string Status_Failed = "FAILED";
+    private const string Status_Exhausted = "EXHAUSTED";
 
     // §4.4 documents six historical attribute names for the Pinterest pin id.
     // We treat the design as "already pinned" if any of these is non-empty.
@@ -273,6 +274,29 @@ public sealed class DynamoDbDesignRepository : IDisposable
     }
 
     /// <summary>
+    /// Stamp EXHAUSTED — max attempts reached, pin will not be retried.
+    /// Preserves attempt count (already bumped at claim time).
+    /// </summary>
+    public async Task MarkExhaustedAsync(Design design, string errorMessage, CancellationToken ct = default)
+    {
+        var truncated = errorMessage.Length > 500 ? errorMessage[..500] : errorMessage;
+        var req = new UpdateItemRequest
+        {
+            TableName = _tableName,
+            Key = PrimaryKey(design),
+            UpdateExpression =
+                "SET PinterestStatus = :exhausted, PinterestLastError = :err, PinterestLastAttemptAt = :now",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":exhausted"] = new AttributeValue { S = Status_Exhausted },
+                [":err"] = new AttributeValue { S = truncated },
+                [":now"] = new AttributeValue { S = DateTime.UtcNow.ToString("o") },
+            },
+        };
+        await _client.UpdateItemAsync(req, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Stamp FAILED with the truncated error message. Preserves attempt count
     /// (already bumped at claim time).
     /// </summary>
@@ -318,7 +342,7 @@ public sealed class DynamoDbDesignRepository : IDisposable
     {
         if (!item.TryGetValue("PinterestStatus", out var v) || string.IsNullOrWhiteSpace(v.S))
             return false;
-        return v.S == Status_Posting || v.S == Status_Posted;
+        return v.S == Status_Posting || v.S == Status_Posted || v.S == Status_Exhausted;
     }
 
     private static Design? ProjectDesign(Dictionary<string, AttributeValue> item)
