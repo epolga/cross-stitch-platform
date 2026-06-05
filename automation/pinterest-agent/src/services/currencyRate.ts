@@ -1,6 +1,4 @@
-const FALLBACK_RATE = 2.89; // USD → ILS fallback if Bank of Israel API unreachable
-
-export async function getUsdIlsRate(): Promise<number> {
+export async function getUsdIlsRate(fallback: number): Promise<number> {
   try {
     const res = await fetch("https://boi.org.il/PublicApi/GetExchangeRates?key=USD");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -9,7 +7,7 @@ export async function getUsdIlsRate(): Promise<number> {
     if (!entry) throw new Error("USD entry not found");
     return entry.currentExchangeRate / entry.unit;
   } catch {
-    console.warn(`  [currencyRate] Bank of Israel API unavailable, using fallback rate ${FALLBACK_RATE}`);
-    return FALLBACK_RATE;
+    console.warn(`  [currencyRate] Bank of Israel API unavailable, using last known rate ${fallback}`);
+    return fallback;
   }
 }

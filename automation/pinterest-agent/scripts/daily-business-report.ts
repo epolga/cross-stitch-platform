@@ -2,7 +2,7 @@ import "dotenv/config";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinterestAdMetrics } from "../src/services/pinterestAds";
 import { getGA4PinterestSessions, getAdSenseEarnings } from "../src/services/googleAnalytics";
-import { putDailyBusiness } from "../src/services/historyStore";
+import { putDailyBusiness, queryRange } from "../src/services/historyStore";
 import { getUsdIlsRate } from "../src/services/currencyRate";
 import type { BusinessReport } from "../src/services/types";
 
@@ -14,11 +14,18 @@ export async function run(dateStr?: string): Promise<BusinessReport> {
 
   const date = dateStr ?? formatDate(yesterdayDate());
 
+  // Last known rate from DDB — used as fallback if Bank of Israel API is down
+  const recentRows = await queryRange<{ usdIlsRate?: number }>("DAILY_BUSINESS", {
+    scanForward: false,
+    limit: 10,
+  });
+  const lastKnownRate = recentRows.find((r) => r.usdIlsRate != null)?.usdIlsRate ?? 2.89;
+
   const [pinterestAds, ga4Sessions, adsenseEarnings, usdIlsRate] = await Promise.all([
     getPinterestAdMetrics(adAccountId, date),
     getGA4PinterestSessions(),
     getAdSenseEarnings(),
-    getUsdIlsRate(),
+    getUsdIlsRate(lastKnownRate),
   ]);
 
   const spendIls = Math.round(pinterestAds.spend * usdIlsRate * 100) / 100;
