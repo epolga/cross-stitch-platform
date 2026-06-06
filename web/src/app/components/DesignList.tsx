@@ -27,6 +27,7 @@ const chartFormatOptions: ChartFormat[] = ['color-symbol', 'symbol-chart', 'colo
 
 interface DesignCardProps {
   design: Design;
+  priority?: boolean;
 }
 
 let missingDesignsPromise: Promise<Set<number>> | null = null;
@@ -86,7 +87,7 @@ function useMissingDesign(designId: number) {
   return { isMissing, loaded };
 }
 
-function DesignCard({ design }: DesignCardProps) {
+function DesignCard({ design, priority = false }: DesignCardProps) {
   const [selectedFormat, setSelectedFormat] = useState<ChartFormat>('color-symbol');
   const { isMissing, loaded } = useMissingDesign(design.DesignID);
   const showFormatSelector = loaded && !isMissing; // add combo only after list is loaded
@@ -130,6 +131,7 @@ function DesignCard({ design }: DesignCardProps) {
                 alt={design.Caption}
                 width={100}
                 height={100}
+                priority={priority}
                 className="max-w-[100px] max-h-[100px] object-contain rounded"
               />
             </div>
@@ -224,8 +226,8 @@ export function DesignList({
         <p className="text-gray-500">No designs found.</p>
       ) : (
         <div className={styles.grid}>
-          {designs.map((design) => (
-            <DesignCard key={`${design.AlbumID}-${design.DesignID}`} design={design} />
+          {designs.map((design, index) => (
+            <DesignCard key={`${design.AlbumID}-${design.DesignID}`} design={design} priority={index < 4} />
           ))}
         </div>
       )}

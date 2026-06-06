@@ -46,6 +46,11 @@ Nothing in flight. All 2026-06-05 session work committed and deployed.
 - Delete `automation/pinterest-agent/daily-run.bat` (superseded by Lambda)
 - Mark done below
 
+### Milestone 9b — Mobile Core Web Vitals (~0.5 day)
+Search Console: 68 mobile "needs improvement", 68 desktop "good".
+- [ ] LCP fix: `priority={true}` on first 4 images in DesignList (above-the-fold eager load)
+- [ ] CLS fix: AdSlot top reservation — fixed-height wrapper instead of `min-height` to prevent shift when ad renders smaller than 250px
+
 ### Milestone 10 — WPF Uploader AI integration (~3–5 days)
 - AI title, board, and keyword suggestions when creating a new Pinterest pin in the WPF uploader
 - Entry point: `uploader/` project
@@ -70,4 +75,6 @@ Nothing in flight. All 2026-06-05 session work committed and deployed.
 - [x] Node.js 20 → 22 everywhere — 2026-06-05
 - [x] A/B test report: DESIGN vs ALBUM pin destination, in daily email + standalone script — 2026-06-05
 - [ ] Remove local service: uninstall Windows task + delete daily-run.bat — after 2026-06-06 Lambda confirms
+- [x] Milestone 9b LCP fix: priority images in DesignList — 2026-06-06
+- [ ] Milestone 9b CLS fix: AdSlot fixed-height wrapper
 - [ ] Milestone 10: WPF Uploader AI integration
