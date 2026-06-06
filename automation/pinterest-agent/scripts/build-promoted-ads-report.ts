@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { pinterestGet } from "../src/services/pinterestClient";
-import { batchPutPromotedAdStats } from "../src/services/historyStore";
+import { batchPutPromotedAdStats, type PromotedAdStatsInput } from "../src/services/historyStore";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
 const AD_ACCOUNT = process.env.PINTEREST_AD_ACCOUNT_ID!;
@@ -31,11 +31,16 @@ async function getNonArchivedAds(): Promise<AdItem[]> {
 
 async function getAdAnalytics(adIds: string[], dateStr: string): Promise<AdAnalyticsRow[]> {
   const columns = "SPEND_IN_MICRO_DOLLAR,IMPRESSION_1,CLICKTHROUGH_1,OUTBOUND_CLICK_1,CTR,AD_ID";
-  // Pinterest v5 analytics expects repeated ad_ids parameters (not bracket notation)
-  const idParams = adIds.map((id) => `ad_ids=${encodeURIComponent(id)}`).join("&");
-  return pinterestGet<AdAnalyticsRow[]>(
-    `/ad_accounts/${AD_ACCOUNT}/ads/analytics?start_date=${dateStr}&end_date=${dateStr}&columns=${columns}&granularity=DAY&${idParams}`
-  );
+  // Pinterest v5 silently ignores all but the first ad_ids param when batched,
+  // so fetch one ad at a time and merge results.
+  const results: AdAnalyticsRow[] = [];
+  for (const id of adIds) {
+    const rows = await pinterestGet<AdAnalyticsRow[]>(
+      `/ad_accounts/${AD_ACCOUNT}/ads/analytics?start_date=${dateStr}&end_date=${dateStr}&columns=${columns}&granularity=DAY&ad_ids=${encodeURIComponent(id)}`
+    );
+    results.push(...rows);
+  }
+  return results;
 }
 
 export async function run(dateStr?: string): Promise<void> {
@@ -50,17 +55,9 @@ export async function run(dateStr?: string): Promise<void> {
   const adMap = new Map(ads.map((a) => [a.id, a]));
   const rows = await getAdAnalytics(ads.map((a) => a.id), date);
 
-  if (!rows.length) {
-    console.log(`  no analytics returned for ${date}`);
-    return;
-  }
-
-  const inputs = rows.map((row) => {
+  const inputs: PromotedAdStatsInput[] = rows.map((row) => {
     const ad = adMap.get(row.AD_ID);
     const destUrl = ad?.destination_url ?? "";
-    // Extract path from full URL for readability
-    let page = destUrl;
-    try { page = new URL(destUrl).pathname; } catch {}
     return {
       date,
       adId: row.AD_ID,
@@ -73,6 +70,25 @@ export async function run(dateStr?: string): Promise<void> {
       ctr: parseFloat(row.CTR || "0"),
     };
   });
+
+  // Pinterest analytics omits ads with zero activity. Pad zero-rows so every
+  // non-archived ad appears in PROMOTED_AD_STATS (and thus PIN_ATTRIBUTION) daily.
+  const analyticsAdIds = new Set(inputs.map((i) => i.adId));
+  for (const [id, ad] of adMap) {
+    if (!analyticsAdIds.has(id)) {
+      inputs.push({
+        date,
+        adId: id,
+        destinationUrl: ad.destination_url ?? "",
+        title: ad.name ?? id,
+        spend: 0,
+        impressions: 0,
+        clicks: 0,
+        outboundClicks: 0,
+        ctr: 0,
+      });
+    }
+  }
 
   await batchPutPromotedAdStats(inputs);
 
