@@ -98,9 +98,9 @@ export async function run(dateStr?: string): Promise<void> {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
     const sign = r.profit >= 0 ? "+" : "";
     console.log(
-      `    ${r.clicks}c  ₪${r.spend.toFixed(2)}sp  ~₪${r.attributedRevenue.toFixed(2)}rev  ~${sign}₪${r.profit.toFixed(2)}profit  ${page}`
+      `    ${r.clicks}c  $${r.spend.toFixed(2)}sp  ~₪${r.attributedRevenue.toFixed(2)}rev  ~${sign}₪${r.profit.toFixed(2)}profit  ${page}`
     );
   }
 }
 
-if (!process.env.AWS_LAMBDA_FUNCTION_NAME) run().catch(console.error);
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) run(process.argv[2]).catch(console.error);
