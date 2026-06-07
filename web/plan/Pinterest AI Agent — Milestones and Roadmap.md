@@ -618,9 +618,9 @@ The original large planning document has been split into specialized thematic do
 
 In active priority order:
 
-* finish Milestone 5 (DynamoDB historical-memory layer)
+* **Milestone 10b** — Repo consolidation cleanup (current focus)
 
-* finish Milestone 7 (AWS Lambda + EventBridge migration off the local Task Scheduler)
+* Milestone 10 — WPF Uploader AI integration
 
-* Milestone 8 (SES email/notification layer)
+* Milestone 11 — Cross-platform expansion
 

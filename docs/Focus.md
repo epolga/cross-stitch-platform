@@ -2,7 +2,7 @@
 
 ## Current goal
 
-Milestone 10 — WPF Uploader AI integration.
+Milestone 10b — Repo consolidation cleanup.
 
 ## Active work
 
