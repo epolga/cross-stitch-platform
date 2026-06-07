@@ -455,6 +455,33 @@ Pinterest publishing
 
 ---
 
+# Milestone 10b — Repo Consolidation Cleanup
+
+## Status
+
+Planned.
+
+## Background
+
+Multiple standalone repos had their content physically relocated into the `cross-stitch-platform` monorepo (content copy, not git merge — histories remain separate).
+
+## Planned work
+
+* Verify web app builds and deploys from monorepo (`web/`)
+* Verify WPF Uploader builds from monorepo (`uploader/`)
+* Verify Lambda pipeline deploys from monorepo (`automation/`)
+* Resolve email template path (`%CROSS_STITCH%` points to old standalone repo location — see FOCUS.md Operational Notes)
+* Audit configs, scripts, and docs for hardcoded paths to old standalone repo locations
+* Decide whether to archive or delete the old standalone repos on GitHub
+
+## Estimated effort
+
+```text
+0.5–1 focused development day
+```
+
+---
+
 # Milestone 11 — Cross-Platform Expansion
 
 ## Status

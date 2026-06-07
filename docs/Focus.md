@@ -61,6 +61,15 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 ### Milestone 9 — skipped item (low priority)
 - AdSense URL channels / per-page revenue — session-based proportional attribution is good enough for now
 
+### Milestone X — Repo consolidation cleanup (~0.5–1 day)
+Multiple standalone repos had their content physically relocated into this `cross-stitch-platform` monorepo (not git-merged — histories are separate). Need to verify everything still works correctly from the new locations:
+- [ ] Web app builds and deploys from monorepo (`web/`)
+- [ ] WPF Uploader builds from monorepo (`uploader/`)
+- [ ] Lambda pipeline deploys from monorepo (`automation/`)
+- [ ] Email template path resolves correctly (see Operational notes — `%CROSS_STITCH%` issue)
+- [ ] No leftover hardcoded paths pointing to old standalone repo locations in configs, scripts, or docs
+- [ ] Decide whether to archive or delete the old standalone repos on GitHub
+
 ## Operational notes
 
 ### Email template path — verify tokens come from the right file
