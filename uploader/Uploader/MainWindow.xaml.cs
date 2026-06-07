@@ -578,6 +578,62 @@ namespace Uploader
             txtStatus.ScrollToEnd();
         }
 
+        private async void BtnGenerateSeoDesc_Click(object sender, RoutedEventArgs e)
+        {
+            if (PatternInfo == null)
+            {
+                txtStatus.Text += "[SEO] Select a folder first.\r\n";
+                return;
+            }
+
+            var button = sender as System.Windows.Controls.Button;
+            if (button != null) button.IsEnabled = false;
+            txtStatus.Text += "[SEO] Generating description...\r\n";
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(PatternInfo.AlbumCaption) && _albumId > 0)
+                    PatternInfo.AlbumCaption = await GetAlbumCaptionAsync(_albumId).ConfigureAwait(false);
+
+                string? seoDescription = await Uploader.Helpers.SeoTextGenerator.GenerateAsync(
+                    PatternInfo.Title,
+                    PatternInfo.AlbumCaption,
+                    PatternInfo.Width,
+                    PatternInfo.Height,
+                    PatternInfo.NColors,
+                    Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty
+                ).ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(seoDescription))
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                        txtStatus.Text += "[SEO] Failed: no text returned (check AnthropicApiKey in App.private.config).\r\n"));
+                    return;
+                }
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                    txtStatus.Text += $"[SEO] Generated ({seoDescription.Length} chars). Saving to DynamoDB...\r\n"));
+
+                await UpdateSeoDescriptionAsync(seoDescription).ConfigureAwait(false);
+
+                string captured = seoDescription;
+                Dispatcher.BeginInvoke(new Action(() =>
+                    txtStatus.Text += $"[SEO] Saved.\r\n{captured}\r\n"));
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                    txtStatus.Text += $"[SEO] Error: {ex.Message}\r\n"));
+            }
+            finally
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (button != null) button.IsEnabled = true;
+                }));
+            }
+        }
+
         #endregion
 
         #region Pattern info and album helpers (no UI access inside)
@@ -1130,6 +1186,37 @@ namespace Uploader
             };
 
             await _dynamoDbClient.PutItemAsync(request).ConfigureAwait(false);
+        }
+
+        private async Task UpdateSeoDescriptionAsync(string seoDescription)
+        {
+            if (PatternInfo == null || string.IsNullOrWhiteSpace(AlbumPartitionKey) || string.IsNullOrWhiteSpace(PatternInfo.NPage))
+                throw new InvalidOperationException("Design not loaded — select a folder first.");
+
+            try
+            {
+                await _dynamoDbClient.UpdateItemAsync(new UpdateItemRequest
+                {
+                    TableName = "CrossStitchItems",
+                    Key = new Dictionary<string, AttributeValue>
+                    {
+                        { "ID",    new AttributeValue { S = AlbumPartitionKey } },
+                        { "NPage", new AttributeValue { S = PatternInfo.NPage } },
+                    },
+                    UpdateExpression = "SET SeoDescription = :desc",
+                    ConditionExpression = "attribute_exists(DesignID)",
+                    ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                    {
+                        { ":desc", new AttributeValue { S = seoDescription } },
+                    },
+                }).ConfigureAwait(false);
+            }
+            catch (Amazon.DynamoDBv2.Model.ConditionalCheckFailedException)
+            {
+                throw new InvalidOperationException(
+                    $"No design found at {AlbumPartitionKey} / NPage {PatternInfo.NPage}. " +
+                    "Upload the design first, or the folder may belong to an already-uploaded design whose NPage differs from the computed next-page.");
+            }
         }
 
         private async Task<string> GetAlbumCaptionAsync(int albumId)
@@ -2172,7 +2259,6 @@ namespace Uploader
                 "admin",
                 DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
             string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
-            var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
             RenderedEmailContent content = RenderHtmlEmailContent(
                 template,
                 "admin",
@@ -2182,6 +2268,9 @@ namespace Uploader
                 altText,
                 unsubscribeUrl);
 
+            // No unsubscribe headers for admin preview — admin doesn't unsubscribe,
+            // and the raw-MIME path (triggered by headers) causes Gmail to silently
+            // discard the message. Structured SendEmailAsync path is used instead.
             await _emailHelper.SendEmailAsync(
                 _sesClient,
                 sender,
@@ -2189,7 +2278,6 @@ namespace Uploader
                 content.Subject,
                 content.TextBody,
                 content.HtmlBody,
-                unsubscribeHeaders,
                 configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
         }
 

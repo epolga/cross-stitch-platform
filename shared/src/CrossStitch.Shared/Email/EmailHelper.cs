@@ -81,7 +81,7 @@ public class EmailHelper
         var sb = new StringBuilder();
         sb.AppendLine($"From: {sender}");
         sb.AppendLine($"To: {toHeader}");
-        sb.AppendLine($"Subject: {subject}");
+        sb.AppendLine($"Subject: {EncodeSubjectRfc2047(subject)}");
         foreach (var header in headers)
             sb.AppendLine($"{header.Key}: {header.Value}");
         sb.AppendLine("MIME-Version: 1.0");
@@ -90,16 +90,16 @@ public class EmailHelper
 
         sb.AppendLine($"--{boundary}");
         sb.AppendLine("Content-Type: text/plain; charset=\"UTF-8\"");
-        sb.AppendLine("Content-Transfer-Encoding: 7bit");
+        sb.AppendLine("Content-Transfer-Encoding: base64");
         sb.AppendLine();
-        sb.AppendLine(textBody);
+        sb.AppendLine(EncodeBodyBase64(textBody));
         sb.AppendLine();
 
         sb.AppendLine($"--{boundary}");
         sb.AppendLine("Content-Type: text/html; charset=\"UTF-8\"");
-        sb.AppendLine("Content-Transfer-Encoding: 7bit");
+        sb.AppendLine("Content-Transfer-Encoding: base64");
         sb.AppendLine();
-        sb.AppendLine(htmlPart);
+        sb.AppendLine(EncodeBodyBase64(htmlPart));
         sb.AppendLine();
         sb.AppendLine($"--{boundary}--");
 
@@ -117,5 +117,25 @@ public class EmailHelper
         };
 
         await sesClient.SendRawEmailAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    // RFC 2047 base64 encode for non-ASCII subjects (emoji, Hebrew, etc.)
+    private static string EncodeSubjectRfc2047(string subject) =>
+        subject.All(c => c <= 127)
+            ? subject
+            : $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(subject))}?=";
+
+    // Base64-encode body content with CRLF line wrapping per MIME spec
+    private static string EncodeBodyBase64(string text)
+    {
+        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+        var sb = new StringBuilder(base64.Length + (base64.Length / 76 + 1) * 2);
+        for (int i = 0; i < base64.Length; i += 76)
+        {
+            sb.Append(base64, i, Math.Min(76, base64.Length - i));
+            if (i + 76 < base64.Length)
+                sb.Append("\r\n");
+        }
+        return sb.ToString();
     }
 }

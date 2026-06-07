@@ -6,7 +6,7 @@ Milestone 10 — WPF Uploader AI integration.
 
 ## Active work
 
-Nothing in flight. All 2026-06-05 session work committed and deployed.
+Nothing in flight. All 2026-06-07 session work committed.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -54,9 +54,23 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 ### Milestone 10 — WPF Uploader AI integration (~3–5 days)
 - AI title, board, and keyword suggestions when creating a new Pinterest pin in the WPF uploader
 - Entry point: `uploader/` project
+- SEO description generation (Claude Haiku) — done 2026-06-07:
+  - `AnthropicApiKey` added to `App.private.config` (was missing — caused "API unavailable")
+  - "Generate SEO Description" button in More Actions — generates + saves `SeoDescription` to DDB for current loaded design
 
 ### Milestone 9 — skipped item (low priority)
 - AdSense URL channels / per-page revenue — session-based proportional attribution is good enough for now
+
+## Operational notes
+
+### Email template path — verify tokens come from the right file
+`App.config` sets `HtmlEmailTemplatePath` / `TextEmailTemplatePath` via `%CROSS_STITCH%\Uploader\Uploader\Templates\...`.
+`%CROSS_STITCH%` defaults to `D:\ann\Git`, so templates are read from the **standalone `D:\ann\Git\Uploader\` repo**, not from `cross-stitch-platform\uploader\`.
+Editing the wrong copy (e.g. `cross-stitch-platform\uploader\Uploader\Templates\`) has no effect.
+- [ ] Decide on a single canonical template location and update `App.config` (or set `%CROSS_STITCH%`) so both repos point to the same file — eliminates the confusion permanently.
+
+### EB restart → 502 Bad Gateway (expected)
+`RestartAppServer` kills and restarts the app server processes. nginx comes up almost instantly, but Node.js takes ~15–30 seconds to start. During that gap nginx has no upstream → 502. **This is normal — just wait and reload.** Not a sign of a broken deployment.
 
 ## Out of scope (do not touch)
 
