@@ -20,6 +20,7 @@ google-oauth-client.json
 # Generated / runtime data
 reports/
 .a5c_backup/
+lambda/dist/
 
 # Logs
 *.log
