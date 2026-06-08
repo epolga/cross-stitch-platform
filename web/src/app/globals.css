@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --color-background: #ffffff;
+  --color-background: #fff1ec;
   --color-foreground: #171717;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --background: #ffffff;
+  --background: #fff1ec;
   --foreground: #171717;
   color-scheme: light;
 }
@@ -43,7 +43,7 @@ body.ads-enabled ins.adsbygoogle[data-anchor-status="displayed"] {
 }
 
 .footer {
-  background-color: #ffffff;
+  background-color: #fff1ec;
   border-top: 1px solid #e5e7eb;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   padding: 1.5rem 1rem;
