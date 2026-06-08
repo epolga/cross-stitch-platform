@@ -357,7 +357,7 @@ export interface PinAttributionInput {
   clicks: number;
   outboundClicks: number;
   spend: number;
-  paidSessions: number;
+  paidSessions: number; // all sessions to pin's landing page (paid + organic + referral)
   attributedRevenue: number;
   profit: number;
 }

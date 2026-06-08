@@ -18,6 +18,8 @@ interface PromotedAdRow {
 interface LandingPageRow {
   page: string;
   paidSessions: number;
+  organicSessions: number;
+  referralSessions: number;
 }
 
 interface DailyBusinessRow {
@@ -57,21 +59,24 @@ export async function run(dateStr?: string): Promise<void> {
   const totalAllSessions = bizRows[0].ga4Sessions;
   const usdIlsRate = bizRows[0].usdIlsRate ?? 3.65; // fallback for old rows without rate
 
+  // Total sessions per page across all sources (paid + organic + referral)
+  // Promotion lifts total traffic, not just paid clicks, so we measure full impact.
   const pageSessionMap = new Map<string, number>();
-  let totalPaidSessions = 0;
+  let totalTrackedSessions = 0;
   for (const r of pageRows) {
-    pageSessionMap.set(r.page, r.paidSessions);
-    totalPaidSessions += r.paidSessions;
+    const all = r.paidSessions + r.organicSessions + r.referralSessions;
+    pageSessionMap.set(r.page, all);
+    totalTrackedSessions += all;
   }
 
   const inputs: PinAttributionInput[] = adRows.map((ad) => {
     let page = ad.destinationUrl;
     try { page = new URL(ad.destinationUrl).pathname; } catch {}
 
-    const paidSessions = pageSessionMap.get(page) ?? 0;
+    const pageSessions = pageSessionMap.get(page) ?? 0;
     const attributedRevenue =
       totalAllSessions > 0
-        ? (paidSessions / totalAllSessions) * totalRevenue
+        ? (pageSessions / totalAllSessions) * totalRevenue
         : 0;
     const spendIls = ad.spend * usdIlsRate; // convert USD → ILS
 
@@ -83,7 +88,7 @@ export async function run(dateStr?: string): Promise<void> {
       clicks: ad.clicks,
       outboundClicks: ad.outboundClicks,
       spend: ad.spend,
-      paidSessions,
+      paidSessions: pageSessions, // stored as total sessions (all sources)
       attributedRevenue,
       profit: attributedRevenue - spendIls, // both ILS
     };
@@ -92,7 +97,7 @@ export async function run(dateStr?: string): Promise<void> {
   await batchPutPinAttribution(inputs);
 
   console.log(
-    `  ${inputs.length} pins — total revenue ₪${totalRevenue.toFixed(2)}, all sessions: ${totalAllSessions}, paid sessions: ${totalPaidSessions}`
+    `  ${inputs.length} pins — total revenue ₪${totalRevenue.toFixed(2)}, all sessions: ${totalAllSessions}, tracked page sessions: ${totalTrackedSessions}`
   );
   for (const r of [...inputs].sort((a, b) => b.profit - a.profit)) {
     const page = r.destinationUrl.replace(/^https?:\/\/[^/]+/, "");
