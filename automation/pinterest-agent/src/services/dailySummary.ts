@@ -54,79 +54,11 @@ interface PinDay {
   profit: number;
 }
 
-interface DesignPinMapRow {
-  pinId: string;
-  pinLinkType?: string;
-}
-
-interface DesignPerfRow {
-  snapshotDate: string;
-  pinId: string;
-  impressions: number;
-  clicks: number;
-  saves: number;
-  ctr: number;
-  savesPerDay?: number;
-  impressionsPerDay?: number;
-  error?: string;
-}
-
-interface AbTestGroup {
-  count: number;
-  totalImpressions: number;
-  totalClicks: number;
-  totalSaves: number;
-  totalCtr: number;
-  totalSavesPerDay: number;
-  countWithRates: number;
-}
-
-interface AbTestSummary {
-  snapshotDate: string;
-  groups: Map<string, AbTestGroup>;
-}
-
 interface PinTrend {
   adId: string;
   title: string;
   days: PinDay[];           // ascending by date
   totals: PinDay;
-}
-
-async function loadAbTestSummary(): Promise<AbTestSummary | null> {
-  const [pinMapRows, perfRows] = await Promise.all([
-    queryRange<DesignPinMapRow>("DESIGN_PIN_MAP"),
-    queryRange<DesignPerfRow>("DESIGN_PERFORMANCE", { scanForward: false, limit: 500 }),
-  ]);
-  if (perfRows.length === 0) return null;
-
-  const pinLinkTypeByPinId = new Map<string, string>();
-  for (const r of pinMapRows) {
-    if (r.pinId && r.pinLinkType) {
-      pinLinkTypeByPinId.set(r.pinId, r.pinLinkType.toUpperCase());
-    }
-  }
-
-  const latestDate = perfRows[0].snapshotDate;
-  const groups = new Map<string, AbTestGroup>();
-  for (const r of perfRows) {
-    if (r.snapshotDate !== latestDate || r.error) continue;
-    const linkType = pinLinkTypeByPinId.get(r.pinId);
-    if (!linkType || linkType === "UNKNOWN") continue; // only count typed pins
-    let g = groups.get(linkType);
-    if (!g) {
-      g = { count: 0, totalImpressions: 0, totalClicks: 0, totalSaves: 0, totalCtr: 0, totalSavesPerDay: 0, countWithRates: 0 };
-      groups.set(linkType, g);
-    }
-    g.count++;
-    g.totalImpressions += r.impressions;
-    g.totalClicks += r.clicks;
-    g.totalSaves += r.saves;
-    g.totalCtr += r.ctr;
-    if (r.savesPerDay !== undefined) { g.totalSavesPerDay += r.savesPerDay; g.countWithRates++; }
-  }
-  if (groups.size === 0) return null;
-  return { snapshotDate: latestDate, groups };
 }
 
 function pct(n: number): string {
@@ -185,29 +117,7 @@ function groupByPin(rows: PinAttributionRow[]): PinTrend[] {
   return [...map.values()].sort((a, b) => b.totals.profit - a.totals.profit);
 }
 
-function formatAbTestText(ab: AbTestSummary): string[] {
-  const lines: string[] = [];
-  lines.push("", `A/B test: organic pin destination (snapshot: ${ab.snapshotDate})`);
-  const header = "  Type    Pins  Imp/pin  Saves/pin   CTR    Saves/day";
-  lines.push(header);
-  for (const [type, g] of [...ab.groups.entries()].sort()) {
-    const imp = g.count ? (g.totalImpressions / g.count).toFixed(0) : "—";
-    const saves = g.count ? (g.totalSaves / g.count).toFixed(1) : "—";
-    const ctr = g.count ? ((g.totalCtr / g.count) * 100).toFixed(2) + "%" : "—";
-    const spd = g.countWithRates ? (g.totalSavesPerDay / g.countWithRates).toFixed(3) : "—";
-    lines.push(`  ${type.padEnd(7)} ${String(g.count).padStart(4)}  ${imp.padStart(7)}  ${saves.padStart(9)}  ${ctr.padStart(6)}  ${spd.padStart(9)}`);
-  }
-  const dg = ab.groups.get("DESIGN");
-  const ag = ab.groups.get("ALBUM");
-  if (dg && ag && dg.count > 0 && ag.count > 0) {
-    const diff = (a: number, d: number) => d === 0 ? "N/A" : ((a - d) / d * 100).toFixed(0) + "%";
-    const sign = (s: string) => s.startsWith("-") ? s : "+" + s;
-    lines.push(`  ALBUM vs DESIGN: ${sign(diff(ag.totalImpressions / ag.count, dg.totalImpressions / dg.count))} imp/pin,  ${sign(diff(ag.totalSaves / ag.count, dg.totalSaves / dg.count))} saves/pin`);
-  }
-  return lines;
-}
-
-function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[], ab: AbTestSummary | null): string {
+function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[]): string {
   const lines: string[] = [];
   lines.push(`Cross-stitch daily report — ${today.SortKey}`, "");
 
@@ -266,15 +176,11 @@ function formatTextBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
     }
   }
 
-  if (ab) {
-    for (const line of formatAbTestText(ab)) lines.push(line);
-  }
-
   lines.push("", "Schema: CrossStitchBusinessHistory[DAILY_BUSINESS / AI_ANALYSIS].");
   return lines.join("\n") + "\n";
 }
 
-function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[], ab: AbTestSummary | null): string {
+function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null, pinTrends: PinTrend[]): string {
   const kpiRows = [
     ["Spend", `${usd(today.spend)} <span style="color:#888">USD</span>`],
     ["Clicks", `${today.clicks} <span style="color:#888">(outbound: ${today.outboundClicks})</span>`],
@@ -321,44 +227,6 @@ function formatHtmlBody(today: DailyRow, prev7: DailyRow[], trend: AiRow | null,
   ${trend.reasoning ? `<tr><td style="padding:5px 14px;border-bottom:1px solid #eee;color:#555">Reasoning</td><td style="padding:5px 14px;border-bottom:1px solid #eee;font-style:italic">${trend.reasoning}</td></tr>` : ""}
   <tr><td style="padding:5px 14px;color:#555">For date</td><td style="padding:5px 14px;color:#888">${trend.forDate}</td></tr>
 </table>`;
-  }
-
-  let abBlock = "";
-  if (ab) {
-    const abRows = [...ab.groups.entries()].sort().map(([type, g]) => {
-      const imp = g.count ? (g.totalImpressions / g.count).toFixed(0) : "—";
-      const saves = g.count ? (g.totalSaves / g.count).toFixed(1) : "—";
-      const ctr = g.count ? ((g.totalCtr / g.count) * 100).toFixed(2) + "%" : "—";
-      const spd = g.countWithRates ? (g.totalSavesPerDay / g.countWithRates).toFixed(3) : "—";
-      return `<tr>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;font-weight:bold">${type}</td>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right">${g.count}</td>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right">${imp}</td>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right">${saves}</td>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right">${ctr}</td>
-        <td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right">${spd}</td>
-      </tr>`;
-    }).join("\n");
-    const dg = ab.groups.get("DESIGN");
-    const ag = ab.groups.get("ALBUM");
-    let diffLine = "";
-    if (dg && ag && dg.count > 0 && ag.count > 0) {
-      const diff = (a: number, d: number) => { const p = d === 0 ? 0 : (a - d) / d * 100; return (p >= 0 ? "+" : "") + p.toFixed(0) + "%"; };
-      diffLine = `<p style="font-size:12px;color:#666;margin:6px 0 0">ALBUM vs DESIGN: <b>${diff(ag.totalImpressions / ag.count, dg.totalImpressions / dg.count)}</b> imp/pin &nbsp;·&nbsp; <b>${diff(ag.totalSaves / ag.count, dg.totalSaves / dg.count)}</b> saves/pin</p>`;
-    }
-    abBlock = `
-<h3 style="margin:24px 0 8px;font-size:15px">A/B test: organic pin destination <span style="font-weight:normal;color:#888;font-size:13px">(snapshot: ${ab.snapshotDate})</span></h3>
-<table style="border-collapse:collapse">
-  <thead><tr style="color:#555;font-size:12px;background:#f5f5f5">
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:left">Type</th>
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:right">Pins</th>
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:right">Imp/pin</th>
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:right">Saves/pin</th>
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:right">Avg CTR</th>
-    <th style="padding:5px 12px;border-bottom:1px solid #ddd;text-align:right">Saves/day</th>
-  </tr></thead>
-  <tbody>${abRows}</tbody>
-</table>${diffLine}`;
   }
 
   let pinsBlock = "";
@@ -419,7 +287,6 @@ ${pinSections}`;
 <table style="border-collapse:collapse">${kpiRows}</table>
 ${avgBlock}
 ${trendBlock}
-${abBlock}
 ${pinsBlock}
 <p style="color:#999;font-size:12px;margin-top:24px">Schema: <code>CrossStitchBusinessHistory[DAILY_BUSINESS / AI_ANALYSIS]</code>.</p>
 </body></html>
@@ -446,21 +313,18 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
 
   // Per-pin attribution for last 7 days, grouped by pin, sorted by total profit desc
   const pinStart = sevenDaysAgo(today.SortKey);
-  const [pinRows, ab] = await Promise.all([
-    queryRange<PinAttributionRow>("PIN_ATTRIBUTION", {
-      startKey: `${pinStart}#`,
-      endKey: `${today.SortKey}#~`,
-    }),
-    loadAbTestSummary().catch(() => null),
-  ]);
+  const pinRows = await queryRange<PinAttributionRow>("PIN_ATTRIBUTION", {
+    startKey: `${pinStart}#`,
+    endKey: `${today.SortKey}#~`,
+  });
   const pinTrends = groupByPin(pinRows);
 
   const subject = `[cross-stitch] Daily report — ${today.SortKey}  ${usd(today.profit)} profit`;
 
   const { messageId } = await sendEmail({
     subject,
-    textBody: formatTextBody(today, prev7, trend, pinTrends, ab),
-    htmlBody: formatHtmlBody(today, prev7, trend, pinTrends, ab),
+    textBody: formatTextBody(today, prev7, trend, pinTrends),
+    htmlBody: formatHtmlBody(today, prev7, trend, pinTrends),
   });
 
   // Telegram: top-3 pins by today's profit

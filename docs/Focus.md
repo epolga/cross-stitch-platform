@@ -32,11 +32,11 @@ Nothing in flight. All 2026-06-07 session work committed.
 **Daily email** — per-pin 7-day trend table + A/B test section (DESIGN vs ALBUM)
 **Telegram** — top-3 pins by today's profit
 
-**A/B test report** (`npm run ab-test`) — `scripts/ab-test-report.ts`
-- Reads DESIGN_PIN_MAP (now stores `pinLinkType`) + latest DESIGN_PERFORMANCE snapshot
-- Groups by DESIGN vs ALBUM, shows per-pin avg impressions/saves/CTR/saves-per-day
-- A/B section also added to daily email (text + HTML)
-- `export-design-pin-map.ts` now reads `PinLinkType` from CrossStitchItems
+**A/B test conclusion** (2026-06-08) — dropped
+- Result: ALBUM pins get ₪0 attributed revenue (visitors land on album page, no AdSense)
+- ALBUM vs DESIGN: -34% impressions/pin, -100% clicks, saves, CTR
+- 102 album pins across 29 albums still exist in Pinterest but will not be promoted
+- Removed A/B section from daily email; deleted `scripts/ab-test-report.ts`
 
 ## Pending
 
