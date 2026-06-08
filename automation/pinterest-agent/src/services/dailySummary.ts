@@ -338,17 +338,18 @@ export async function sendDailySummary(): Promise<{ messageId: string; date: str
     `Sessions: ${today.ga4Sessions}  Clicks: ${today.clicks}`,
     `AI: ${trendLine}`,
   ];
-  // today's pins = last day in each pin's days array (already sorted ascending)
+  // top-3 pins today: only pins with spend > 0, sorted by today's profit desc
   const todayPins = pinTrends
-    .map((p) => p.days.at(-1)!)
-    .filter((d) => d.date === today.SortKey)
-    .sort((a, b) => b.profit - a.profit);
+    .flatMap((pin) => {
+      const d = pin.days.find((x) => x.date === today.SortKey);
+      return d && d.spend > 0 ? [{ pin, d }] : [];
+    })
+    .sort((a, b) => b.d.profit - a.d.profit)
+    .slice(0, 3);
   if (todayPins.length > 0) {
     tgLines.push("");
     tgLines.push("🔝 <b>Top pins today</b>:");
-    for (const [i, pin] of pinTrends.entries()) {
-      const d = pin.days.find((x) => x.date === today.SortKey);
-      if (!d || i >= 3) continue;
+    for (const { pin, d } of todayPins) {
       const name = pin.title.length > 22 ? pin.title.slice(0, 21) + "…" : pin.title;
       const sign = d.profit >= 0 ? "+" : "";
       tgLines.push(`  ${name}: ${d.clicks}c  ${usd(d.spend)}sp  ~${ils(d.attributedRevenue)}rev  ~<b>${sign}${ils(d.profit)}</b>`);
