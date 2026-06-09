@@ -300,6 +300,8 @@ Album caption is used as the temporary theme/category field. Richer per-design m
 * DynamoDB persistence (see Milestone 8 in Memory and Trend Analysis)
 
 > Note: steps 11–13 in the Lambda pipeline (design pin map, design performance, AI design analysis) are currently **disabled** because the output is not surfaced anywhere. Re-enable once the email section is built.
+>
+> **Why disabled (2026-06-09):** Step 12 fetches Pinterest analytics for all 957 organically pinned designs one-by-one. The Pinterest API rate-limits heavily (HTTP 429), and at ~0.8s/pin the step regularly consumed the entire 15-minute Lambda budget — causing the daily summary email (step 10) to never be sent. Since the analysis output was invisible to the user anyway, steps 11–13 were commented out. Commit `37f95e1`.
 
 ---
 
