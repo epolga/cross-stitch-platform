@@ -293,9 +293,13 @@ Album caption is used as the temporary theme/category field. Richer per-design m
 
 ## Remaining work for V2
 
+* **surface AI design analysis in the daily email** — the analysis runs and saves to S3/DDB but is never shown to the user; add a section to the daily summary email (or a separate weekly digest) with top albums, underperforming albums, and design directions to create
+
 * richer design categorization beyond album captions
 
 * DynamoDB persistence (see Milestone 8 in Memory and Trend Analysis)
+
+> Note: steps 11–13 in the Lambda pipeline (design pin map, design performance, AI design analysis) are currently **disabled** because the output is not surfaced anywhere. Re-enable once the email section is built.
 
 ---
 
@@ -618,7 +622,9 @@ The original large planning document has been split into specialized thematic do
 
 In active priority order:
 
-* **Milestone 10b** — Repo consolidation cleanup (current focus)
+* **Milestone 6b V2** — Surface AI design analysis in daily email (steps 11–13 disabled until this is done)
+
+* Milestone 9 — Better Attribution (A/B test report: DESIGN vs ALBUM pin organic performance)
 
 * Milestone 10 — WPF Uploader AI integration
 

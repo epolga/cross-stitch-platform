@@ -83,14 +83,15 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   const tokenReminderSent = await sendGoogleTokenReminderIfDue();
   if (tokenReminderSent) console.log("  Google token refresh reminder sent via Telegram");
 
-  console.log("[11/13] design pin map export");
-  await runPinMap();
-
-  console.log("[12/13] design performance build");
-  await runPerf();
-
-  console.log("[13/13] AI design analysis");
-  await runAiDesign();
+  // Steps 11-13 (design pin map, design performance, AI design analysis) are
+  // disabled — output is not surfaced anywhere yet. Re-enable when the email
+  // or a separate report includes the design analysis. See Milestones doc.
+  // console.log("[11/13] design pin map export");
+  // await runPinMap();
+  // console.log("[12/13] design performance build");
+  // await runPerf();
+  // console.log("[13/13] AI design analysis");
+  // await runAiDesign();
 
   console.log(`[pipeline] complete for date=${dateStr}`);
 };
