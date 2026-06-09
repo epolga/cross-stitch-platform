@@ -74,21 +74,23 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log("  no recommendation change");
   }
 
-  console.log("[10/13] design pin map export");
-  await runPinMap();
-
-  console.log("[11/13] design performance build");
-  await runPerf();
-
-  console.log("[12/13] AI design analysis");
-  await runAiDesign();
-
-  console.log("[13/13] daily summary email");
+  // Send email before the slow design-analysis steps (10-12) so a timeout there
+  // doesn't prevent the daily report from going out.
+  console.log("[10/13] daily summary email");
   const { messageId, date } = await sendDailySummary();
   console.log(`  sent → SES MessageId=${messageId} (date=${date})`);
 
   const tokenReminderSent = await sendGoogleTokenReminderIfDue();
   if (tokenReminderSent) console.log("  Google token refresh reminder sent via Telegram");
+
+  console.log("[11/13] design pin map export");
+  await runPinMap();
+
+  console.log("[12/13] design performance build");
+  await runPerf();
+
+  console.log("[13/13] AI design analysis");
+  await runAiDesign();
 
   console.log(`[pipeline] complete for date=${dateStr}`);
 };
