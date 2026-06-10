@@ -6,7 +6,7 @@ Milestone 10b — Repo consolidation cleanup.
 
 ## Active work
 
-Nothing in flight. Homepage 500 fixed and deployed 2026-06-10.
+Nothing in flight. All 2026-06-10 session work committed and deployed.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -40,15 +40,25 @@ Nothing in flight. Homepage 500 fixed and deployed 2026-06-10.
 
 ## Pending
 
-### Homepage 500 — fixed 2026-06-10
+### What was built in the 2026-06-10 session
 
-**Root cause:** `.next` cache pollution from `next dev` sessions. Path-based webpack IDs from dev bled into `next build` for the homepage's `page_client-reference-manifest.js` → TypeError on SSR → 500.
+**Homepage 500 — fixed**
+- Root cause: `.next` cache pollution from `next dev` sessions. Path-based webpack IDs from dev bled into `next build` for the homepage's `page_client-reference-manifest.js` → TypeError on SSR → 500.
+- Fix: always delete `.next` before production build. Clean build produces all-numeric webpack IDs.
+- Always run `rm -rf .next` before `next build` (step 1 of `deploy-web.md` already covers this).
 
-**Fix:** always delete `.next` before production build. Clean build produces all-numeric webpack IDs. Confirmed 200 locally, deployed 2026-06-10.
+**Next.js upgraded 15.5.7 → 15.5.18**
+- Latest 15.x patch; includes security fixes. `package.json` + `package-lock.json` committed.
 
-### Milestone 9b — Mobile Core Web Vitals (~0.5 day)
+**Mobile LCP fix — Milestone 9b**
+- Root cause: 250px top AdSlot pushed design images below the fold on mobile → `priority` images had no effect.
+- Fix: `hidden md:block` on top AdSlot — hidden on mobile, visible on desktop.
+- Result: LCP 1.9s (Lighthouse mobile, localhost), CLS 0, TBT 0ms, Performance score 98.
+
+### Milestone 9b — Mobile Core Web Vitals
 Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] LCP fix: `priority={true}` on first 4 images in DesignList — 2026-06-06
+- [x] LCP fix: hide top AdSlot on mobile (`hidden md:block`) — 2026-06-10, LCP now 1.9s
 - [ ] CLS fix: AdSlot top reservation — fixed-height wrapper instead of `min-height` to prevent shift when ad renders smaller than 250px
 
 ### Milestone 10 — WPF Uploader AI integration (~3–5 days)
@@ -99,5 +109,8 @@ Editing the wrong copy (e.g. `cross-stitch-platform\uploader\Uploader\Templates\
 - [x] A/B test report: DESIGN vs ALBUM pin destination, in daily email + standalone script — 2026-06-05
 - [ ] Remove local service: uninstall Windows task + delete daily-run.bat — after 2026-06-06 Lambda confirms
 - [x] Milestone 9b LCP fix: priority images in DesignList — 2026-06-06
+- [x] Milestone 9b LCP fix: hide top ad on mobile, LCP 1.9s — 2026-06-10
+- [x] Homepage 500 fixed: clean build clears manifest cache pollution — 2026-06-10
+- [x] Next.js upgraded 15.5.7 → 15.5.18 — 2026-06-10
 - [ ] Milestone 9b CLS fix: AdSlot fixed-height wrapper
 - [ ] Milestone 10: WPF Uploader AI integration
