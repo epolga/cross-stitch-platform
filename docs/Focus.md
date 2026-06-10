@@ -6,7 +6,7 @@ Milestone 10b — Repo consolidation cleanup.
 
 ## Active work
 
-Nothing in flight. All 2026-06-07 session work committed.
+Nothing in flight. Homepage 500 fixed and deployed 2026-06-10.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -40,15 +40,15 @@ Nothing in flight. All 2026-06-07 session work committed.
 
 ## Pending
 
-### Tomorrow (2026-06-06) — after Lambda run confirmed
-- Check daily email: A/B section present + all 13 steps in CloudWatch logs
-- If green: uninstall `\PinterestDailyReport` from Task Scheduler (currently disabled, not deleted)
-- Delete `automation/pinterest-agent/daily-run.bat` (superseded by Lambda)
-- Mark done below
+### Homepage 500 — fixed 2026-06-10
+
+**Root cause:** `.next` cache pollution from `next dev` sessions. Path-based webpack IDs from dev bled into `next build` for the homepage's `page_client-reference-manifest.js` → TypeError on SSR → 500.
+
+**Fix:** always delete `.next` before production build. Clean build produces all-numeric webpack IDs. Confirmed 200 locally, deployed 2026-06-10.
 
 ### Milestone 9b — Mobile Core Web Vitals (~0.5 day)
 Search Console: 68 mobile "needs improvement", 68 desktop "good".
-- [ ] LCP fix: `priority={true}` on first 4 images in DesignList (above-the-fold eager load)
+- [x] LCP fix: `priority={true}` on first 4 images in DesignList — 2026-06-06
 - [ ] CLS fix: AdSlot top reservation — fixed-height wrapper instead of `min-height` to prevent shift when ad renders smaller than 250px
 
 ### Milestone 10 — WPF Uploader AI integration (~3–5 days)

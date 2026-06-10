@@ -171,7 +171,6 @@ export default async function Home({ searchParams }: Props) {
     process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ??
     '';
 
-  console.log("Home page accessed with eid:", eid, "and cid:", cid);
   if (eid && cid) {
     try {
       await Promise.all([
@@ -229,11 +228,6 @@ export default async function Home({ searchParams }: Props) {
           <p className="text-gray-700 mb-6">
             Browse hundreds of free downloadable charts, filter by size or colors, and find your next stitching project.
           </p>
-          {adsEnabled && adSlotTop && (
-            <div className="my-4">
-              <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
-            </div>
-          )}
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
             <p className="text-gray-800">
               All charts here are full, printable PDFs with color keys and stitch counts. Every listing includes stitch width, height,
@@ -241,6 +235,11 @@ export default async function Home({ searchParams }: Props) {
               making this library a reliable place to bookmark for future projects.
             </p>
           </div>
+          {adsEnabled && adSlotTop && (
+            <div className="my-4">
+              <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
+            </div>
+          )}
           <section className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6 space-y-3">
             <h2 className="text-xl font-semibold text-gray-900">How to use the filters</h2>
             <p className="text-gray-800">
