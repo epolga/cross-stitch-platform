@@ -236,7 +236,7 @@ export default async function Home({ searchParams }: Props) {
             </p>
           </div>
           {adsEnabled && adSlotTop && (
-            <div className="my-4">
+            <div className="hidden md:block my-4">
               <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
             </div>
           )}
