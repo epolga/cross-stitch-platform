@@ -367,35 +367,35 @@ Planned.
 
 ## Status
 
-Planned.
+Complete — 2026-06-05 through 2026-06-11.
 
-## Planned work
+## What was built
 
-Improve:
+**Per-pin attribution (PIN_ATTRIBUTION DDB entity)**
+- Written daily by Lambda step 5
+- Fields: date, adId, title, destinationUrl, clicks, outboundClicks, spend (USD), paidSessions, attributedRevenue (ILS), profit (ILS), usdIlsRate
+- Attribution formula: `pin_revenue = (pin_paid_sessions / total_all_sessions) × adsense_revenue`
 
-```text
+**Currency fix**
+- Pinterest spend is USD; AdSense revenue and profit are ILS
+- Live USD→ILS rate from Bank of Israel API; fallback: last known rate from DDB
+- DAILY_BUSINESS rows now store `usdIlsRate`
 
-traffic quality understanding
+**Daily email & Telegram**
+- Per-pin 7-day profit trend table in daily email
+- Top-3 pins by today's profit in Telegram
 
-```
+**A/B test (DESIGN vs ALBUM pins) — concluded 2026-06-08, dropped**
+- ALBUM pins get ₪0 attributed revenue (no AdSense on album landing pages)
+- ALBUM vs DESIGN: −34% impressions/pin, −100% clicks, saves, CTR
+- 102 album pins still exist on Pinterest but will not be promoted
 
-including:
-
-* landing-page analysis
-
-* returning users
-
-* monetization depth
-
-* newsletter conversion quality
-
-## Estimated effort
-
-```text
-
-2–3 focused development days
-
-```
+**Milestone 9b — Mobile Core Web Vitals**
+- LCP fix: `priority={true}` on first 4 images in DesignList — 2026-06-06
+- LCP fix: `hidden md:block` on top AdSlot (homepage) — 2026-06-10, LCP 1.9s mobile
+- CLS fix: `hidden md:block` on top AdSlot for all page types (design, albums, album detail) — 2026-06-11
+- AdSlot component restructured: `<ins>` wrapped in `<div class="ad-slot-wrapper">` — AdSense overrides `height` and `max-height` with `!important` on parent elements so CSS-only height capping is not possible; top-ad removal on mobile is the effective fix
+- Search Console improvement expected within 1–2 weeks
 
 ---
 
@@ -624,11 +624,9 @@ The original large planning document has been split into specialized thematic do
 
 In active priority order:
 
-* **Milestone 6b V2** — Surface AI design analysis in daily email (steps 11–13 disabled until this is done)
+* **Milestone 10b** — Repo consolidation cleanup (verify all projects build/deploy from monorepo)
 
-* Milestone 9 — Better Attribution (A/B test report: DESIGN vs ALBUM pin organic performance)
-
-* Milestone 10 — WPF Uploader AI integration
+* **Milestone 10** — WPF Uploader AI integration (AI title, board, keyword suggestions; SEO description generation already done 2026-06-07)
 
 * Milestone 11 — Cross-platform expansion
 
