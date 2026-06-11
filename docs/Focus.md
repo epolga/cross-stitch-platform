@@ -6,7 +6,7 @@ Milestone 10b — Repo consolidation cleanup.
 
 ## Active work
 
-Nothing in flight. All 2026-06-10 session work committed and deployed.
+Nothing in flight. All 2026-06-11 session work committed and deployed.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -55,11 +55,23 @@ Nothing in flight. All 2026-06-10 session work committed and deployed.
 - Fix: `hidden md:block` on top AdSlot — hidden on mobile, visible on desktop.
 - Result: LCP 1.9s (Lighthouse mobile, localhost), CLS 0, TBT 0ms, Performance score 98.
 
+### What was built in the 2026-06-11 session
+
+**Windows task cleanup**
+- Deleted `\PinterestDailyReport` and `\GoogleTokenRefreshReminder` from Task Scheduler (were disabled since 2026-06-05, now removed).
+
+**Mobile CLS fix — Milestone 9b**
+- Extended `hidden md:block` to top AdSlot on design pages, albums list, and album detail (homepage already had it from 2026-06-10).
+- `AdSlot` component restructured: `<ins>` now wrapped in `<div class="ad-slot-wrapper">` — separates layout concerns from the AdSense-managed element.
+- Key finding: AdSense injects `height: auto !important` and `max-height: none !important` inline on any ancestor div with a height constraint — CSS-only CLS prevention on the wrapper is not possible.
+- Net result: top ad CLS eliminated on mobile (ad absent). Bottom ad CLS is below the fold when page loads → off-screen shifts are not counted by Core Web Vitals.
+- Search Console improvement expected in 1–2 weeks.
+
 ### Milestone 9b — Mobile Core Web Vitals
 Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] LCP fix: `priority={true}` on first 4 images in DesignList — 2026-06-06
 - [x] LCP fix: hide top AdSlot on mobile (`hidden md:block`) — 2026-06-10, LCP now 1.9s
-- [ ] CLS fix: AdSlot top reservation — fixed-height wrapper instead of `min-height` to prevent shift when ad renders smaller than 250px
+- [x] CLS fix: hide top AdSlot on mobile for all page types; AdSlot wrapper div — 2026-06-11
 
 ### Milestone 10 — WPF Uploader AI integration (~3–5 days)
 - AI title, board, and keyword suggestions when creating a new Pinterest pin in the WPF uploader
