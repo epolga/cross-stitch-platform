@@ -30,17 +30,20 @@ body.ads-enabled ins.adsbygoogle[data-anchor-status="displayed"] {
   z-index: 50;
 }
 
-.ad-slot {
-  display: block;
-  width: 100%;
+.ad-slot-wrapper {
   height: var(--ad-min-height, 250px);
   overflow: hidden;
 }
 
 @media (min-width: 768px) {
-  .ad-slot {
+  .ad-slot-wrapper {
     height: var(--ad-min-height-md, var(--ad-min-height, 250px));
   }
+}
+
+.ad-slot {
+  display: block;
+  width: 100%;
 }
 
 .footer {

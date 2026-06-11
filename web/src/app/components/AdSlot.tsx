@@ -46,13 +46,14 @@ export default function AdSlot({
   } as CSSProperties;
 
   return (
-    <ins
-      className={`adsbygoogle ad-slot ${className ?? ''}`.trim()}
-      style={style}
-      data-ad-client={ADSENSE_CLIENT_ID}
-      data-ad-slot={slot}
-      data-ad-format="auto"
-      data-full-width-responsive="true"
-    />
+    <div className={`ad-slot-wrapper ${className ?? ''}`.trim()} style={style}>
+      <ins
+        className="adsbygoogle ad-slot"
+        data-ad-client={ADSENSE_CLIENT_ID}
+        data-ad-slot={slot}
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+    </div>
   );
 }
