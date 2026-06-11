@@ -47,7 +47,7 @@ export default async function AlbumsPage() {
         Each album links to instant downloads, detailed color keys, and stitch counts so you can plan your next project quickly.
       </p>
       {adsEnabled && adSlotTop && (
-        <div className="my-6">
+        <div className="hidden md:block my-6">
           <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
         </div>
       )}

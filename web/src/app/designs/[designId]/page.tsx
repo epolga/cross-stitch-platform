@@ -246,7 +246,7 @@ export default async function DesignPage({ params }: Props) {
           <p className="text-sm text-gray-600 mb-4">Download the free PDF chart once you sign in.</p>
 
           {adsEnabled && adSlotTop && (
-            <div className="my-4">
+            <div className="hidden md:block my-4">
               <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
             </div>
           )}

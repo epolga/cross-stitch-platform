@@ -146,7 +146,7 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
         </p>
       ) : null}
       {adsEnabled && adSlotTop && (
-        <div className="my-6">
+        <div className="hidden md:block my-6">
           <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
         </div>
       )}

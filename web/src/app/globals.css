@@ -33,12 +33,13 @@ body.ads-enabled ins.adsbygoogle[data-anchor-status="displayed"] {
 .ad-slot {
   display: block;
   width: 100%;
-  min-height: var(--ad-min-height, 250px);
+  height: var(--ad-min-height, 250px);
+  overflow: hidden;
 }
 
 @media (min-width: 768px) {
   .ad-slot {
-    min-height: var(--ad-min-height-md, var(--ad-min-height, 250px));
+    height: var(--ad-min-height-md, var(--ad-min-height, 250px));
   }
 }
 

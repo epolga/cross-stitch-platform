@@ -107,10 +107,10 @@ Editing the wrong copy (e.g. `cross-stitch-platform\uploader\Uploader\Templates\
 - [x] Currency fix: spend USD / revenue ILS / profit ILS with live Bank of Israel rate — 2026-06-05
 - [x] Node.js 20 → 22 everywhere — 2026-06-05
 - [x] A/B test report: DESIGN vs ALBUM pin destination, in daily email + standalone script — 2026-06-05
-- [ ] Remove local service: uninstall Windows task + delete daily-run.bat — after 2026-06-06 Lambda confirms
+- [x] Remove local service: deleted PinterestDailyReport + GoogleTokenRefreshReminder Windows tasks — 2026-06-11
 - [x] Milestone 9b LCP fix: priority images in DesignList — 2026-06-06
 - [x] Milestone 9b LCP fix: hide top ad on mobile, LCP 1.9s — 2026-06-10
 - [x] Homepage 500 fixed: clean build clears manifest cache pollution — 2026-06-10
 - [x] Next.js upgraded 15.5.7 → 15.5.18 — 2026-06-10
-- [ ] Milestone 9b CLS fix: AdSlot fixed-height wrapper
+- [x] Milestone 9b CLS fix: AdSlot fixed-height wrapper + hide top ad on mobile for all pages — 2026-06-11
 - [ ] Milestone 10: WPF Uploader AI integration
