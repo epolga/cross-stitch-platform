@@ -90,7 +90,8 @@ public sealed class PinterestUploader
     public async Task<PinUploadResult> UploadPinForPatternAsync(
         PinPatternInfo pattern,
         bool test = false,
-        string? photoFileName = null)
+        string? photoFileName = null,
+        string? titleOverride = null)
     {
         if (pattern == null) throw new ArgumentNullException(nameof(pattern));
 
@@ -128,7 +129,7 @@ public sealed class PinterestUploader
 
         // 3. Analyze theme + build SEO text.
         var theme = DetectTheme(working);
-        var title = BuildPinTitle(working, theme);
+        var title = !string.IsNullOrWhiteSpace(titleOverride) ? titleOverride : BuildPinTitle(working, theme);
         var description = BuildPinDescription(working, theme, working.AlbumId, patternUrl);
         var altText = BuildAltText(working, theme);
 

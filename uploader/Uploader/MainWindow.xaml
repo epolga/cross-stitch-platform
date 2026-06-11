@@ -130,6 +130,48 @@
                                 </WrapPanel>
                         </Expander>
 
+                        <Expander x:Name="aiSuggestionsExpander"
+                                  Header="AI Pin Suggestions"
+                                  Margin="10,0,10,5"
+                                  Visibility="Collapsed">
+                                <StackPanel Margin="10,5,10,8">
+                                        <TextBlock Text="Pin Title:"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,3"/>
+                                        <RadioButton x:Name="rbTitle0"
+                                                     GroupName="PinTitles"
+                                                     IsChecked="True"
+                                                     Margin="0,2">
+                                                <TextBlock x:Name="txtAiTitle0" TextWrapping="Wrap"/>
+                                        </RadioButton>
+                                        <RadioButton x:Name="rbTitle1"
+                                                     GroupName="PinTitles"
+                                                     Margin="0,2">
+                                                <TextBlock x:Name="txtAiTitle1" TextWrapping="Wrap"/>
+                                        </RadioButton>
+                                        <RadioButton x:Name="rbTitle2"
+                                                     GroupName="PinTitles"
+                                                     Margin="0,2">
+                                                <TextBlock x:Name="txtAiTitle2" TextWrapping="Wrap"/>
+                                        </RadioButton>
+
+                                        <StackPanel Orientation="Horizontal"
+                                                    Margin="0,8,0,0">
+                                                <TextBlock Text="Suggested board: "
+                                                           FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="txtAiBoard"
+                                                           VerticalAlignment="Center"/>
+                                                <Button x:Name="btnRegenSuggestions"
+                                                        Content="↻ Re-generate"
+                                                        Width="110"
+                                                        Height="24"
+                                                        Margin="20,0,0,0"
+                                                        Click="BtnRegenSuggestions_Click"/>
+                                        </StackPanel>
+                                </StackPanel>
+                        </Expander>
+
                         <TextBox x:Name="txtStatus"
                                  Height="480"
                                  Margin="5"

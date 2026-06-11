@@ -107,6 +107,7 @@ namespace Uploader
         private EmailTemplateDefinition? _cachedHtmlEmailTemplate;
         private EmailTemplateDefinition? _cachedTextEmailTemplate;
         private int _albumId;
+        private PinSuggestions? _suggestions;
 
         public PatternInfo? PatternInfo { get; private set; }
         public string AlbumPartitionKey { get; private set; } = string.Empty;
@@ -146,6 +147,10 @@ namespace Uploader
             // UI updates are safe here (we are on UI thread)
             txtFolderPath.Text = _batchFolderPath;
 
+            // Reset AI suggestions whenever a new folder is loaded
+            _suggestions = null;
+            aiSuggestionsExpander.Visibility = Visibility.Collapsed;
+
             try
             {
                 var requiredPdfs = new[] { "1.pdf", "3.pdf", "5.pdf" };
@@ -168,6 +173,9 @@ namespace Uploader
                 SetPatternInfoToUI(PatternInfo);
                 string pdfPath = Path.Combine(_batchFolderPath, "1.pdf");
                 GetAndShowImage(pdfPath);
+
+                // Fire-and-forget: generate AI suggestions in background (never blocks upload)
+                _ = LoadSuggestionsAsync();
             }
             catch (Exception ex)
             {
@@ -634,7 +642,88 @@ namespace Uploader
             }
         }
 
-        #endregion
+        private async Task LoadSuggestionsAsync()
+        {
+            var apiKey = Uploader.Helpers.HelperFactory.GetAnthropicApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey)) return;
+
+            var pattern = PatternInfo;
+            if (pattern == null) return;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+                txtStatus.Text += "[AI] Generating pin suggestions...\r\n"));
+
+            if (string.IsNullOrWhiteSpace(pattern.AlbumCaption) && _albumId > 0)
+                pattern.AlbumCaption = await GetAlbumCaptionAsync(_albumId).ConfigureAwait(false);
+
+            var suggestions = await Uploader.Helpers.PinSuggestionsGenerator.GenerateAsync(
+                pattern.Title,
+                pattern.AlbumCaption,
+                pattern.Width,
+                pattern.Height,
+                pattern.NColors,
+                apiKey).ConfigureAwait(false);
+
+            _suggestions = suggestions;
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (suggestions == null)
+                {
+                    txtStatus.Text += "[AI] Suggestions unavailable.\r\n";
+                    return;
+                }
+                PopulateSuggestionsUI(suggestions);
+                txtStatus.Text += "[AI] Suggestions ready.\r\n";
+            }));
+        }
+
+        private void PopulateSuggestionsUI(PinSuggestions suggestions)
+        {
+            txtAiTitle0.Text = suggestions.Titles.Count > 0 ? suggestions.Titles[0] : "";
+            txtAiTitle1.Text = suggestions.Titles.Count > 1 ? suggestions.Titles[1] : "";
+            txtAiTitle2.Text = suggestions.Titles.Count > 2 ? suggestions.Titles[2] : "";
+            rbTitle0.IsChecked = true;
+            txtAiBoard.Text    = suggestions.Board;
+
+            aiSuggestionsExpander.IsExpanded  = true;
+            aiSuggestionsExpander.Visibility  = Visibility.Visible;
+        }
+
+        private async void BtnRegenSuggestions_Click(object sender, RoutedEventArgs e)
+        {
+            if (PatternInfo == null)
+            {
+                txtStatus.Text += "[AI] Select a folder first.\r\n";
+                return;
+            }
+
+            var button = sender as System.Windows.Controls.Button;
+            if (button != null) button.IsEnabled = false;
+
+            try
+            {
+                await LoadSuggestionsAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (button != null) button.IsEnabled = true;
+                }));
+            }
+        }
+
+        private string? GetSelectedAiTitle()
+        {
+            if (_suggestions == null) return null;
+            if (rbTitle0.IsChecked == true) return txtAiTitle0.Text;
+            if (rbTitle1.IsChecked == true) return txtAiTitle1.Text;
+            if (rbTitle2.IsChecked == true) return txtAiTitle2.Text;
+            return null;
+        }
+
+#endregion
 
         #region Pattern info and album helpers (no UI access inside)
 
@@ -708,6 +797,9 @@ namespace Uploader
         /// </summary>
         private async Task RunFullUploadFlowAsync()
         {
+            // Capture AI title on UI thread before any awaits
+            string? aiTitleOverride = GetSelectedAiTitle();
+
             // 1. Calculate global page and next design ID
             int maxGlobalPage = await GetMaxGlobalPageAsync();
             int nGlobalPage = maxGlobalPage + 1;
@@ -726,7 +818,10 @@ namespace Uploader
             PatternInfo.AlbumCaption = await GetAlbumCaptionAsync(_albumId).ConfigureAwait(false);
             string? pinterestPhotoFileName = GetPinterestPhotoFileName();
             var pinResult = await _pinterestHelper
-                .UploadPinForPatternAsync(PatternInfo.ToPinPatternInfo(), photoFileName: pinterestPhotoFileName)
+                .UploadPinForPatternAsync(
+                    PatternInfo.ToPinPatternInfo(),
+                    photoFileName: pinterestPhotoFileName,
+                    titleOverride: aiTitleOverride)
                 .ConfigureAwait(false);
 
             PatternInfo.PinId = pinResult.PinId;
