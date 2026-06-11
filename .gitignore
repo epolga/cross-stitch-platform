@@ -32,3 +32,6 @@ Thumbs.db
 # IDE
 .vs/
 .idea/
+
+# MCP tool caches
+.playwright-mcp/
