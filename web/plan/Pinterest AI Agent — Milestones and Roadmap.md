@@ -403,60 +403,36 @@ Complete — 2026-06-05 through 2026-06-11.
 
 ## Status
 
-Planned.
+Partially complete — 2026-06-11.
 
-## Planned work
+## Completed work
 
-Uploader becomes:
+**SEO Description Generation** — 2026-06-07
+- `AnthropicApiKey` added to `App.private.config` (was missing — caused silent failures)
+- "Generate SEO Description" button in More Actions; saves `SeoDescription` to DDB
 
-```text
+**AI Pin Title Suggestions** — commit `59b3421`, 2026-06-11
+- `PinSuggestionsGenerator.cs` — calls `claude-sonnet-4-6`, fires on folder load (fire-and-forget)
+- 3 Pinterest-optimized title alternatives shown as radio buttons in WPF Uploader expander
+- Board suggestion displayed (informational)
+- ↻ Re-generate button
+- Selected title injected into upload via `titleOverride` in `UploadPinForPatternAsync`
+- Graceful failure: API down / no key → upload unaffected, original title used
 
-publishing interface for the AI agent
+## Intentionally dropped
 
-```
+- **Hashtags** — original spec included 12 editable hashtags appended to pin description; removed because hashtags have negligible Pinterest SEO impact
 
-Future features:
+## Remaining work
 
-* AI title suggestions
+- Board suggestion constrained to actual board names from `AlbumBoards.csv` (currently AI suggests freely — informational only)
+- Manual end-to-end test: select real folder → verify suggestions appear → upload with AI title, confirm correct title reaches Pinterest
+- Keyword suggestions and UTM recommendations — deferred to future iteration
 
-* board suggestions
-
-* description suggestions
-
-* keyword suggestions
-
-* UTM recommendations
-
-## Recommended architecture
-
-```text
-
-WPF Uploader
-
-↓
-
-Agent backend
-
-↓
-
-AI recommendations
-
-↓
-
-User approval
-
-↓
-
-Pinterest publishing
-
-```
-
-## Estimated effort
+## Estimated effort remaining
 
 ```text
-
-3–5 focused development days
-
+~0.5 focused development days (board CSV constraint + manual test)
 ```
 
 ---

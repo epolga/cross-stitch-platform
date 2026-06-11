@@ -2,7 +2,7 @@
 
 ## Current goal
 
-Milestone 10 — WPF Uploader AI integration (title, board, keyword suggestions).
+Milestone 10 — WPF Uploader AI integration (remaining: board CSV constraint + manual end-to-end test).
 
 ## Active work
 
@@ -120,4 +120,6 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] Next.js upgraded 15.5.7 → 15.5.18 — 2026-06-10
 - [x] Milestone 9b CLS fix: AdSlot fixed-height wrapper + hide top ad on mobile for all pages — 2026-06-11
 - [x] Milestone 10b: repo consolidation cleanup — archive 4 standalone repos, fix all stale paths — 2026-06-11
-- [ ] Milestone 10: WPF Uploader AI integration (title, board, keyword suggestions)
+- [x] Milestone 10a: AI title suggestions — 3 radio buttons, Sonnet 4.6, board suggestion, re-generate, titleOverride in upload — 2026-06-11 `59b3421`
+- [ ] Milestone 10 remaining: board suggestion constrained to AlbumBoards.csv board names
+- [ ] Milestone 10 remaining: manual end-to-end test (select folder → titles appear → upload uses AI title)
