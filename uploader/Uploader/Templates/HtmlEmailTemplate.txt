@@ -1,19 +1,19 @@
 [Subject]
-A gentle antelope for your next stitch 🧵
+This little kitten is looking for a home 🐱
 
 [Greeting]
 Hi [FName],
 
 [BeforeImage]
-I've just finished a new animal design, and this one has a calm, graceful feeling.
+I've just finished a new pattern, and I think this one might be the cutest face I've designed in a while.
 
-🦌 Antelope cross-stitch pattern
-Warm colors, long horns, and clean shapes that make it pleasant and relaxing to stitch.
+🐱 Cute ginger kitten cross-stitch pattern
+Big eyes, tiny whiskers, and a cheerful expression that makes it hard not to smile.
 
 [ImageWithLink]
 <p>
 	<a href="<pattern_url>">
-		<img src="<image_url>" alt="Antelope cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+		<img src="<image_url>" alt="Cute ginger kitten cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
 	</a>
 </p>
 <p>
@@ -22,13 +22,14 @@ Warm colors, long horns, and clean shapes that make it pleasant and relaxing to 
 
 
 [AfterImage]
-I'm enjoying these wildlife designs because they feel natural and elegant without being too complicated.
+One thing I love about small projects like this is that they don't ask for a huge commitment.
+A few relaxing stitching sessions, and you already have something adorable to show for it.
 
-I'd love to know:
-– Do you like animal patterns in this style?
-– What wildlife design would you like to see next?
+Now I'd love your opinion:
+– Would you stitch this little kitten?
+– Are you more of a cat person, a dog person, or do you love all animals equally?
 
-Just reply and tell me what you think.
+Just reply and let me know — I read every message and always enjoy hearing from fellow stitchers.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:<br/>

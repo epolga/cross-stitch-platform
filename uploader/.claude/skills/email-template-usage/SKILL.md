@@ -12,6 +12,17 @@ Operational rules for editing the Uploader's outbound email template. The templa
 - **Template:** `Uploader/Templates/HtmlEmailTemplate.txt` — the HTML body, broken into named sections.
 - **Config:** `Uploader/App.config` — `HtmlEmailTemplatePath` key tells the app which template file to load. Changing template files means changing this key, not just the file on disk.
 
+## Canonical read location
+
+The app resolves `%CROSS_STITCH%` using the `CROSS_STITCH` environment variable, falling back to `D:\ann\Git`. `App.config` points to the monorepo:
+
+```
+D:\ann\Git\cross-stitch-platform\uploader\Uploader\Templates\HtmlEmailTemplate.txt
+D:\ann\Git\cross-stitch-platform\uploader\Uploader\Templates\TextEmailTemplate.txt
+```
+
+Edit those files. After editing, click **"Reload Email Template"** in the Uploader before sending a test — templates are cached in memory on first load.
+
 ## Section headers (load-bearing — required order)
 
 The template parser splits the file on section-header markers. Every template must contain these headers, in this order, each on its own line:
@@ -64,6 +75,7 @@ For emphasis in narrative sections:
 |---|---|
 | `"does not contain any sections"` runtime error | The template file is missing one of the required section headers, or a header line has stray whitespace / wrong bracket character. |
 | Wrong template loaded | The `HtmlEmailTemplatePath` key in `App.config` — confirm it points to the file you just edited. |
+| Old email received after editing template | Template is cached in memory. Click **"Reload Email Template"** in the Uploader, then resend. |
 | Token not substituted (`[FName]` shows literally) | Token spelled wrong (case-sensitive on some tokens), or the sending code doesn't pass that field. Grep for the token usage in the C# email code before changing template syntax. |
 | Image renders too large / breaks layout | Add `max-width` / `max-height` to the `<img>` — many clients ignore CSS but honor inline attributes. |
 | HTML tag visible as literal text (e.g. `<strong>` shows up in the body) | The tag is in a narrative section. Only `[ImageWithLink]` renders HTML. Strip the tag and use emoji / line breaks for emphasis instead. |
