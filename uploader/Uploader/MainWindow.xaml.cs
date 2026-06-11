@@ -84,14 +84,14 @@ namespace Uploader
         private const string TextEmailTemplatePathDefault = "Templates\\TextEmailTemplate.txt";
         // %CROSS_STITCH% in any path read by ResolveTemplatePath expands to the
         // CROSS_STITCH environment variable, falling back to this default when
-        // the env var is not set. Lets App.config point at sibling-repo paths
-        // (cross-stitch-platform-docs/docs/uploader/HtmlEmailTemplate.txt) in
-        // a way that survives moving all three repos to a different common root.
+        // the env var is not set. Lets App.config point into the monorepo
+        // (cross-stitch-platform\uploader\...) without hardcoding an absolute path.
         private const string CrossStitchRootEnvVar = "CROSS_STITCH";
         private const string CrossStitchRootDefault = @"D:\ann\Git";
         private const string CrossStitchRootToken = "%CROSS_STITCH%";
         private const string AdminPreviewUnsubscribeToken = "preview-admin-unsubscribe-token";
-        private const string SuppressedListPath = @"D:\ann\Git\cross-stitch\list-suppressed.txt";
+        private const string SuppressedListPath = @"D:\ann\Git\cross-stitch-platform\uploader\data\list-suppressed.txt";
+        // ConverterExePath lives in D:\ann\Git\Converter\ — a separate tool repo, not part of this monorepo.
         private const string ConverterExePath = @"D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe";
         private static readonly string[] RequiredPdfVariants = { "1", "3", "5" };
         private static readonly string[] HtmlEmailTemplateRequiredSections =

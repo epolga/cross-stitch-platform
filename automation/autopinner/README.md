@@ -105,8 +105,8 @@ The first run will:
 
 ```powershell
 $action = New-ScheduledTaskAction -Execute "dotnet.exe" `
-    -Argument "D:\ann\Git\AutoPinner\src\AutoPinner\bin\Release\net8.0\AutoPinner.dll --once" `
-    -WorkingDirectory "D:\ann\Git\AutoPinner\src\AutoPinner\bin\Release\net8.0"
+    -Argument "D:\ann\Git\cross-stitch-platform\automation\autopinner\src\AutoPinner\bin\Release\net8.0\AutoPinner.dll --once" `
+    -WorkingDirectory "D:\ann\Git\cross-stitch-platform\automation\autopinner\src\AutoPinner\bin\Release\net8.0"
 
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 7) `
