@@ -309,31 +309,14 @@ Album caption is used as the temporary theme/category field. Richer per-design m
 
 ## Status
 
-Partially completed (local scheduling done; AWS Lambda still planned).
+Complete — 2026-06-03.
 
 ## Completed work
 
-* automatic daily execution via Windows Task Scheduler
-
-* `daily-run.bat` orchestrating the full daily pipeline with fail-fast logging to `daily-run.log`
-
-* automated report generation
-
-## Remaining work
-
-* AWS Lambda automation
-
-* EventBridge scheduling
-
-* migration off the developer machine
-
-## Estimated effort
-
-```text
-
-1 focused development day remaining (AWS migration)
-
-```
+* AWS Lambda `cross-stitch-daily-pipeline` deployed, EventBridge at 02:00 UTC (05:00 local)
+* 13-step pipeline: daily business → history → promoted ads → landing pages → pin attribution → anomaly detection → anomaly notifications → AI trend → recommendation change alert → design pin map → design performance → AI design analysis → daily summary email
+* Node.js 20 → 22 everywhere (Lambda runtime, esbuild target, EB platform, local nvm)
+* Windows Tasks `\PinterestDailyReport` and `\GoogleTokenRefreshReminder` disabled 2026-06-05, deleted 2026-06-11
 
 ---
 
@@ -341,25 +324,14 @@ Partially completed (local scheduling done; AWS Lambda still planned).
 
 ## Status
 
-Planned.
+Complete — 2026-06-04.
 
-## Planned work
+## Completed work
 
-* SES report delivery
-
-* alerts
-
-* summaries
-
-* anomaly notifications
-
-## Estimated effort
-
-```text
-
-1 focused development day
-
-```
+* Daily summary email via SES (HTML + plain text)
+* Anomaly detection + email alerts
+* Recommendation change alert email
+* Telegram bot: daily summary, anomaly alerts, recommendation changes, Google token reminder
 
 ---
 
@@ -403,7 +375,7 @@ Complete — 2026-06-05 through 2026-06-11.
 
 ## Status
 
-Partially complete — 2026-06-11.
+Partially complete — 2026-06-12.
 
 ## Completed work
 
@@ -419,20 +391,22 @@ Partially complete — 2026-06-11.
 - Selected title injected into upload via `titleOverride` in `UploadPinForPatternAsync`
 - Graceful failure: API down / no key → upload unaffected, original title used
 
+**Board suggestion constrained to AlbumBoards.csv** — commit `ca01c00`, 2026-06-12
+- AI board suggestion now restricted to actual board names from `AlbumBoards.csv`
+
 ## Intentionally dropped
 
 - **Hashtags** — original spec included 12 editable hashtags appended to pin description; removed because hashtags have negligible Pinterest SEO impact
 
 ## Remaining work
 
-- Board suggestion constrained to actual board names from `AlbumBoards.csv` (currently AI suggests freely — informational only)
 - Manual end-to-end test: select real folder → verify suggestions appear → upload with AI title, confirm correct title reaches Pinterest
 - Keyword suggestions and UTM recommendations — deferred to future iteration
 
 ## Estimated effort remaining
 
 ```text
-~0.5 focused development days (board CSV constraint + manual test)
+~1–2 hours (manual end-to-end test only)
 ```
 
 ---
@@ -441,26 +415,15 @@ Partially complete — 2026-06-11.
 
 ## Status
 
-Planned.
+Complete — 2026-06-11.
 
-## Background
+## Completed work
 
-Multiple standalone repos had their content physically relocated into the `cross-stitch-platform` monorepo (content copy, not git merge — histories remain separate).
-
-## Planned work
-
-* Verify web app builds and deploys from monorepo (`web/`)
-* Verify WPF Uploader builds from monorepo (`uploader/`)
-* Verify Lambda pipeline deploys from monorepo (`automation/`)
-* Resolve email template path (`%CROSS_STITCH%` points to old standalone repo location — see FOCUS.md Operational Notes)
-* Audit configs, scripts, and docs for hardcoded paths to old standalone repo locations
-* Decide whether to archive or delete the old standalone repos on GitHub
-
-## Estimated effort
-
-```text
-0.5–1 focused development day
-```
+* Archived 4 standalone GitHub repos: `epolga/cross-stitch`, `epolga/Uploader`, `epolga/AutoPinner`, `epolga/CrossStitch.Shared` (content lives in monorepo)
+* `SuppressedListPath` in `MainWindow.xaml.cs`: moved to `uploader/data/list-suppressed.txt` in monorepo
+* AutoPinner README: Task Scheduler example paths updated to monorepo paths
+* Stale comments and path references in `MainWindow.xaml.cs` updated
+* `cross-stitch-platform-docs` left live — Lambda still reads `platform-config.json` and `AlbumBoards.csv` from it
 
 ---
 
@@ -600,9 +563,7 @@ The original large planning document has been split into specialized thematic do
 
 In active priority order:
 
-* **Milestone 10b** — Repo consolidation cleanup (verify all projects build/deploy from monorepo)
-
-* **Milestone 10** — WPF Uploader AI integration (AI title, board, keyword suggestions; SEO description generation already done 2026-06-07)
+* **Milestone 10** — WPF Uploader AI integration: manual end-to-end test remaining (select folder → titles appear → upload uses AI title)
 
 * Milestone 11 — Cross-platform expansion
 
