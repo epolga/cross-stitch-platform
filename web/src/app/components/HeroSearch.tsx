@@ -43,8 +43,9 @@ export default function HeroSearch() {
       if (filters.ncolorsTo < 10000) params.set('ncolorsTo', String(filters.ncolorsTo));
 
       router.push(`/?${params.toString()}#results`);
-      if (typeof window !== 'undefined' && typeof (window as Window & { gtag?: Function }).gtag === 'function') {
-        (window as Window & { gtag: Function }).gtag('event', 'ai_search', {
+      type GtagFn = (...args: unknown[]) => void;
+      if (typeof window !== 'undefined' && typeof (window as Window & { gtag?: GtagFn }).gtag === 'function') {
+        (window as Window & { gtag: GtagFn }).gtag('event', 'ai_search', {
           search_query: q,
           resolved_filters: params.toString(),
         });
