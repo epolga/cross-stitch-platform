@@ -96,6 +96,12 @@
     float: none;
     width: auto;
     min-width: unset;
+    margin: 0;
+  }
+
+  .formatSelect {
+    min-width: unset;
+    width: 100%;
   }
 
   .imageContainer {
