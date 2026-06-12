@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -27,17 +29,31 @@ public static class PinSuggestionsGenerator
     private const string Model    = "claude-sonnet-4-6";
     private const int    MaxTokens = 300;
 
+    public static List<string> LoadBoardNames(string csvPath)
+    {
+        var names = new List<string>();
+        if (string.IsNullOrWhiteSpace(csvPath) || !File.Exists(csvPath))
+            return names;
+        foreach (var line in File.ReadLines(csvPath).Skip(1))
+        {
+            var m = Regex.Match(line, @"^\d+,""([^""]+)""");
+            if (m.Success) names.Add(m.Groups[1].Value);
+        }
+        return names;
+    }
+
     public static async Task<PinSuggestions?> GenerateAsync(
         string title,
         string albumCaption,
         int    width,
         int    height,
         int    nColors,
-        string apiKey)
+        string apiKey,
+        IReadOnlyList<string>? boardNames = null)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) return null;
 
-        var prompt = BuildPrompt(title, albumCaption, width, height, nColors);
+        var prompt = BuildPrompt(title, albumCaption, width, height, nColors, boardNames);
 
         try
         {
@@ -71,10 +87,14 @@ public static class PinSuggestionsGenerator
         }
     }
 
-    private static string BuildPrompt(string title, string albumCaption, int width, int height, int nColors)
+    private static string BuildPrompt(string title, string albumCaption, int width, int height, int nColors, IReadOnlyList<string>? boardNames)
     {
         var sizeStr  = width > 0 && height > 0 ? $"{width} × {height} stitches" : "unknown size";
         var colorStr = nColors > 0 ? $"{nColors} DMC colors" : "multiple colors";
+
+        string boardRule = boardNames != null && boardNames.Count > 0
+            ? $"- Choose the single best matching board from this list (return the name verbatim, no variation):\n  {string.Join(", ", boardNames)}"
+            : "- Suggest a single Pinterest board name that best fits this pattern";
 
         return $@"You are a Pinterest SEO expert for cross-stitch patterns.
 
@@ -96,7 +116,7 @@ Title rules (exactly 3 alternatives, each max 100 characters):
 - Each title emphasizes a different angle: keyword-rich, size/difficulty, emotional appeal
 
 Board rule:
-- Suggest a single Pinterest board name that best fits this pattern (e.g. ""Animals"", ""Flowers & Nature"", ""Christmas"")";
+{boardRule}";
     }
 
     private static PinSuggestions? ParseResponse(string text)

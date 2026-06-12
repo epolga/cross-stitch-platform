@@ -656,13 +656,18 @@ namespace Uploader
             if (string.IsNullOrWhiteSpace(pattern.AlbumCaption) && _albumId > 0)
                 pattern.AlbumCaption = await GetAlbumCaptionAsync(_albumId).ConfigureAwait(false);
 
+            string csvPath = "";
+            try { csvPath = PlatformConfig.ResolveAlbumBoardsCsvPath(); } catch { }
+            var boardNames = PinSuggestionsGenerator.LoadBoardNames(csvPath);
+
             var suggestions = await Uploader.Helpers.PinSuggestionsGenerator.GenerateAsync(
                 pattern.Title,
                 pattern.AlbumCaption,
                 pattern.Width,
                 pattern.Height,
                 pattern.NColors,
-                apiKey).ConfigureAwait(false);
+                apiKey,
+                boardNames.Count > 0 ? boardNames : null).ConfigureAwait(false);
 
             _suggestions = suggestions;
 
