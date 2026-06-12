@@ -59,9 +59,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <Script id="google-analytics" strategy="afterInteractive">
               {`
                 window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', 'G-J63NFLQTD1');
+                window.gtag = function(){window.dataLayer.push(arguments);}
+                window.gtag('js', new Date());
+                window.gtag('config', 'G-J63NFLQTD1');
               `}
             </Script>
           </>
