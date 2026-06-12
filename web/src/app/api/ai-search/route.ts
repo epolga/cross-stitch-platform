@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const ddb = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const SEARCH_QUERIES_TABLE = process.env.DDB_SEARCH_QUERIES_TABLE || 'SearchQueries';
+
+function logSearchQuery(rawQuery: string, filters: Record<string, unknown>): void {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const ts = `${now.toISOString()}#${Math.random().toString(36).slice(2, 9)}`;
+  ddb.send(new PutItemCommand({
+    TableName: SEARCH_QUERIES_TABLE,
+    Item: {
+      date: { S: date },
+      ts: { S: ts },
+      rawQuery: { S: rawQuery },
+      resolvedFilters: { S: JSON.stringify(filters) },
+    },
+  })).catch((err) => console.error('Search query log failed:', err));
+}
 
 const SYSTEM_PROMPT = `You extract cross-stitch pattern search filters from natural language queries.
 Return ONLY valid JSON with exactly these fields:
@@ -56,6 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const filters = JSON.parse(jsonMatch[0]);
+    logSearchQuery(String(query).slice(0, 500), filters);
     return NextResponse.json(filters);
   } catch (err) {
     console.error('AI search error:', err);
