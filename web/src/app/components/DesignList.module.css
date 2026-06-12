@@ -34,6 +34,13 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
 }
 
+.imageContainer {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+}
+
 .formatSelect {
   display: inline-block;
   width: auto;
@@ -78,16 +85,22 @@
   margin: 1.5rem 0;
 }
 
-/* Mobile: make each card at least ~40% of the viewport width */
 @media (max-width: 767px) {
   .grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem; /* you can adjust spacing if needed */
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
   }
 
   .card {
-    flex: 1 1 40vw; /* min ≈ 40% of screen width */
-    max-width: 100%;
+    float: none;
+    width: auto;
+    min-width: unset;
+  }
+
+  .imageContainer {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
   }
 }

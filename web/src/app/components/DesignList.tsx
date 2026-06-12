@@ -125,18 +125,18 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
       <Link href={CreateDesignUrl(design)} className="no-underline">
         <div className="text-center">
           {design.ImageUrl ? (
-            <div className="w-[100px] h-[100px] mx-auto flex items-center justify-center">
+            <div className={styles.imageContainer}>
               <Image
                 src={design.ImageUrl}
                 alt={design.Caption}
-                width={100}
-                height={100}
+                fill
+                sizes="(max-width: 767px) 45vw, 100px"
                 priority={priority}
-                className="max-w-[100px] max-h-[100px] object-contain rounded"
+                className="object-contain rounded"
               />
             </div>
           ) : (
-            <div className="w-[100px] h-[100px] mx-auto bg-gray-200 rounded flex items-center justify-center">
+            <div className={`${styles.imageContainer} bg-gray-200 rounded flex items-center justify-center`}>
               <span className="text-gray-500 text-sm">No Image</span>
             </div>
           )}
