@@ -8,6 +8,7 @@ import { updateLastEmailEntryInUsersTable } from '@/lib/users';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
 import AdSlot from '@/app/components/AdSlot';
+import HeroSearch from '@/app/components/HeroSearch';
 
 export const dynamic = 'force-dynamic';
 
@@ -225,6 +226,7 @@ export default async function Home({ searchParams }: Props) {
               You have been logged out. The private voting page is only available while you are signed in.
             </div>
           )}
+          <HeroSearch />
           <p className="text-gray-700 mb-6">
             Browse hundreds of free downloadable charts, filter by size or colors, and find your next stitching project.
           </p>

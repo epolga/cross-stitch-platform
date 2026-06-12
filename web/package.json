@@ -13,6 +13,7 @@
         "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.104.1",
         "@aws-sdk/client-dynamodb": "^3.803.0",
         "@aws-sdk/client-s3": "^3.908.0",
         "@aws-sdk/client-ses": "^3.929.0",

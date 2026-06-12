@@ -518,12 +518,12 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
         );
       }
       if (searchText) {
-        const searchLower = searchText.toLowerCase();
+        const terms = searchText.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
         allDesigns = await Promise.all(
           allDesigns.map(async (design) => {
             const designCaption = design.Caption.toLowerCase();
             const albumCaption = (await getAlbumCaption(design.AlbumID))?.toLowerCase() || '';
-            return designCaption.includes(searchLower) || albumCaption.includes(searchLower) ? design : null;
+            return terms.some(term => designCaption.includes(term) || albumCaption.includes(term)) ? design : null;
           })
         ).then((results) => results.filter((design): design is Design => design !== null));
       }
