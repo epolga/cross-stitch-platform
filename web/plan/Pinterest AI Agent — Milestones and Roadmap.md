@@ -427,6 +427,42 @@ Complete — 2026-06-11.
 
 ---
 
+# Milestone 10c — Homepage AI Search & User Query Analytics
+
+## Status
+
+Complete — 2026-06-12.
+
+## Goal
+
+Replace the plain text search sidebar with an AI-powered hero search bar on the homepage. Let users describe what they want in natural language and collect search data to understand demand.
+
+## Completed work
+
+**AI-powered hero search bar** — commits `ab5f7c0`, `82e88c7`
+- `HeroSearch.tsx` — rose/pink gradient card above the design grid; prominent description, free-text input, Search button, suggestion chips
+- `/api/ai-search` route — calls `claude-opus-4-8` to parse natural language into structured filters (`searchText`, width, height, ncolors)
+- Semantic expansion: genre terms ("floral", "animals") → comma-separated specific subject names that match design titles
+- Comma-separated OR support added to `searchText` filter in `data-access.ts`
+- Redirects to `/?{filters}#results` after AI parsing
+
+**Search query logging — DynamoDB** — commit `ab5f7c0`
+- `SearchQueries` DynamoDB table (PK: `date`, SK: `ts#random`)
+- Every `/api/ai-search` call writes: `rawQuery`, `resolvedFilters` (JSON)
+- Fire-and-forget — does not slow down the search response
+- IAM updated: `aws-elasticbeanstalk-ec2-role` and `claude-dev` user both granted PutItem on `SearchQueries`
+
+**Search query logging — GA4** — commits `ab5f7c0`, `831121a`
+- `HeroSearch.tsx` fires `gtag('event', 'ai_search', { search_query, resolved_filters })` after each search
+- Fixed `window.gtag` not being defined: changed inline script from `function gtag(){}` to `window.gtag = function(){}` so Next.js Script component exposes it globally
+- GA4 respects DNT/GPC headers — tracking is skipped for users who opt out
+
+**Analytics setup note**
+- Register `search_query` as a custom dimension in GA4: Admin → Custom definitions → Custom dimensions → Event-scoped → parameter: `search_query`
+- Full doc: `docs/plan/web/SEARCH-QUERIES-ANALYTICS.md`
+
+---
+
 # Milestone 11 — Cross-Platform Expansion
 
 ## Status
