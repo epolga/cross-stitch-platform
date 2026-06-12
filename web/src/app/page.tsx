@@ -228,7 +228,7 @@ export default async function Home({ searchParams }: Props) {
           )}
           <HeroSearch />
           <p className="text-gray-700 mb-6">
-            Browse hundreds of free downloadable charts, filter by size or colors, and find your next stitching project.
+            Browse thousands of free downloadable charts, filter by size or colors, and find your next stitching project.
           </p>
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
             <p className="text-gray-800">

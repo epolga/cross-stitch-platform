@@ -52,10 +52,10 @@ export default function HeroSearch() {
 
   return (
     <div className="mb-6 rounded-xl bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-rose-500 mb-1">
+      <p className="text-xs font-semibold uppercase tracking-wide text-rose-500 mb-2">
         AI-powered search
       </p>
-      <p className="text-sm text-gray-600 mb-3">
+      <p className="text-lg font-semibold text-gray-900 mb-3">
         Describe what you&apos;re looking for in plain English — size, colors, theme, difficulty.
       </p>
       <form
