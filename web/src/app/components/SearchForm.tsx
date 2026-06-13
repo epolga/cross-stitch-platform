@@ -31,6 +31,10 @@ export default function SearchForm() {
     const target = query ? `/?${query}#results` : '/#results';
     router.push(target, { scroll: false });
     scrollToResults();
+    type GtagFn = (...args: unknown[]) => void;
+    if (typeof window !== 'undefined' && typeof (window as Window & { gtag?: GtagFn }).gtag === 'function') {
+      (window as Window & { gtag: GtagFn }).gtag('event', 'filter_search', { filters: query });
+    }
   };
 
   const handleReset = () => {
