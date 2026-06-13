@@ -42,7 +42,8 @@ export default function HeroSearch() {
       if (filters.ncolorsFrom > 0) params.set('ncolorsFrom', String(filters.ncolorsFrom));
       if (filters.ncolorsTo < 10000) params.set('ncolorsTo', String(filters.ncolorsTo));
 
-      router.push(`/?${params.toString()}#results`);
+      router.push(`/?${params.toString()}#results`, { scroll: false });
+      document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       type GtagFn = (...args: unknown[]) => void;
       if (typeof window !== 'undefined' && typeof (window as Window & { gtag?: GtagFn }).gtag === 'function') {
         (window as Window & { gtag: GtagFn }).gtag('event', 'ai_search', {
