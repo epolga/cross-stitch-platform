@@ -1,21 +1,19 @@
 [Subject]
-A different kind of wildlife pattern 🦌
+A tall little cow for your next stitch 🐄
 
 [Greeting]
 Hi [FName],
 
 [BeforeImage]
-Most of my animal designs focus on cute faces and playful expressions.
+This week's design is a little unusual — a long, narrow cow pattern that could work beautifully as a bookmark.
 
-This time, I wanted to try something different.
-
-🦌 Modern deer cross-stitch pattern
-Clean lines, bold shapes, and a minimalist style inspired by nature.
+🐄 Cow cross-stitch pattern
+Simple, gentle, and perfect for a relaxing stitching project.
 
 [ImageWithLink]
 <p>
 	<a href="<pattern_url>">
-		<img src="<image_url>" alt="Modern deer cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+		<img src="<image_url>" alt="Cow cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
 	</a>
 </p>
 <p>
@@ -24,13 +22,13 @@ Clean lines, bold shapes, and a minimalist style inspired by nature.
 
 
 [AfterImage]
-What I like about this design is how a few simple shapes can still capture the strength and elegance of a deer. Sometimes less really is more.
+I liked the idea of making a cow in a vertical format — something different from the usual cute square animal designs.
 
-I'd love to hear your thoughts:
-– Do you enjoy modern, minimalist patterns like this?
-– Or do you prefer detailed and realistic wildlife designs?
+I'd love to hear what you think:
+– Would you stitch this as a bookmark?
+– Do you like farm animal patterns?
 
-Just reply and let me know. Your feedback helps me decide what to create next.
+Just reply and let me know.
 
 Happy stitching,
 
