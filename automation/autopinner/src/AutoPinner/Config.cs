@@ -19,7 +19,6 @@ public sealed class Config
 {
     public string AwsRegion { get; }
     public string DdbTableName { get; }
-    public int PostIntervalSeconds { get; }
     public int DailyCap { get; }
     public int MaxBatchPerRun { get; }
     public int MaxPinterestAttempts { get; }
@@ -58,7 +57,6 @@ public sealed class Config
     {
         AwsRegion = Env("AWS_REGION", "us-east-1");
         DdbTableName = Env("DDB_TABLE_NAME", "CrossStitchItems");
-        PostIntervalSeconds = EnvInt("POST_INTERVAL_SECONDS", 300);
         DailyCap = EnvInt("DAILY_CAP", 200);
         MaxBatchPerRun = EnvInt("MAX_BATCH_PER_RUN", 1);
         MaxPinterestAttempts = EnvInt("MAX_PINTEREST_ATTEMPTS", 10);
@@ -87,8 +85,6 @@ public sealed class Config
 
         AlbumLinkRatio = Math.Clamp(EnvDouble("ALBUM_LINK_RATIO", 0.0), 0.0, 1.0);
 
-        if (PostIntervalSeconds < 60)
-            throw new InvalidOperationException($"POST_INTERVAL_SECONDS must be ≥ 60 (got {PostIntervalSeconds}); short intervals will trip Pinterest spam signals.");
         if (DailyCap < 1)
             throw new InvalidOperationException($"DAILY_CAP must be ≥ 1 (got {DailyCap}).");
         if (MaxBatchPerRun < 1)
@@ -98,7 +94,7 @@ public sealed class Config
     }
 
     public override string ToString() =>
-        $"env={EnvironmentName} region={AwsRegion} table={DdbTableName} interval={PostIntervalSeconds}s dailyCap={DailyCap} batch={MaxBatchPerRun} baseUrl={BaseUrl} emailEnabled={EmailEnabled}";
+        $"env={EnvironmentName} region={AwsRegion} table={DdbTableName} dailyCap={DailyCap} batch={MaxBatchPerRun} baseUrl={BaseUrl} emailEnabled={EmailEnabled}";
 
     private static string Env(string name, string fallback) =>
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : fallback;

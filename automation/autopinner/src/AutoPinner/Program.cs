@@ -66,7 +66,6 @@ var uploader = new PinterestUploader(
 var notifier = BuildNotifier(config);
 using var dedup = new AlertDeduplicator(config.AwsRegion, config.DdbTableName, TimeSpan.FromMinutes(config.AlertCooldownMinutes));
 using var repo = new DynamoDbDesignRepository(config.AwsRegion, config.DdbTableName);
-var rateLimiter = new RateLimiter(TimeSpan.FromSeconds(config.PostIntervalSeconds));
 var retryPolicy = new RetryPolicy();
 
 var stats = new RunStats();
@@ -96,7 +95,7 @@ try
         while (!cts.IsCancellationRequested)
         {
             await ProcessBatchAsync(cts.Token);
-            await Task.Delay(TimeSpan.FromSeconds(config.PostIntervalSeconds), cts.Token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromHours(1), cts.Token).ConfigureAwait(false);
         }
     }
 }
@@ -135,9 +134,6 @@ async Task ProcessBatchAsync(CancellationToken ct)
             Console.WriteLine($"  daily cap reached mid-batch (posted {stats.PostedSinceMidnightUtc})");
             break;
         }
-
-        if (mode == RunMode.Daemon)
-            await rateLimiter.WaitAsync(ct).ConfigureAwait(false);
 
         await ProcessOneAsync(design, ct);
     }
