@@ -4,7 +4,8 @@ import type { Design } from '@/app/types/design';
 import type { Metadata } from 'next';
 import { buildCanonicalUrl, CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
-import { getAdjacentDesigns } from '@/lib/data-access';
+import { getAdjacentDesigns, getAllAlbumCaptions } from '@/lib/data-access';
+import { getRelatedLinks } from '@/lib/related-links';
 import { DesignDownloadControls } from './DesignDownloadControls';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
@@ -180,7 +181,11 @@ export default async function DesignPage({ params }: Props) {
   const missingDesigns = await getMissingDesigns();
   const isMissing = missingDesigns.has(design.DesignID);
 
-  const nav = await getAdjacentDesigns(design.DesignID);
+  const [nav, allAlbums] = await Promise.all([
+    getAdjacentDesigns(design.DesignID),
+    getAllAlbumCaptions(),
+  ]);
+  const relatedLinks = getRelatedLinks(design, nav?.albumCaption, allAlbums ?? []);
   const albumUrl = nav?.albumCaption
     ? CreateAlbumUrl(nav.albumCaption)
     : nav ? `/albums/${nav.albumId}` : null;
@@ -351,6 +356,25 @@ export default async function DesignPage({ params }: Props) {
           {adsEnabled && adSlotBottom && (
             <div className="my-4">
               <AdSlot slot={adSlotBottom} minHeight={250} minHeightDesktop={280} />
+            </div>
+          )}
+
+          {relatedLinks.length > 0 && (
+            <div className="text-left mb-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                Explore more patterns
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {relatedLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="inline-block px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm hover:bg-blue-100 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 
