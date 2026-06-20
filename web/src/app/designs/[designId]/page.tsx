@@ -223,27 +223,35 @@ export default async function DesignPage({ params }: Props) {
       <h1 className="text-center text-3xl font-bold mb-6">{design.Caption}</h1>
       <div className="max-w-3xl mx-auto">
         <div className="border border-gray-500 rounded-lg shadow hover:shadow-lg p-5 text-center">
-          <div
-            className="mb-3"
-            style={{
-              width: '100%',
-              display: 'block',
-              textAlign: 'right',
-            }}
-          >
-            <DesignLikeButton designId={design.DesignID} />
-          </div>
-          <div className="mb-3 flex items-center justify-center gap-2">
-            <h2 className="text-lg font-semibold">{design.Caption}</h2>
-            <PinterestSaveLink
-              href={pinterestHref}
-              designId={design.DesignID}
-              designCaption={design.Caption}
-              label={pinterestLabel}
-              trackingMode={pinterestTrackingMode}
-              compact
-              className="h-8 w-8 shrink-0"
-            />
+          <div className="mb-3 flex items-start justify-between gap-2">
+            {relatedLinks.length > 0 && (
+              <div className="text-left">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Explore more patterns</p>
+                <div className="flex flex-wrap gap-1.5">
+                {relatedLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs hover:bg-blue-100 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                </div>
+              </div>
+            )}
+            <div className="ml-auto shrink-0 flex items-center gap-1">
+              <PinterestSaveLink
+                href={pinterestHref}
+                designId={design.DesignID}
+                designCaption={design.Caption}
+                label={pinterestLabel}
+                trackingMode={pinterestTrackingMode}
+                compact
+                className="h-8 w-8 shrink-0"
+              />
+              <DesignLikeButton designId={design.DesignID} />
+            </div>
           </div>
 
           {/* TOP download control (gated) */}
@@ -356,25 +364,6 @@ export default async function DesignPage({ params }: Props) {
           {adsEnabled && adSlotBottom && (
             <div className="my-4">
               <AdSlot slot={adSlotBottom} minHeight={250} minHeightDesktop={280} />
-            </div>
-          )}
-
-          {relatedLinks.length > 0 && (
-            <div className="text-left mb-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                Explore more patterns
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {relatedLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="inline-block px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-sm hover:bg-blue-100 transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
             </div>
           )}
 
