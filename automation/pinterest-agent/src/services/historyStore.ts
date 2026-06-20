@@ -9,6 +9,7 @@ import {
   BatchWriteCommand,
   type BatchWriteCommandOutput,
   UpdateCommand,
+  GetCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 const REGION = process.env.AWS_REGION || "us-east-1";
@@ -26,7 +27,8 @@ export type EntityType =
   | "ANOMALY_EVENT"
   | "PROMOTED_AD_STATS"
   | "LANDING_PAGE_STATS"
-  | "PIN_ATTRIBUTION";
+  | "PIN_ATTRIBUTION"
+  | "PINTEREST_TOKEN";
 
 export type AnalysisType = "trend" | "design";
 
@@ -42,6 +44,7 @@ function padDesignId(designId: number): string {
 }
 
 export const sortKey = {
+  pinterestToken: () => "CURRENT" as const,
   dailyBusiness: (date: string) => date,
   aiAnalysis: (generatedAt: string, type: AnalysisType) =>
     `${generatedAt}#${type}`,
@@ -372,6 +375,41 @@ export async function batchPutPinAttribution(inputs: PinAttributionInput[]): Pro
       writtenAt: now,
     }))
   );
+}
+
+export interface PinterestTokenRecord {
+  access_token: string;
+  refresh_token: string;
+  expires_at_utc: string;
+  scope: string;
+  writtenAt: string;
+  refreshedAt?: string;
+}
+
+export async function putPinterestToken(
+  token: Omit<PinterestTokenRecord, "writtenAt">
+): Promise<void> {
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        EntityType: "PINTEREST_TOKEN",
+        SortKey: sortKey.pinterestToken(),
+        ...token,
+        writtenAt: new Date().toISOString(),
+      },
+    })
+  );
+}
+
+export async function getPinterestToken(): Promise<PinterestTokenRecord | null> {
+  const res = await ddb.send(
+    new GetCommand({
+      TableName: TABLE,
+      Key: { EntityType: "PINTEREST_TOKEN", SortKey: sortKey.pinterestToken() },
+    })
+  );
+  return res.Item ? (res.Item as PinterestTokenRecord) : null;
 }
 
 // Reads

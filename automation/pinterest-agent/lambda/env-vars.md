@@ -7,7 +7,9 @@ Set these in the Lambda function configuration (Configuration → Environment va
 | `DYNAMODB_TABLE_NAME` | `CrossStitchItems` | Same as .env |
 | `HISTORY_TABLE_NAME` | `CrossStitchBusinessHistory` | default in historyStore.ts |
 | `PINTEREST_AD_ACCOUNT_ID` | `549769986352` | Same as .env |
-| `PINTEREST_ACCESS_TOKEN` | `pina_...` | Same as .env |
+| `PINTEREST_ACCESS_TOKEN` | `pina_...` | Bootstrap fallback only — token is stored in DDB after `seed-pinterest-token` |
+| `PINTEREST_CLIENT_ID` | `1535483` | Pinterest app client ID (from Uploader/App.config) |
+| `PINTEREST_CLIENT_SECRET` | `0ffe4...` | Pinterest app client secret (from Uploader/App.private.config) |
 | `GOOGLE_CLIENT_ID` | `637314...` | Same as .env |
 | `GOOGLE_CLIENT_SECRET` | `GOCSPX-...` | Same as .env |
 | `GOOGLE_REFRESH_TOKEN` | `1//03...` | Same as .env |

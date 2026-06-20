@@ -27,6 +27,7 @@
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
     "setup-token": "tsx scripts/get-google-refresh-token.ts",
+    "seed-pinterest-token": "tsx scripts/seed-pinterest-token.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],

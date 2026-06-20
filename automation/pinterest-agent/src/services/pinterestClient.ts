@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readPinterestAccessToken } from "./readPinterestToken";
+import { getPinterestAccessToken } from "./pinterestTokenManager";
 
 const PINTEREST_API_BASE = "https://api.pinterest.com/v5";
 const MAX_RETRIES = 6;
@@ -9,7 +9,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function pinterestGet<T>(path: string): Promise<T> {
-  const token = readPinterestAccessToken();
+  const token = getPinterestAccessToken();
 
   let lastBody = "";
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

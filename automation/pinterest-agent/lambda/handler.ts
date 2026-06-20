@@ -22,6 +22,7 @@ import { notifyAnomalies } from "../src/services/anomalyNotifier";
 import { notifyRecommendationChange } from "../src/services/recommendationChangeNotifier";
 import { sendDailySummary } from "../src/services/dailySummary";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
+import { initPinterestToken } from "../src/services/pinterestTokenManager";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
 export interface PipelineEvent {
@@ -31,6 +32,9 @@ export interface PipelineEvent {
 export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   const dateStr = event.date ?? formatDate(yesterdayDate());
   console.log(`[pipeline] starting for date=${dateStr}`);
+
+  console.log("[init] Pinterest token");
+  await initPinterestToken();
 
   console.log("[1/13] daily business report");
   await runDailyReport(dateStr);
