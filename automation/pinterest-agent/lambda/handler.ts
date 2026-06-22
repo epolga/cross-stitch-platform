@@ -22,6 +22,7 @@ import { notifyAnomalies } from "../src/services/anomalyNotifier";
 import { notifyRecommendationChange } from "../src/services/recommendationChangeNotifier";
 import { sendDailySummary } from "../src/services/dailySummary";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
+import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
@@ -36,22 +37,22 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   console.log("[init] Pinterest token");
   await initPinterestToken();
 
-  console.log("[1/13] daily business report");
+  console.log("[1/14] daily business report");
   await runDailyReport(dateStr);
 
-  console.log("[2/13] build business history");
+  console.log("[2/14] build business history");
   await runBuildHistory("/tmp");
 
-  console.log("[3/13] promoted ads report");
+  console.log("[3/14] promoted ads report");
   await runPromotedAds(dateStr);
 
-  console.log("[4/13] landing page report");
+  console.log("[4/14] landing page report");
   await runLandingPages(dateStr);
 
-  console.log("[5/13] pin attribution");
+  console.log("[5/14] pin attribution");
   await runPinAttribution(dateStr);
 
-  console.log("[6/13] anomaly detection");
+  console.log("[6/14] anomaly detection");
   const anomalyResult = await runAnomalyDetection();
   if (!anomalyResult.checked) {
     console.log(`  skipped: ${anomalyResult.reason}`);
@@ -59,7 +60,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log(`  checked ${anomalyResult.forDate}, ${anomalyResult.anomalies.length} anomaly(s)`);
   }
 
-  console.log("[7/13] anomaly notifications");
+  console.log("[7/14] anomaly notifications");
   const notifyResult = await notifyAnomalies();
   if (notifyResult.unnotifiedFound === 0) {
     console.log("  no unnotified anomalies");
@@ -67,10 +68,10 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log(`  sent email for ${notifyResult.unnotifiedFound} anomaly(s)`);
   }
 
-  console.log("[8/13] AI trend analysis");
+  console.log("[8/14] AI trend analysis");
   await runAiTrend("/tmp");
 
-  console.log("[9/13] recommendation change alert");
+  console.log("[9/14] recommendation change alert");
   const changeResult = await notifyRecommendationChange();
   if (changeResult.sent) {
     console.log(`  recommendation changed: ${changeResult.from} → ${changeResult.to}`);
@@ -80,21 +81,29 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
 
   // Send email before the slow design-analysis steps (10-12) so a timeout there
   // doesn't prevent the daily report from going out.
-  console.log("[10/13] daily summary email");
+  console.log("[10/14] daily summary email");
   const { messageId, date } = await sendDailySummary();
   console.log(`  sent → SES MessageId=${messageId} (date=${date})`);
 
   const tokenReminderSent = await sendGoogleTokenReminderIfDue();
   if (tokenReminderSent) console.log("  Google token refresh reminder sent via Telegram");
 
-  // Steps 11-13 (design pin map, design performance, AI design analysis) are
+  console.log("[11/14] holiday reminder");
+  const holidayResult = await sendHolidayReminderIfDue();
+  if (holidayResult.sent) {
+    console.log(`  reminder sent: ${holidayResult.holiday} in 14 days`);
+  } else {
+    console.log("  no holiday in 14 days");
+  }
+
+  // Steps 12-14 (design pin map, design performance, AI design analysis) are
   // disabled — output is not surfaced anywhere yet. Re-enable when the email
   // or a separate report includes the design analysis. See Milestones doc.
-  // console.log("[11/13] design pin map export");
+  // console.log("[12/14] design pin map export");
   // await runPinMap();
-  // console.log("[12/13] design performance build");
+  // console.log("[13/14] design performance build");
   // await runPerf();
-  // console.log("[13/13] AI design analysis");
+  // console.log("[14/14] AI design analysis");
   // await runAiDesign();
 
   console.log(`[pipeline] complete for date=${dateStr}`);
