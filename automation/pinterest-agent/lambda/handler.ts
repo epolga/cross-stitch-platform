@@ -90,10 +90,12 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
 
   console.log("[11/14] holiday reminder");
   const holidayResult = await sendHolidayReminderIfDue();
-  if (holidayResult.sent) {
-    console.log(`  reminder sent: ${holidayResult.holiday} in 14 days`);
+  if (holidayResult.reminders.length > 0) {
+    for (const r of holidayResult.reminders) {
+      console.log(`  reminder sent: ${r.holiday} in ${r.daysAway} days`);
+    }
   } else {
-    console.log("  no holiday in 14 days");
+    console.log("  no holiday in 14 or 28 days");
   }
 
   // Steps 12-14 (design pin map, design performance, AI design analysis) are

@@ -6,6 +6,11 @@ interface Holiday {
   date: Date;
 }
 
+export interface HolidayReminderSent {
+  holiday: string;
+  daysAway: number;
+}
+
 // month: 1-12, weekday: 0=Sun..6=Sat, n: 1-based
 function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
   const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
@@ -67,8 +72,8 @@ function getHolidays(year: number): Holiday[] {
 }
 
 const SUGGESTIONS: Record<string, string> = {
-  "New Year's Day":    "Ring in the new year! Promote winter and celebration-themed patterns.",
-  "Valentine's Day":   "Hearts, roses, and love motifs — perfect last-minute gift patterns.",
+  "New Year's Day":    "Promote winter and celebration-themed patterns.",
+  "Valentine's Day":   "Hearts, roses, and love motifs make perfect gift patterns.",
   "St. Patrick's Day": "Celtic knots and shamrock designs. A niche with a loyal audience.",
   "Easter":            "Spring bunnies, eggs, and florals. Popular for home decoration stitchers.",
   "Mother's Day":      "Top handmade gift occasion of the year. Push your most popular patterns.",
@@ -80,49 +85,64 @@ const SUGGESTIONS: Record<string, string> = {
   "Christmas":         "The #1 cross-stitch holiday. Ornaments, stockings, and holiday gifts.",
 };
 
+const EARLY_ACTION = "Great time to start a full project — most patterns take 3–6 weeks to complete.";
+const LATE_ACTION  = "Last call for quick patterns and small gifts. Pin last-minute ideas now.";
+
 function toIsoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-export async function sendHolidayReminderIfDue(
-  today: Date = new Date()
-): Promise<{ sent: boolean; holiday?: string }> {
-  const targetDate = new Date(today.getTime() + 14 * 86400000);
-  const targetStr = toIsoDate(targetDate);
-  const todayStr = toIsoDate(today);
+async function sendReminder(todayStr: string, holiday: Holiday, daysAway: number): Promise<void> {
+  const holidayStr = toIsoDate(holiday.date);
+  const suggestion = SUGGESTIONS[holiday.name] ?? "Great time to promote themed patterns!";
+  const isEarly = daysAway === 28;
+  const weeksLabel = isEarly ? "4 weeks" : "2 weeks";
+  const action = isEarly ? EARLY_ACTION : LATE_ACTION;
 
-  const holidays = getHolidays(targetDate.getUTCFullYear());
-  const match = holidays.find((h) => toIsoDate(h.date) === targetStr);
-  if (!match) return { sent: false };
-
-  const suggestion = SUGGESTIONS[match.name] ?? "Great time to promote themed patterns!";
-
-  const subject = `[cross-stitch] 2-week reminder: ${match.name} is on ${targetStr}`;
+  const subject = `[cross-stitch] ${weeksLabel} reminder: ${holiday.name} is on ${holidayStr}`;
 
   const textBody = [
     `Holiday reminder — ${todayStr}`,
     "",
-    `${match.name} is in 14 days (${targetStr}).`,
+    `${holiday.name} is in ${weeksLabel} (${holidayStr}).`,
     "",
     suggestion,
     "",
-    "Action: Review and pin relevant patterns on Pinterest before the holiday rush.",
+    `Action: ${action}`,
   ].join("\n");
 
   const htmlBody = `<!doctype html>
 <html><body style="font-family:system-ui,-apple-system,sans-serif;color:#222;max-width:600px;margin:24px">
 <h2 style="margin-bottom:4px">Holiday reminder</h2>
 <p style="color:#888;margin-top:0">${todayStr}</p>
-<p style="font-size:17px"><b>${match.name}</b> is in <b>14 days</b> — ${targetStr}</p>
+<p style="font-size:17px"><b>${holiday.name}</b> is in <b>${weeksLabel}</b> — ${holidayStr}</p>
 <p style="color:#444">${suggestion}</p>
-<p style="color:#555"><b>Action:</b> Review and pin relevant patterns on Pinterest before the holiday rush.</p>
+<p style="color:#555"><b>Action:</b> ${action}</p>
 <p style="color:#999;font-size:12px;margin-top:24px">Sent by the daily Lambda pipeline.</p>
 </body></html>`;
 
   await sendEmail({ subject, textBody, htmlBody });
   await sendTelegramMessage(
-    `🗓 <b>Holiday reminder</b>\n<b>${match.name}</b> in 14 days (${targetStr})\n${suggestion}`
+    `🗓 <b>Holiday reminder — ${weeksLabel}</b>\n<b>${holiday.name}</b> on ${holidayStr}\n${suggestion}\n<i>${action}</i>`
   ).catch(() => {/* non-fatal */});
+}
 
-  return { sent: true, holiday: match.name };
+export async function sendHolidayReminderIfDue(
+  today: Date = new Date()
+): Promise<{ reminders: HolidayReminderSent[] }> {
+  const todayStr = toIsoDate(today);
+  const sent: HolidayReminderSent[] = [];
+
+  for (const daysAway of [28, 14]) {
+    const targetDate = new Date(today.getTime() + daysAway * 86400000);
+    const targetStr = toIsoDate(targetDate);
+    const holidays = getHolidays(targetDate.getUTCFullYear());
+    const match = holidays.find((h) => toIsoDate(h.date) === targetStr);
+    if (match) {
+      await sendReminder(todayStr, match, daysAway);
+      sent.push({ holiday: match.name, daysAway });
+    }
+  }
+
+  return { reminders: sent };
 }
