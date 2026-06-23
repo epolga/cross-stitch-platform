@@ -28,6 +28,8 @@
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
     "setup-token": "tsx scripts/get-google-refresh-token.ts",
     "seed-pinterest-token": "tsx scripts/seed-pinterest-token.ts",
+    "embeddings": "tsx scripts/generate-embeddings.ts",
+    "check-images": "tsx scripts/check-missing-images.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
@@ -36,6 +38,7 @@
   "description": "",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1075.0",
     "@aws-sdk/client-dynamodb": "^3.1051.0",
     "@aws-sdk/client-iam": "^3.1053.0",
     "@aws-sdk/client-s3": "^3.1051.0",

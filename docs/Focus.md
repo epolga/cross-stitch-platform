@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Milestone 10 — WPF Uploader AI integration (remaining: board CSV constraint + manual end-to-end test).
+Site Technology Milestones — S1 (image SEO), S2 (faceted filters), S3 (visual similarity search).
 
 ## Active work
 
-Nothing in flight. All 2026-06-11 session work committed.
+S3 embedding batch running — generating Titan Multimodal vectors for ~5,500 designs. Started 2026-06-23.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -123,3 +123,5 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] Milestone 10a: AI title suggestions — 3 radio buttons, Sonnet 4.6, board suggestion, re-generate, titleOverride in upload — 2026-06-11 `59b3421`
 - [x] Milestone 10 remaining: board suggestion constrained to AlbumBoards.csv board names — 2026-06-12 `ca01c00`
 - [ ] Milestone 10 remaining: manual end-to-end test (select folder → titles appear → upload uses AI title)
+- [x] S2 — Faceted filters: subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters — deployed 2026-06-23 `e5c0250`
+- [ ] S3 — Visual similarity search: Titan embeddings batch (in progress 2026-06-23), compute-similar-designs script, API route, "Similar Designs" UI block
