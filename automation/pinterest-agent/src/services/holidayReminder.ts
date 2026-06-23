@@ -37,52 +37,28 @@ function easterDate(year: number): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-// Hanukkah first night dates (month, day). Hebrew calendar is complex; hardcoded to 2035.
-const HANUKKAH: Record<number, [number, number]> = {
-  2025: [12, 14],
-  2026: [12,  4],
-  2027: [12, 24],
-  2028: [12, 12],
-  2029: [12,  1],
-  2030: [11, 20],
-  2031: [12,  8],
-  2032: [11, 27],
-  2033: [12, 16],
-  2034: [12,  5],
-  2035: [11, 25],
-};
 
 function getHolidays(year: number): Holiday[] {
   const d = (m: number, day: number) => new Date(Date.UTC(year, m - 1, day));
-  const holidays: Holiday[] = [
-    { name: "New Year's Day",    date: d(1, 1) },
-    { name: "Valentine's Day",   date: d(2, 14) },
-    { name: "St. Patrick's Day", date: d(3, 17) },
-    { name: "Easter",            date: easterDate(year) },
-    { name: "Mother's Day",      date: nthWeekdayOfMonth(year, 5, 0, 2) },  // 2nd Sunday May
-    { name: "Father's Day",      date: nthWeekdayOfMonth(year, 6, 0, 3) },  // 3rd Sunday June
-    { name: "Independence Day",  date: d(7, 4) },
-    { name: "Halloween",         date: d(10, 31) },
-    { name: "Thanksgiving",      date: nthWeekdayOfMonth(year, 11, 4, 4) }, // 4th Thursday November
-    { name: "Christmas",         date: d(12, 25) },
+  return [
+    { name: "Valentine's Day",  date: d(2, 14) },
+    { name: "Easter",           date: easterDate(year) },
+    { name: "Mother's Day",     date: nthWeekdayOfMonth(year, 5, 0, 2) },  // 2nd Sunday May
+    { name: "Independence Day", date: d(7, 4) },
+    { name: "Halloween",        date: d(10, 31) },
+    { name: "Thanksgiving",     date: nthWeekdayOfMonth(year, 11, 4, 4) }, // 4th Thursday November
+    { name: "Christmas",        date: d(12, 25) },
   ];
-  const hanukkah = HANUKKAH[year];
-  if (hanukkah) holidays.push({ name: "Hanukkah", date: d(hanukkah[0], hanukkah[1]) });
-  return holidays;
 }
 
 const SUGGESTIONS: Record<string, string> = {
-  "New Year's Day":    "Promote winter and celebration-themed patterns.",
-  "Valentine's Day":   "Hearts, roses, and love motifs make perfect gift patterns.",
-  "St. Patrick's Day": "Celtic knots and shamrock designs. A niche with a loyal audience.",
-  "Easter":            "Spring bunnies, eggs, and florals. Popular for home decoration stitchers.",
-  "Mother's Day":      "Top handmade gift occasion of the year. Push your most popular patterns.",
-  "Father's Day":      "Highlight masculine motifs: animals, maps, hobbies, humorous designs.",
-  "Independence Day":  "Patriotic red-white-blue patterns and Americana motifs.",
-  "Halloween":         "One of the biggest craft holidays. Feature skull, pumpkin, and gothic designs.",
-  "Thanksgiving":      "Fall harvest, autumn leaves, and home decor patterns.",
-  "Hanukkah":          "Jewish holiday decor: Star of David, menorah, and blue-and-silver motifs.",
-  "Christmas":         "The #1 cross-stitch holiday. Ornaments, stockings, and holiday gifts.",
+  "Valentine's Day":  "Hearts, roses, and love motifs make perfect gift patterns.",
+  "Easter":           "Spring bunnies, eggs, and florals. Popular for home decoration stitchers.",
+  "Mother's Day":     "Top handmade gift occasion of the year. Push your most popular patterns.",
+  "Independence Day": "Patriotic red-white-blue patterns and Americana motifs.",
+  "Halloween":        "One of the biggest craft holidays. Feature skull, pumpkin, and gothic designs.",
+  "Thanksgiving":     "Fall harvest, autumn leaves, and home decor patterns.",
+  "Christmas":        "The #1 cross-stitch holiday. Ornaments, stockings, and holiday gifts.",
 };
 
 const EARLY_ACTION = "Great time to start a full project — most patterns take 3–6 weeks to complete.";
