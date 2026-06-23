@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import type { Design, DesignsResponse } from '@/app/types/design';
 import type { Album, AlbumsResponse } from '@/app/types/album';
+import { albumSubject } from '@/data/album-taxonomy';
 import { saveUserToDynamoDB } from '@/lib/users';
 
 // Force SSR to avoid static generation issues
@@ -92,6 +93,27 @@ async function verifyUserInSecondaryTable(
   }
 }
 
+function computeOrientation(w: number, h: number): 'portrait' | 'landscape' | 'square' {
+  if (h === 0) return 'square';
+  const ratio = w / h;
+  if (ratio > 1.1) return 'landscape';
+  if (ratio < 0.9) return 'portrait';
+  return 'square';
+}
+
+function computeSizeCategory(w: number, h: number): 'small' | 'medium' | 'large' {
+  const maxDim = Math.max(w, h);
+  if (maxDim <= 50) return 'small';
+  if (maxDim <= 100) return 'medium';
+  return 'large';
+}
+
+function computeColorBucket(n: number): 'few' | 'medium' | 'many' {
+  if (n <= 5) return 'few';
+  if (n <= 15) return 'medium';
+  return 'many';
+}
+
 // In-memory caches for designs and albums
 const designCache: Map<number, Design> = new Map();
 const designKeyCache: Map<number, { id: string; nPage: string }> = new Map();
@@ -170,8 +192,16 @@ async function initializeCache(): Promise<void> {
                 readOptionalAttributeString(item.PinURL) ||
                 null,
               NGlobalPage: item.NGlobalPage?.N ? parseInt(item.NGlobalPage.N) : 0,
-              SeoDescription: item.SeoDescription?.S || undefined
+              SeoDescription: item.SeoDescription?.S || undefined,
             };
+            const w = design.Width;
+            const h = design.Height;
+            const n = design.NColors;
+            design.subject = albumSubject[design.AlbumID];
+            design.orientation = computeOrientation(w, h);
+            design.sizeCategory = computeSizeCategory(w, h);
+            design.colorBucket = computeColorBucket(n);
+            design.isBeginnerFriendly = n <= 5 && w <= 60 && h <= 60;
             if (design.DesignID > 0) {
               designCache.set(design.DesignID, design);
               const rawId = item.ID?.S;
@@ -483,7 +513,7 @@ export async function getDesignsByAlbumId(albumId: string, pageSize: number, nPa
   });
 }
 
-interface FilterOptions {
+export interface FilterOptions {
   widthFrom: number;
   widthTo: number;
   heightFrom: number;
@@ -493,6 +523,10 @@ interface FilterOptions {
   nPage: number;
   pageSize: number;
   searchText?: string;
+  subject?: string;
+  sizeCategory?: 'small' | 'medium' | 'large';
+  orientation?: 'portrait' | 'landscape' | 'square';
+  isBeginnerFriendly?: boolean;
 }
 
 export async function fetchFilteredDesigns(filters: FilterOptions): Promise<DesignsResponse> {
@@ -516,6 +550,18 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
         allDesigns = allDesigns.filter(
           (design) => design.NColors >= filters.ncolorsFrom && design.NColors <= filters.ncolorsTo
         );
+      }
+      if (filters.subject) {
+        allDesigns = allDesigns.filter(d => d.subject === filters.subject);
+      }
+      if (filters.sizeCategory) {
+        allDesigns = allDesigns.filter(d => d.sizeCategory === filters.sizeCategory);
+      }
+      if (filters.orientation) {
+        allDesigns = allDesigns.filter(d => d.orientation === filters.orientation);
+      }
+      if (filters.isBeginnerFriendly) {
+        allDesigns = allDesigns.filter(d => d.isBeginnerFriendly === true);
       }
       if (searchText) {
         const terms = searchText.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);

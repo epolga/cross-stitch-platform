@@ -18,6 +18,12 @@ export interface Design {
     PinterestPinUrl?: string | null;
     NGlobalPage: number;
     SeoDescription?: string;
+    // Computed facets — derived at cache load, not stored in DDB
+    subject?: string;
+    orientation?: 'portrait' | 'landscape' | 'square';
+    sizeCategory?: 'small' | 'medium' | 'large';
+    colorBucket?: 'few' | 'medium' | 'many';
+    isBeginnerFriendly?: boolean;
 }
 
 export interface DesignsResponse {
