@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { semanticSearch } from '@/lib/semantic-search';
+import { logSearch } from '@/lib/search-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
 
     const designIds = await semanticSearch(description, 60);
     console.log('[image-search] Top-10 IDs:', designIds.slice(0, 10));
+    logSearch({ query: description, source: 'image', hasResults: designIds.length > 0 });
     return NextResponse.json({ designIds, description });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
