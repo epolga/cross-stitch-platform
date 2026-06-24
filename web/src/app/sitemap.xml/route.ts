@@ -80,15 +80,25 @@ async function generateAndUploadSitemap(baseUrl: string) {
      
   }
 
-  const designUrls = designs.map(design => ({
-    url: CreateDesignUrl(design),
-    changefreq: 'monthly',
-    priority: 0.6,
-    lastmod: new Date().toISOString(),
-  }));
+  const designUrls = designs.map(design => {
+    const imgUrl = design.ImageUrl && /^https?:\/\//.test(design.ImageUrl) ? design.ImageUrl : null;
+    return {
+      url: CreateDesignUrl(design),
+      changefreq: 'monthly' as const,
+      priority: 0.6,
+      lastmod: new Date().toISOString(),
+      ...(imgUrl ? {
+        img: [{
+          url: imgUrl,
+          title: `${design.Caption} cross-stitch pattern`,
+          caption: `Free ${design.Caption} cross-stitch pattern${design.Width && design.Height ? ` — ${design.Width}×${design.Height} stitches` : ''}${design.NColors ? `, ${design.NColors} colors` : ''}`,
+        }],
+      } : {}),
+    };
+  });
 
   // Create sitemap stream (single file since total URLs are manageable)
-  const smStream = new SitemapStream({ hostname: baseUrl });
+  const smStream = new SitemapStream({ hostname: baseUrl, xmlns: { image: true, news: false, xhtml: false, video: false } });
   staticUrls.forEach(url => smStream.write(url));
   albumUrls.forEach(url =>  smStream.write(url));
   designUrls.forEach(url => smStream.write(url));

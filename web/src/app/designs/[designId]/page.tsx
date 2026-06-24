@@ -97,9 +97,10 @@ console.log("Generating metadata for designId:", designId);
   ].filter(Boolean);
 
   const baseTitle = `${design.Caption} (Design ${designId}) - Free Cross-Stitch Pattern`;
-  const description = design.Description
+  const fallbackDescription = design.Description
     ? `${design.Description} (Design ${designId}${featureParts.length ? ` · ${featureParts.join(' · ')}` : ''})`
     : `Free cross-stitch pattern ${design.Caption} (Design ${designId})${featureParts.length ? ` with ${featureParts.join(' · ')}` : ''}.`;
+  const description = design.SeoDescription || fallbackDescription;
   const captionSlug = design.Caption.replace(/\s+/g, '-');
   const keywords = [
     'cross stitch',
@@ -134,23 +135,6 @@ console.log("Generating metadata for designId:", designId);
       title: baseTitle,
       description,
       images: ogImage,
-    },
-    other: {
-      'application/ld+json': JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "CreativeWork",
-        "name": baseTitle,
-        "description": description,
-        "image": ogImage,
-        "url": canonicalUrl,
-        "keywords": "cross stitch, free pattern, design",
-        "isAccessibleForFree": true,
-        "inLanguage": "en",
-        "author": {
-          "@type": "Person",
-          "name": "Ann"
-        }
-      }),
     },
   };
 }
@@ -220,8 +204,22 @@ export default async function DesignPage({ params }: Props) {
   const pinterestLabel = pinterestPinUrl ? 'Open on Pinterest' : 'Save on Pinterest';
   const pinterestTrackingMode = pinterestPinUrl ? 'existing_pin' : 'create_pin';
 
+  const jsonLdDescription = design.SeoDescription || design.Description || `Free cross-stitch pattern: ${design.Caption}`;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    "name": `${design.Caption} - Free Cross-Stitch Pattern`,
+    "description": jsonLdDescription,
+    "image": toAbsoluteUrl(design.ImageUrl) || DEFAULT_OG_IMAGE,
+    "url": buildCanonicalUrl(CreateDesignUrl(design)),
+    "isAccessibleForFree": true,
+    "inLanguage": "en",
+    "creator": { "@type": "Person", "name": "Ann" },
+  };
+
   return (
     <div className="container mx-auto p-4">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <h1 className="text-center text-3xl font-bold mb-6">{design.Caption}</h1>
       <div className="max-w-3xl mx-auto">
         <div className="border border-gray-500 rounded-lg shadow hover:shadow-lg p-5 text-center">
@@ -388,7 +386,7 @@ export default async function DesignPage({ params }: Props) {
                   {d.ImageUrl ? (
                     <Image
                       src={d.ImageUrl}
-                      alt={d.Caption}
+                      alt={`${d.Caption} cross-stitch pattern`}
                       fill
                       className="object-contain p-1"
                       sizes="(max-width: 640px) 30vw, (max-width: 768px) 22vw, 15vw"
