@@ -14,7 +14,7 @@ export default function PersonalizedSection() {
   useEffect(() => {
     let cancelled = false;
     try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
       const viewedIds: number[] = raw ? JSON.parse(raw) : [];
       if (viewedIds.length === 0) return;
 
