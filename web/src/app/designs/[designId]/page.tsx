@@ -8,6 +8,7 @@ import { getAdjacentDesigns, getAllAlbumCaptions } from '@/lib/data-access';
 import { getRelatedLinks } from '@/lib/related-links';
 import { getSimilarDesigns } from '@/lib/similar-designs';
 import { DesignDownloadControls } from './DesignDownloadControls';
+import DesignViewTracker from '@/app/components/DesignViewTracker';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
@@ -401,6 +402,7 @@ export default async function DesignPage({ params }: Props) {
           </div>
         </div>
       )}
+      <DesignViewTracker designId={design.DesignID} />
     </div>
   );
 }

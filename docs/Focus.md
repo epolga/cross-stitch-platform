@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S7 converter, S5, or S6 next.
+Site Technology Milestones — S6 or S8 next.
 
 ## Active work
 
-Nothing in flight. S1–S4, S7 (search by image) complete as of 2026-06-24.
+Nothing in flight. S1–S5, S7 complete as of 2026-06-24.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -122,6 +122,12 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - Image never stored; held in memory ~1–2 s then discarded; description shown to user
 - Fixed `imageVec`/`textVec` field name bug that zeroed all semantic dot products in production
 
+**S5 — Session-based personalization** (deployed 2026-06-24)
+- `DesignViewTracker` (client component): records design ID to `sessionStorage` on every design page view (cap 10)
+- `POST /api/personalized`: takes up to 5 most-recent viewed IDs → round-robin neighbor lists from `similar-designs.json` → top-12 unseen candidates → full Design objects
+- `PersonalizedSection` (client component): reads sessionStorage on homepage mount, fetches `/api/personalized`, renders horizontal scroll row of 12 thumbnails
+- Placed after `<DesignListWrapper>` (below the fold) — zero CLS impact
+
 ---
 
 ## Operational notes
@@ -160,3 +166,4 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] S1 — Image SEO: JSON-LD structured data, SeoDescription in meta, image sitemap, alt text site-wide — 2026-06-24
 - [x] S4 — Semantic text search: Titan text embeddings, parallel search in HeroSearch, semanticIds ranking — 2026-06-24
 - [x] S7 — Search by image: Claude Haiku vision → semantic text search, tab toggle in HeroSearch, fixed imageVec/textVec bug — 2026-06-24 `516f04e`
+- [x] S5 — Session-based personalization: DesignViewTracker + /api/personalized + PersonalizedSection homepage row — 2026-06-24

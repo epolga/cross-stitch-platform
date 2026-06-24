@@ -29,6 +29,11 @@ async function loadSimilarMap(): Promise<SimilarMap> {
   return mapLoadPromise;
 }
 
+export async function getSimilarIds(designId: number): Promise<number[]> {
+  const map = await loadSimilarMap();
+  return map[String(designId)] ?? [];
+}
+
 export async function getSimilarDesigns(designId: number, count = 12): Promise<Design[]> {
   try {
     const map = await loadSimilarMap();

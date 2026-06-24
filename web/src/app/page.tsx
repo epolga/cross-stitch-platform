@@ -9,6 +9,7 @@ import { buildCanonicalUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
 import AdSlot from '@/app/components/AdSlot';
 import HeroSearch from '@/app/components/HeroSearch';
+import PersonalizedSection from '@/app/components/PersonalizedSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -289,6 +290,7 @@ export default async function Home({ searchParams }: Props) {
               pageSize={pageSize}
               baseUrl="/"
             />
+            <PersonalizedSection />
           </div>
           {adsEnabled && adSlotBottom && (
             <div className="my-6">
