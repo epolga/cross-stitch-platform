@@ -135,6 +135,6 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] Milestone 10b: repo consolidation cleanup — archive 4 standalone repos, fix all stale paths — 2026-06-11
 - [x] Milestone 10a: AI title suggestions — 3 radio buttons, Sonnet 4.6, board suggestion, re-generate, titleOverride in upload — 2026-06-11 `59b3421`
 - [x] Milestone 10 remaining: board suggestion constrained to AlbumBoards.csv board names — 2026-06-12 `ca01c00`
-- [ ] Milestone 10 remaining: manual end-to-end test (select folder → titles appear → upload uses AI title)
+- [x] Milestone 10 remaining: manual end-to-end test confirmed working — 2026-06-24
 - [x] S2 — Faceted filters: subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters — deployed 2026-06-23 `e5c0250`
 - [x] S3 — Visual similarity search: Titan embeddings (5,260 designs), compute-similar-designs, "You may also like" UI block on design pages — 2026-06-24
