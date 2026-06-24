@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S5 (session-based personalization) or S6 (performance).
+Site Technology Milestones — S7 converter, S5, or S6 next.
 
 ## Active work
 
-Nothing in flight. S1–S4 complete as of 2026-06-24.
+Nothing in flight. S1–S4, S7 (search by image) complete as of 2026-06-24.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -116,6 +116,12 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - Designs sorted by semantic rank when `semanticIds` present; AI filters still apply as constraints
 - IAM: `AmazonBedrockFullAccess` added to EB EC2 instance role
 
+**S7 — Search by image** (deployed 2026-06-24 `516f04e`)
+- Tab toggle in HeroSearch: "Text search" / "Search by image"
+- Drag-and-drop upload; Claude Haiku describes image → semantic text search → top-60 results
+- Image never stored; held in memory ~1–2 s then discarded; description shown to user
+- Fixed `imageVec`/`textVec` field name bug that zeroed all semantic dot products in production
+
 ---
 
 ## Operational notes
@@ -153,3 +159,4 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] S3 — Visual similarity search: Titan embeddings (5,260 designs), compute-similar-designs, "You may also like" UI block on design pages — 2026-06-24
 - [x] S1 — Image SEO: JSON-LD structured data, SeoDescription in meta, image sitemap, alt text site-wide — 2026-06-24
 - [x] S4 — Semantic text search: Titan text embeddings, parallel search in HeroSearch, semanticIds ranking — 2026-06-24
+- [x] S7 — Search by image: Claude Haiku vision → semantic text search, tab toggle in HeroSearch, fixed imageVec/textVec bug — 2026-06-24 `516f04e`

@@ -211,15 +211,29 @@ Future — Phase 3.
 
 ## Status
 
-Future — Phase 4.
+Partially complete — 2026-06-24 (search by image done; converter remaining).
+
+## Completed work
+
+**Search by uploaded image** — deployed 2026-06-24 `516f04e`
+
+* Tab toggle in HeroSearch: "Text search" / "Search by image"
+* Drag-and-drop or click-to-upload (JPEG/PNG/WebP, max 5 MB)
+* Claude Haiku (vision) describes the uploaded image in plain text
+* Description fed into existing semantic text search → top-60 matching designs
+* Claude's description shown to user ("Searching for: …") so they can verify intent
+* Image never stored — held in memory for ~1–2 s during Claude API call, then discarded
+* Also fixed: `imageVec`/`textVec` field name bug in `semantic-search.ts` that was silently zeroing all dot products (affected both image and text semantic search in production)
 
 ## Planned work
 
-**Search by uploaded image**
+**Search by uploaded image** — ✅ done
 
-* User uploads an image; system returns visually similar designs from the catalog
-* Reuses visual embedding infrastructure from Milestone S3
-* Image processed temporarily and deleted immediately; explained clearly to users
+**Photo-to-cross-stitch converter**
+
+* Basic browser tool: image resizing, color reduction, nearest-thread-color matching, downloadable grid preview
+* No generative AI required for v1
+* Advanced v2: background removal, edge preservation, face/subject emphasis, palette optimization, downloadable PDF patterns
 
 **Photo-to-cross-stitch converter**
 
