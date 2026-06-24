@@ -239,7 +239,7 @@ export default function ProfileVotesPageClient() {
                     {vote.design.ImageUrl ? (
                       <Image
                         src={vote.design.ImageUrl}
-                        alt={vote.design.Caption}
+                        alt={`${vote.design.Caption} cross-stitch pattern`}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
                         className="object-contain p-4 transition group-hover:scale-[1.02]"

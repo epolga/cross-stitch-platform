@@ -128,7 +128,7 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
             <div className={styles.imageContainer}>
               <Image
                 src={design.ImageUrl}
-                alt={design.Caption}
+                alt={`${design.Caption} cross-stitch pattern`}
                 fill
                 sizes="(max-width: 767px) 45vw, 100px"
                 priority={priority}
