@@ -6,6 +6,7 @@ import { buildCanonicalUrl, CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } fr
 import { isPaidDownloadMode } from '@/lib/download-mode';
 import { getAdjacentDesigns, getAllAlbumCaptions } from '@/lib/data-access';
 import { getRelatedLinks } from '@/lib/related-links';
+import { getSimilarDesigns } from '@/lib/similar-designs';
 import { DesignDownloadControls } from './DesignDownloadControls';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
@@ -181,9 +182,10 @@ export default async function DesignPage({ params }: Props) {
   const missingDesigns = await getMissingDesigns();
   const isMissing = missingDesigns.has(design.DesignID);
 
-  const [nav, allAlbums] = await Promise.all([
+  const [nav, allAlbums, similarDesigns] = await Promise.all([
     getAdjacentDesigns(design.DesignID),
     getAllAlbumCaptions(),
+    getSimilarDesigns(design.DesignID, 12),
   ]);
   const relatedLinks = getRelatedLinks(design, nav?.albumCaption, allAlbums ?? []);
   const albumUrl = nav?.albumCaption
@@ -371,6 +373,36 @@ export default async function DesignPage({ params }: Props) {
           <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} />
         </div>
       </div>
+
+      {similarDesigns.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-xl font-bold mb-4 text-center">You may also like</h2>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {similarDesigns.map(d => (
+              <Link
+                key={d.DesignID}
+                href={CreateDesignUrl(d)}
+                className="group block"
+              >
+                <div className="relative aspect-square bg-gray-100 rounded overflow-hidden border border-gray-200 group-hover:border-blue-400 transition-colors">
+                  {d.ImageUrl ? (
+                    <Image
+                      src={d.ImageUrl}
+                      alt={d.Caption}
+                      fill
+                      className="object-contain p-1"
+                      sizes="(max-width: 640px) 30vw, (max-width: 768px) 22vw, 15vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No image</div>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-center truncate text-gray-700 group-hover:text-blue-600">{d.Caption}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,7 @@
     "setup-token": "tsx scripts/get-google-refresh-token.ts",
     "seed-pinterest-token": "tsx scripts/seed-pinterest-token.ts",
     "embeddings": "tsx scripts/generate-embeddings.ts",
+    "similar": "tsx scripts/compute-similar-designs.ts",
     "check-images": "tsx scripts/check-missing-images.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },

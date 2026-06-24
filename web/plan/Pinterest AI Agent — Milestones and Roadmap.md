@@ -375,7 +375,7 @@ Complete — 2026-06-05 through 2026-06-11.
 
 ## Status
 
-Partially complete — 2026-06-12.
+Complete — 2026-06-23.
 
 ## Completed work
 
@@ -398,16 +398,9 @@ Partially complete — 2026-06-12.
 
 - **Hashtags** — original spec included 12 editable hashtags appended to pin description; removed because hashtags have negligible Pinterest SEO impact
 
-## Remaining work
+## Intentionally deferred
 
-- Manual end-to-end test: select real folder → verify suggestions appear → upload with AI title, confirm correct title reaches Pinterest
 - Keyword suggestions and UTM recommendations — deferred to future iteration
-
-## Estimated effort remaining
-
-```text
-~1–2 hours (manual end-to-end test only)
-```
 
 ---
 
@@ -599,7 +592,7 @@ The original large planning document has been split into specialized thematic do
 
 In active priority order:
 
-* **Milestone 10** — WPF Uploader AI integration: manual end-to-end test remaining (select folder → titles appear → upload uses AI title)
+* **Site Technology** — see `Cross-Stitch.com — Site Technology Milestones.md` (S1–S8)
 
 * Milestone 11 — Cross-platform expansion
 

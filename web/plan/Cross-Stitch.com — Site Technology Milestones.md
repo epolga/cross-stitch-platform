@@ -46,7 +46,18 @@ Improve image discoverability and page performance with SEO metadata and modern 
 
 ## Status
 
-Future — Phase 1.
+Complete — 2026-06-23.
+
+## Completed work
+
+* Subject filter: 9 categories mapped to 128 albums (DynamoDB AlbumID lookup)
+* Size filter (small / medium / large by stitch count)
+* Orientation filter (portrait / landscape / square)
+* Beginner-friendly filter (≤ 4 colors, ≤ 900 stitches)
+* Collapsible "Advanced filters" panel for secondary options
+* All filters reflected in URL query params; shareable / bookmarkable
+* SEO: filter combinations not indexable by default (no static pages generated)
+* Deployed 2026-06-23 `e5c0250`
 
 ## Goal
 
@@ -74,7 +85,15 @@ Only curated, high-value filter combinations should be indexable. Low-value comb
 
 ## Status
 
-Future — Phase 2. Recommended first project from the technology opportunities analysis.
+Complete — 2026-06-24.
+
+## Completed work
+
+* **Embedding batch** (`automation/pinterest-agent/scripts/compute-embeddings.ts`) — Titan Multimodal Embeddings v1 via Amazon Bedrock; 1024-dim image + text vectors for all 5,260 designs; stored in `s3://cross-stitch-sitemap-cache/embeddings/vectors.json` (43 MB)
+* **Similar-designs compute** (`scripts/compute-similar-designs.ts`) — combined vector `W = [√0.75 × imgVec, √0.25 × txtVec]` (2048-dim, unit-length); top-20 nearest neighbors per design via min-heap; result stored in `embeddings/similar-designs.json` (543 KB, 5,260 entries); ~113 s runtime
+* **Web lib** (`web/src/lib/similar-designs.ts`) — singleton S3 fetch with in-process cache; resolves design IDs to full `Design` objects via DynamoDB
+* **"You may also like" UI block** (`web/src/app/designs/[designId]/page.tsx`) — 6-column responsive grid, compact image cards with title link and hover state; rendered server-side in the `Promise.all` alongside the main design fetch
+* **Credential fix** — removed hardcoded IAM user keys from `.env.local`; EB instances now use EC2 instance role (`AmazonS3FullAccess`) for S3 reads instead of overriding with a key that lacked access to the `embeddings/` prefix
 
 ## Goal
 

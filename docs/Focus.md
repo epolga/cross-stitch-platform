@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S1 (image SEO), S2 (faceted filters), S3 (visual similarity search).
+Site Technology Milestones — S1 (image SEO), S4 (semantic text search).
 
 ## Active work
 
-S3 embedding batch running — generating Titan Multimodal vectors for ~5,500 designs. Started 2026-06-23.
+Nothing in flight. S2 and S3 complete as of 2026-06-24.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -92,6 +92,19 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - AdSense URL channels / per-page revenue — session-based proportional attribution is good enough for now
 
 
+### What was built in the 2026-06-23/24 session
+
+**S2 — Faceted filters** (deployed 2026-06-23 `e5c0250`)
+- Subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters
+
+**S3 — Visual similarity search** (deployed 2026-06-24)
+- Titan Multimodal Embeddings v1 (Bedrock) for all 5,260 designs; combined image+text vector `W = [√0.75 × img, √0.25 × txt]`
+- Top-20 neighbors precomputed; stored in S3 (`embeddings/similar-designs.json`, 543 KB)
+- "You may also like" 6-column grid on every design page; server-side with in-process S3 cache
+- Credential fix: removed IAM user keys from `.env.local`; EB now uses EC2 instance role for S3
+
+---
+
 ## Operational notes
 
 ### EB restart → 502 Bad Gateway (expected)
@@ -124,4 +137,4 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] Milestone 10 remaining: board suggestion constrained to AlbumBoards.csv board names — 2026-06-12 `ca01c00`
 - [ ] Milestone 10 remaining: manual end-to-end test (select folder → titles appear → upload uses AI title)
 - [x] S2 — Faceted filters: subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters — deployed 2026-06-23 `e5c0250`
-- [ ] S3 — Visual similarity search: Titan embeddings batch (in progress 2026-06-23), compute-similar-designs script, API route, "Similar Designs" UI block
+- [x] S3 — Visual similarity search: Titan embeddings (5,260 designs), compute-similar-designs, "You may also like" UI block on design pages — 2026-06-24
