@@ -564,19 +564,41 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
       if (filters.isBeginnerFriendly) {
         allDesigns = allDesigns.filter(d => d.isBeginnerFriendly === true);
       }
-      if (searchText) {
+      if (searchText && filters.semanticIds && filters.semanticIds.length > 0) {
+        // Text search is the hard filter; semantic is used only for re-ranking within those results
         const terms = searchText.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
-        allDesigns = await Promise.all(
+        const textMatches = (await Promise.all(
           allDesigns.map(async (design) => {
             const designCaption = design.Caption.toLowerCase();
             const albumCaption = (await getAlbumCaption(design.AlbumID))?.toLowerCase() || '';
             return terms.some(term => designCaption.includes(term) || albumCaption.includes(term)) ? design : null;
           })
-        ).then((results) => results.filter((design): design is Design => design !== null));
-      }
-      if (filters.semanticIds && filters.semanticIds.length > 0) {
+        )).filter((d): d is Design => d !== null);
         const idSet = new Set(filters.semanticIds);
+        const idOrder = new Map(filters.semanticIds.map((id, i) => [id, i]));
+        const inSemantic = textMatches.filter(d => idSet.has(d.DesignID));
+        const notInSemantic = textMatches.filter(d => !idSet.has(d.DesignID));
+        inSemantic.sort((a, b) => (idOrder.get(a.DesignID) ?? 9999) - (idOrder.get(b.DesignID) ?? 9999));
+        notInSemantic.sort((a, b) => b.DesignID - a.DesignID);
+        allDesigns = [...inSemantic, ...notInSemantic];
+      } else if (filters.semanticIds && filters.semanticIds.length > 0) {
+        // No text filter — semantic is the only signal
+        const idSet = new Set(filters.semanticIds);
+        const idOrder = new Map(filters.semanticIds.map((id, i) => [id, i]));
         allDesigns = allDesigns.filter(d => idSet.has(d.DesignID));
+        allDesigns.sort((a, b) => (idOrder.get(a.DesignID) ?? 9999) - (idOrder.get(b.DesignID) ?? 9999));
+      } else {
+        if (searchText) {
+          const terms = searchText.toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+          allDesigns = (await Promise.all(
+            allDesigns.map(async (design) => {
+              const designCaption = design.Caption.toLowerCase();
+              const albumCaption = (await getAlbumCaption(design.AlbumID))?.toLowerCase() || '';
+              return terms.some(term => designCaption.includes(term) || albumCaption.includes(term)) ? design : null;
+            })
+          )).filter((d): d is Design => d !== null);
+        }
+        allDesigns.sort((a, b) => b.DesignID - a.DesignID);
       }
 
       const totalItems = allDesigns.length;
@@ -593,13 +615,6 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
       if (totalItems == 0) {
         console.warn("No designs found matching filters");
         return responseData;
-      }
-
-      if (filters.semanticIds && filters.semanticIds.length > 0) {
-        const idOrder = new Map(filters.semanticIds.map((id, i) => [id, i]));
-        allDesigns.sort((a, b) => (idOrder.get(a.DesignID) ?? 9999) - (idOrder.get(b.DesignID) ?? 9999));
-      } else {
-        allDesigns.sort((a, b) => b.DesignID - a.DesignID);
       }
 
       const startIndex = (nPage - 1) * pageSize;
