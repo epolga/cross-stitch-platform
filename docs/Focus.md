@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S6 or S8 next.
+S8 — Search analytics (in progress). After S8: S7 converter (stitchable PDF chart).
 
 ## Active work
 
-Nothing in flight. S1–S5, S7 complete as of 2026-06-24.
+S8 implementation starting now.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -38,7 +38,57 @@ Nothing in flight. S1–S5, S7 complete as of 2026-06-24.
 - 102 album pins across 29 albums still exist in Pinterest but will not be promoted
 - Removed A/B section from daily email; deleted `scripts/ab-test-report.ts`
 
-## Pending
+## Planned work
+
+### S8 — Search analytics
+
+**Goal:** understand what users search for, catch zero-result queries, surface trending terms.
+
+**What to log** (server-side, from API routes):
+- Query text, timestamp, source (`text` / `image`), result count, filters applied
+
+**Storage:** new DDB entity type `SEARCH_LOG` in `CrossStitchItems` table
+- PK: `SEARCH_LOG`, SK: `{ISO-timestamp}#{nanoid}`
+- Fields: `query`, `source`, `resultCount`, `filters` (JSON), `ttl` (90 days, Unix epoch)
+
+**Reporting:** `scripts/search-analytics.ts` (`npm run search-analytics`)
+- Top 20 queries by frequency (last 30 days)
+- Zero-result queries (resultCount = 0)
+- Daily search volume
+
+**Instrumentation points:**
+- `/api/ai-search` — log after resolving filters; resultCount comes from a `fetchFilteredDesigns` call
+- `/api/image-search` — log after semantic search returns designIds
+
+---
+
+### S7 converter — Stitchable PDF chart
+
+**Goal:** user uploads a photo → downloads a ready-to-stitch cross-stitch PDF pattern.
+
+**Pipeline:**
+1. Upload photo (new tab "Convert to pattern" in HeroSearch, reuse drag-drop UI)
+2. Resize to target stitch grid (user picks: 50×50 / 80×80 / 100×100)
+3. Quantize pixel colors → nearest DMC thread color (Euclidean RGB distance)
+4. Limit palette to N colors (10 / 15 / 20) — merge least-used into nearest neighbor
+5. Generate PDF:
+   - Page 1: color preview grid (cells filled with DMC color)
+   - Page 2+: symbol grid (unique symbol per DMC color, for B&W printing)
+   - Final page: color key — symbol | DMC number | color name | stitch count
+6. Return PDF for immediate download
+
+**Key assets:**
+- `web/src/data/dmc-colors.json` — ~500 DMC colors with RGB + name (public dataset)
+
+**Libraries:**
+- `sharp` — resize + per-pixel color extraction
+- `pdf-lib` — pure-JS PDF generation (no native deps)
+
+**Complexity:** ~3 days. Main risks: PDF layout quality, color accuracy on complex photos.
+
+---
+
+## History
 
 ### What was built in the 2026-06-10 session
 

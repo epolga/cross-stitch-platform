@@ -31,6 +31,7 @@
     "embeddings": "tsx scripts/generate-embeddings.ts",
     "similar": "tsx scripts/compute-similar-designs.ts",
     "check-images": "tsx scripts/check-missing-images.ts",
+    "search-analytics": "tsx scripts/search-analytics.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
