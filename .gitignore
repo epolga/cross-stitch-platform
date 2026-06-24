@@ -3,6 +3,7 @@ node_modules/
 .next/
 .tmp/
 .a5c/
+.claude/worktrees/
 
 # .NET
 bin/
