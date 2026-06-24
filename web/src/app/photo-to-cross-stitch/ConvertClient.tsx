@@ -88,14 +88,7 @@ export default function ConvertPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Photo to Cross-Stitch Pattern</h1>
-        <p className="text-gray-600 mb-8">
-          Upload a photo and convert it to a stitchable cross-stitch pattern with DMC thread colors.
-        </p>
-
-        <div className="space-y-6">
+    <div className="space-y-6">
           {/* Step 1: Upload */}
           <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">1. Upload your photo</h2>
@@ -257,8 +250,6 @@ export default function ConvertPage() {
               </div>
             </section>
           )}
-        </div>
-      </div>
     </div>
   );
 }
