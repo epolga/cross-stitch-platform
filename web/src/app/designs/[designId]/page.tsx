@@ -15,6 +15,7 @@ import DesignLikeButton from '@/app/components/DesignLikeButton';
 import { getDesignById } from '@/lib/data-access';
 import { promises as fs } from 'fs';
 import path from 'path';
+import AffiliateMaterials from '@/app/components/AffiliateMaterials';
 
 export const dynamic = 'force-dynamic';
 
@@ -361,6 +362,8 @@ export default async function DesignPage({ params }: Props) {
             <p key={index}>{line.trim()}</p>
           ))}
          </div>
+
+          <AffiliateMaterials designId={design.DesignID} designCaption={design.Caption} />
 
           {adsEnabled && adSlotBottom && (
             <div className="my-4">
