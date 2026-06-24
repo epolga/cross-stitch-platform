@@ -16,6 +16,7 @@ export default function HeroSearch() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [relatedSuggestions, setRelatedSuggestions] = useState<string[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageDescription, setImageDescription] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -28,6 +29,7 @@ export default function HeroSearch() {
     if (!q) return;
     setLoading(true);
     setError('');
+    setRelatedSuggestions([]);
     try {
       const [aiResult, semResult] = await Promise.allSettled([
         fetch('/api/ai-search', {
@@ -54,12 +56,29 @@ export default function HeroSearch() {
       if (filters.ncolorsFrom > 0) params.set('ncolorsFrom', String(filters.ncolorsFrom));
       if (filters.ncolorsTo < 10000) params.set('ncolorsTo', String(filters.ncolorsTo));
 
+      let semanticIds: number[] = [];
       if (semResult.status === 'fulfilled' && semResult.value.ok) {
         const { designIds } = await semResult.value.json() as { designIds?: number[] };
-        if (designIds?.length) params.set('semanticIds', designIds.join(','));
+        if (designIds?.length) {
+          semanticIds = designIds;
+          params.set('semanticIds', designIds.join(','));
+        }
       }
 
       router.push(`/?${params.toString()}#results`, { scroll: false });
+
+      if (semanticIds.length > 0) {
+        fetch('/api/related-searches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ semanticIds: semanticIds.slice(0, 30), currentQuery: q }),
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then((data: { suggestions: string[] } | null) => {
+            if (data?.suggestions?.length) setRelatedSuggestions(data.suggestions);
+          })
+          .catch(() => {});
+      }
       document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       type GtagFn = (...args: unknown[]) => void;
       if (typeof window !== 'undefined' && typeof (window as Window & { gtag?: GtagFn }).gtag === 'function') {
@@ -178,6 +197,22 @@ export default function HeroSearch() {
               </button>
             ))}
           </div>
+          {relatedSuggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+              <span className="text-xs text-gray-400">Explore also:</span>
+              {relatedSuggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setQuery(s); runTextSearch(s); }}
+                  disabled={loading}
+                  className="rounded-full border border-rose-300 bg-rose-50 px-3 py-1 text-xs text-rose-800 hover:bg-rose-100 disabled:opacity-50 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <>
