@@ -23,17 +23,23 @@ export default function HeroSearch() {
     setError('');
 
     try {
-      const res = await fetch('/api/ai-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      });
+      const [aiResult, semResult] = await Promise.allSettled([
+        fetch('/api/ai-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        }),
+        fetch('/api/semantic-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        }),
+      ]);
 
-      if (!res.ok) throw new Error('Search failed');
+      if (aiResult.status === 'rejected' || !aiResult.value.ok) throw new Error('Search failed');
+      const filters = await aiResult.value.json();
 
-      const filters = await res.json();
       const params = new URLSearchParams();
-
       if (filters.searchText) params.set('searchText', filters.searchText);
       if (filters.widthFrom > 0) params.set('widthFrom', String(filters.widthFrom));
       if (filters.widthTo < 10000) params.set('widthTo', String(filters.widthTo));
@@ -41,6 +47,11 @@ export default function HeroSearch() {
       if (filters.heightTo < 10000) params.set('heightTo', String(filters.heightTo));
       if (filters.ncolorsFrom > 0) params.set('ncolorsFrom', String(filters.ncolorsFrom));
       if (filters.ncolorsTo < 10000) params.set('ncolorsTo', String(filters.ncolorsTo));
+
+      if (semResult.status === 'fulfilled' && semResult.value.ok) {
+        const { designIds } = await semResult.value.json() as { designIds?: number[] };
+        if (designIds?.length) params.set('semanticIds', designIds.join(','));
+      }
 
       router.push(`/?${params.toString()}#results`, { scroll: false });
       document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -85,6 +85,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     sizeCategory: (resolvedSearchParams?.sizeCategory?.toString() as 'small' | 'medium' | 'large') || undefined,
     orientation: (resolvedSearchParams?.orientation?.toString() as 'portrait' | 'landscape' | 'square') || undefined,
     isBeginnerFriendly: resolvedSearchParams?.isBeginnerFriendly === 'true' || undefined,
+    semanticIds: resolvedSearchParams?.semanticIds?.toString()
+      ? resolvedSearchParams.semanticIds.toString().split(',').map(Number).filter(n => !isNaN(n) && n > 0)
+      : undefined,
   };
 
   let designs;
@@ -188,6 +191,11 @@ export default async function Home({ searchParams }: Props) {
     }
   }
 
+  const semanticIdsStr = resolvedSearchParams?.semanticIds?.toString() || '';
+  const semanticIds = semanticIdsStr
+    ? semanticIdsStr.split(',').map(Number).filter(n => !isNaN(n) && n > 0)
+    : undefined;
+
   const filters = {
     widthFrom: parseInt(resolvedSearchParams?.widthFrom?.toString() || '0', 10),
     widthTo: parseInt(resolvedSearchParams?.widthTo?.toString() || '10000', 10),
@@ -202,6 +210,7 @@ export default async function Home({ searchParams }: Props) {
     sizeCategory: (resolvedSearchParams?.sizeCategory?.toString() as 'small' | 'medium' | 'large') || undefined,
     orientation: (resolvedSearchParams?.orientation?.toString() as 'portrait' | 'landscape' | 'square') || undefined,
     isBeginnerFriendly: resolvedSearchParams?.isBeginnerFriendly === 'true' || undefined,
+    semanticIds,
   };
 
   let designs, totalPages;

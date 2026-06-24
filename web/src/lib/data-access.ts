@@ -527,6 +527,7 @@ export interface FilterOptions {
   sizeCategory?: 'small' | 'medium' | 'large';
   orientation?: 'portrait' | 'landscape' | 'square';
   isBeginnerFriendly?: boolean;
+  semanticIds?: number[];
 }
 
 export async function fetchFilteredDesigns(filters: FilterOptions): Promise<DesignsResponse> {
@@ -573,6 +574,10 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
           })
         ).then((results) => results.filter((design): design is Design => design !== null));
       }
+      if (filters.semanticIds && filters.semanticIds.length > 0) {
+        const idSet = new Set(filters.semanticIds);
+        allDesigns = allDesigns.filter(d => idSet.has(d.DesignID));
+      }
 
       const totalItems = allDesigns.length;
       const totalPages = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
@@ -590,7 +595,12 @@ export async function fetchFilteredDesigns(filters: FilterOptions): Promise<Desi
         return responseData;
       }
 
-      allDesigns.sort((a, b) => b.DesignID - a.DesignID);
+      if (filters.semanticIds && filters.semanticIds.length > 0) {
+        const idOrder = new Map(filters.semanticIds.map((id, i) => [id, i]));
+        allDesigns.sort((a, b) => (idOrder.get(a.DesignID) ?? 9999) - (idOrder.get(b.DesignID) ?? 9999));
+      } else {
+        allDesigns.sort((a, b) => b.DesignID - a.DesignID);
+      }
 
       const startIndex = (nPage - 1) * pageSize;
       const endIndex = startIndex + pageSize;
