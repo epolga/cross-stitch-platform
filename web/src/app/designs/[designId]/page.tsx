@@ -12,7 +12,9 @@ import DesignViewTracker from '@/app/components/DesignViewTracker';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
+import AffiliateMaterials from '@/app/components/AffiliateMaterials';
 import { getDesignById } from '@/lib/data-access';
+import { getAffiliateStoreUrls } from '@/lib/affiliate-config';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -145,6 +147,7 @@ export default async function DesignPage({ params }: Props) {
   const adsEnabled = !isPaidDownloadMode();
   const adSlotTop = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_TOP ?? '';
   const adSlotBottom = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ?? '';
+  const affiliateStores = getAffiliateStoreUrls();
 
   let design: Design;
   try {
@@ -367,6 +370,12 @@ export default async function DesignPage({ params }: Props) {
               <AdSlot slot={adSlotBottom} minHeight={250} minHeightDesktop={280} />
             </div>
           )}
+
+          <AffiliateMaterials
+            stores={affiliateStores}
+            designId={String(design.DesignID)}
+            designName={design.Caption}
+          />
 
           {/* BOTTOM download control (gated) */}
           <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} />
