@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S4 (semantic text search).
+Site Technology Milestones — S5 (session-based personalization) or S6 (performance).
 
 ## Active work
 
-Nothing in flight. S1, S2, S3 complete as of 2026-06-24.
+Nothing in flight. S1–S4 complete as of 2026-06-24.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -109,6 +109,13 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - Image sitemap: `<image:image>` blocks added to all 5,260 design URLs in `sitemap.xml`
 - Alt text: all image tags now use `"X cross-stitch pattern"` format site-wide
 
+**S4 — Semantic text search** (deployed 2026-06-24)
+- Bedrock Titan text embeddings for all 5,260 designs already in `vectors.json` (from S3)
+- Query embedded at request time; dot-product against stored text vectors; top-60 returned
+- Runs in parallel with AI filter search in HeroSearch; results merged via `semanticIds` URL param
+- Designs sorted by semantic rank when `semanticIds` present; AI filters still apply as constraints
+- IAM: `AmazonBedrockFullAccess` added to EB EC2 instance role
+
 ---
 
 ## Operational notes
@@ -145,3 +152,4 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] S2 — Faceted filters: subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters — deployed 2026-06-23 `e5c0250`
 - [x] S3 — Visual similarity search: Titan embeddings (5,260 designs), compute-similar-designs, "You may also like" UI block on design pages — 2026-06-24
 - [x] S1 — Image SEO: JSON-LD structured data, SeoDescription in meta, image sitemap, alt text site-wide — 2026-06-24
+- [x] S4 — Semantic text search: Titan text embeddings, parallel search in HeroSearch, semanticIds ranking — 2026-06-24

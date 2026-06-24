@@ -132,7 +132,18 @@ Add a **Similar Designs** block to every design page using visual image embeddin
 
 ## Status
 
-Future — Phase 2.
+Complete — 2026-06-24.
+
+## Completed work
+
+* **`web/src/lib/semantic-search.ts`** — loads `embeddings/vectors.json` from S3 (singleton, `Float32Array` cache ~21 MB); embeds user query via Bedrock Titan Multimodal (`amazon.titan-embed-image-v1`); dot-products query vector against all 5,260 stored text vectors; returns top-60 design IDs in ranked order
+* **`/api/semantic-search`** — POST `{query}` → `{designIds: number[]}`; non-fatal (AI filter results still shown if Bedrock fails)
+* **`HeroSearch.tsx`** — runs `/api/ai-search` and `/api/semantic-search` in parallel (`Promise.allSettled`); passes `semanticIds` as a URL param alongside AI filter params
+* **`data-access.ts`** — `semanticIds` added to `FilterOptions`; when present, filters to those IDs and sorts by semantic rank instead of default DesignID-desc
+* **`page.tsx`** — parses `semanticIds` from URL in both `Home` and `generateMetadata`
+* **IAM** — `AmazonBedrockFullAccess` attached to `aws-elasticbeanstalk-ec2-role`
+* Cold-start latency: ~3–5 s on first query (vector load + Bedrock embed); ~500 ms after cache warm
+* Deployed 2026-06-24 `cc5e1b2`
 
 ## Goal
 
