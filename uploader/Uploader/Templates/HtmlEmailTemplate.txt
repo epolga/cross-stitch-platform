@@ -1,22 +1,22 @@
 [Subject]
-Can you finish this before July 4th?
+New free pattern: Wedding Rings 💍
 
 [Greeting]
 Hi [FName],
 
 [BeforeImage]
-I have a challenge for you.
+June is wedding season — and I have a new free pattern to celebrate.
 
-Can you start a cross-stitch project today and have it finished by July 4th?
+Wedding Rings Cross-Stitch Pattern
 
-Happy 4th of July Cross-Stitch Pattern
+Two interlocked rings, one with a sparkling diamond. Simple, elegant, and stitchable in a weekend.
 
-This pattern was designed to be quick, simple, and fun to stitch. No complicated details. No huge color palette. Just a festive project you can actually finish in time for the holiday.
+Whether you're making a gift for a bride, commemorating an anniversary, or just love the design — this one is for you.
 
 [ImageWithLink]
 <p>
 	<a href="<pattern_url>">
-		<img src="<image_url>" alt="Happy 4th of July cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+		<img src="<image_url>" alt="Wedding Rings cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
 	</a>
 </p>
 <p>
@@ -25,14 +25,12 @@ This pattern was designed to be quick, simple, and fun to stitch. No complicated
 
 
 [AfterImage]
-Personally, I love projects that don't sit in a drawer for months waiting to be completed.
+I designed this to work both as a standalone framed piece and as a card insert — slip it into a wedding card for something truly handmade.
 
-Sometimes it's satisfying to start something on Friday and be displaying it a few days later.
+A question for you:
 
-What about you?
-
-– Do you prefer quick-finish projects or long-term masterpieces?
-– How many unfinished projects are waiting for you right now? 😊
+– Have you ever stitched a gift for a wedding or anniversary?
+– Did the recipient know what it was worth in hours? 😊
 
 Just hit Reply and tell me.
 
