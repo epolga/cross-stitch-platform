@@ -2,11 +2,11 @@
 
 ## Current goal
 
-Site Technology Milestones — S1 (image SEO), S4 (semantic text search).
+Site Technology Milestones — S4 (semantic text search).
 
 ## Active work
 
-Nothing in flight. S2 and S3 complete as of 2026-06-24.
+Nothing in flight. S1, S2, S3 complete as of 2026-06-24.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -103,6 +103,12 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - "You may also like" 6-column grid on every design page; server-side with in-process S3 cache
 - Credential fix: removed IAM user keys from `.env.local`; EB now uses EC2 instance role for S3
 
+**S1 — Image SEO** (deployed 2026-06-24)
+- JSON-LD `<script type="application/ld+json">` on every design page (was broken as `<meta>` tag)
+- `SeoDescription` (Claude-generated, from DDB) now used as primary meta description
+- Image sitemap: `<image:image>` blocks added to all 5,260 design URLs in `sitemap.xml`
+- Alt text: all image tags now use `"X cross-stitch pattern"` format site-wide
+
 ---
 
 ## Operational notes
@@ -138,3 +144,4 @@ Search Console: 68 mobile "needs improvement", 68 desktop "good".
 - [x] Milestone 10 remaining: manual end-to-end test confirmed working — 2026-06-24
 - [x] S2 — Faceted filters: subject (9 categories / 128 albums), size, orientation, beginner-friendly; collapsible advanced filters — deployed 2026-06-23 `e5c0250`
 - [x] S3 — Visual similarity search: Titan embeddings (5,260 designs), compute-similar-designs, "You may also like" UI block on design pages — 2026-06-24
+- [x] S1 — Image SEO: JSON-LD structured data, SeoDescription in meta, image sitemap, alt text site-wide — 2026-06-24

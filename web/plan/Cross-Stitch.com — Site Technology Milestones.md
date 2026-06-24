@@ -14,7 +14,16 @@ Source analysis: `docs/technology_opportunities_for_cross_stitch_com.md`.
 
 ## Status
 
-Future — Phase 1.
+Complete — 2026-06-24.
+
+## Completed work
+
+* **JSON-LD structured data** — moved from `metadata.other` (rendered as a broken `<meta>` tag) to `<script type="application/ld+json">` in JSX; schema type `CreativeWork` with name, description, image, url, `isAccessibleForFree`, creator
+* **`SeoDescription` in metadata** — Claude-generated field from DDB now used as primary `<meta name="description">` and Open Graph description when present; falls back to mechanical description
+* **Image sitemap** — all 5,260 design URLs in `sitemap.xml` include `<image:image>` blocks with title and caption; image xmlns enabled on `SitemapStream`
+* **Alt text** — all image tags now use `"X cross-stitch pattern"` format: design page main image, "You may also like" grid, homepage/album `DesignList` cards, profile votes thumbnails
+* **Modern delivery** — already handled by `next/image` (WebP/AVIF, responsive srcset, lazy loading, priority for LCP); CloudFront CDN already in place
+* Deployed 2026-06-24 `823bf34`, `35c2f98`
 
 ## Goal
 
