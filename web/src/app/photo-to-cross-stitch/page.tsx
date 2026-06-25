@@ -76,7 +76,7 @@ export default function PhotoToCrossStitchPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="w-full px-6 py-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Free Photo to Cross-Stitch Pattern Converter
           </h1>
