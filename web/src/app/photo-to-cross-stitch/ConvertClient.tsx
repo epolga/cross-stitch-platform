@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import PatternCanvas from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS = [10, 15, 20, 25] as const;
-type Tool = 'pencil' | 'fill' | 'erase-fill';
+type Tool = 'pencil' | 'fill';
+type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both';
 
 function floodFill(grid: number[][], row: number, col: number, newColor: number): number[][] {
@@ -46,6 +47,18 @@ export default function ConvertPage() {
   const [redoStack, setRedoStack] = useState<number[][][]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('color');
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
+  const [fillMode, setFillMode] = useState<FillMode>('flood');
+  const [showFillMenu, setShowFillMenu] = useState(false);
+  const fillBtnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showFillMenu) return;
+    function onClickOutside(e: MouseEvent) {
+      if (!fillBtnRef.current?.contains(e.target as Node)) setShowFillMenu(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [showFillMenu]);
   const [selectedColor, setSelectedColor] = useState(0);
   const strokeSnapshot = useRef<number[][] | null>(null);
 
@@ -333,22 +346,54 @@ export default function ConvertPage() {
               <div className="h-px bg-gray-200 my-1" />
 
               {/* Tools */}
-              {([
-                { id: 'pencil',     icon: '✏',  label: 'Pencil'    },
-                { id: 'fill',       icon: '🪣',  label: 'Fill'      },
-                { id: 'erase-fill', icon: '⬜', label: 'Erase Fill' },
-              ] as { id: Tool; icon: string; label: string }[]).map(({ id, icon, label }) => (
-                <button key={id} type="button" onClick={() => setActiveTool(id)}
-                  className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                    activeTool === id
+              {/* Pencil */}
+              <button type="button" onClick={() => setActiveTool('pencil')}
+                className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                  activeTool === 'pencil'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                }`}
+              >
+                <span className="text-base leading-none">✏</span>
+                <span>Pencil</span>
+              </button>
+
+              {/* Fill — single button, dropdown submenu on click */}
+              <div ref={fillBtnRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTool('fill'); setShowFillMenu(s => !s); }}
+                  className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
+                    activeTool === 'fill'
                       ? 'bg-gray-900 text-white border-gray-900'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
                   }`}
                 >
-                  <span className="text-base leading-none">{icon}</span>
-                  <span className="text-center leading-tight">{label}</span>
+                  <span className="text-base leading-none">{fillMode === 'erase' ? '⬜' : '🪣'}</span>
+                  <span>{fillMode === 'erase' ? 'Erase' : 'Flood'}</span>
+                  <span className={`leading-none ${activeTool === 'fill' ? 'opacity-60' : 'opacity-40'}`}>Fill ▾</span>
                 </button>
-              ))}
+
+                {showFillMenu && (
+                  <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-28">
+                    {([
+                      { mode: 'flood' as FillMode, icon: '🪣', label: 'Flood Fill' },
+                      { mode: 'erase' as FillMode, icon: '⬜', label: 'Erase Fill' },
+                    ]).map(({ mode, icon, label }) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => { setFillMode(mode); setShowFillMenu(false); }}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
+                      >
+                        <span className="w-3 text-center">{fillMode === mode ? '✓' : ''}</span>
+                        <span>{icon}</span>
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="h-px bg-gray-200 my-1" />
 
@@ -373,9 +418,9 @@ export default function ConvertPage() {
                 palette={pattern.palette}
                 mode={viewMode}
                 editable
-                activeTool={activeTool}
+                activeTool={activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
                 onPaint={handlePaint}
-                onFill={activeTool === 'erase-fill' ? handleEraseFill : handleFill}
+                onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}
                 onStrokeEnd={handleStrokeEnd}
               />

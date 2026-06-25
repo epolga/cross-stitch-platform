@@ -12,7 +12,7 @@ interface Props {
   mode: 'color' | 'symbol' | 'both';
   cellSize?: number;
   editable?: boolean;
-  activeTool?: 'pencil' | 'fill';
+  activeTool?: 'pencil' | 'fill' | 'erase-fill';
   onPaint?: (row: number, col: number) => void;
   onFill?: (row: number, col: number) => void;
   onStrokeStart?: () => void;
@@ -124,7 +124,7 @@ export default function PatternCanvas({
   }
 
   function onDown(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (!editable) return;
+    if (!editable || e.button !== 0) return;
     const cell = cellAt(e);
     if (!cell) return;
     if (activeTool === 'fill' || activeTool === 'erase-fill') {
@@ -158,6 +158,7 @@ export default function PatternCanvas({
       onMouseMove={onMove}
       onMouseUp={onUp}
       onMouseLeave={onUp}
+      onContextMenu={(e) => e.preventDefault()}
     />
   );
 }
