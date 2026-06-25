@@ -313,6 +313,23 @@ export default function ConvertPage() {
     });
   }
 
+  function handleCrop() {
+    const b = selectionBounds();
+    if (!b) return;
+    const g = gridRef.current;
+    if (!g.length) return;
+    const newGrid: number[][] = [];
+    for (let r = b.rMin; r <= b.rMax; r++) {
+      const row: number[] = [];
+      for (let c = b.cMin; c <= b.cMax; c++) row.push(g[r]?.[c] ?? -1);
+      newGrid.push(row);
+    }
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+    setSelection(null);
+  }
+
   // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
   function handleRightClickCell(row: number, col: number) {
     const ci = gridRef.current[row]?.[col];
@@ -462,7 +479,7 @@ export default function ConvertPage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">3. Edit your pattern</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {pattern.width} × {pattern.height} stitches · {pattern.palette.length} DMC colors
+                {grid[0]?.length ?? 0} × {grid.length} stitches · {pattern.palette.length} DMC colors
               </p>
             </div>
             <button
@@ -516,7 +533,7 @@ export default function ConvertPage() {
                 items: [
                   { type: 'item', label: 'Properties…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Resize…', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Crop…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
                 ],
               },
               {
@@ -718,6 +735,15 @@ export default function ConvertPage() {
               >
                 <span className="text-base leading-none">✂</span>
                 <span>Cut</span>
+              </button>
+
+              {/* Crop to selection */}
+              <button type="button" onClick={handleCrop} disabled={!selection}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Crop to selection"
+              >
+                <span className="text-base leading-none">⊡</span>
+                <span>Crop</span>
               </button>
             </div>
 
