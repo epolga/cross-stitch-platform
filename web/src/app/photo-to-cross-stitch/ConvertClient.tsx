@@ -10,7 +10,7 @@ import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
 import type { ConvertedPattern, PatternPalette } from '@/lib/pattern-converter';
 type Tool = 'pencil' | 'fill' | 'select';
 type FillMode = 'flood' | 'erase';
-type ViewMode = 'color' | 'symbol' | 'both';
+type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
 
 function floodFill(grid: number[][], row: number, col: number, newColor: number): number[][] {
   const rows = grid.length, cols = grid[0].length;
@@ -554,6 +554,7 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Color', checked: viewMode === 'color', onClick: () => setViewMode('color') },
                   { type: 'item', label: 'Symbol', checked: viewMode === 'symbol', onClick: () => setViewMode('symbol') },
                   { type: 'item', label: 'Both', checked: viewMode === 'both', onClick: () => setViewMode('both') },
+                  { type: 'item', label: 'Simulation', checked: viewMode === 'simulation', onClick: () => setViewMode('simulation') },
                   { type: 'separator' },
                   { type: 'item', label: 'Zoom In', disabled: true, onClick: noop },
                   { type: 'item', label: 'Zoom Out', disabled: true, onClick: noop },
@@ -726,7 +727,7 @@ export default function ConvertPage() {
               <div className="h-px bg-gray-200 my-1" />
 
               {/* View mode */}
-              {(['color', 'symbol', 'both'] as ViewMode[]).map(m => (
+              {(['color', 'symbol', 'both', 'simulation'] as ViewMode[]).map(m => (
                 <button key={m} type="button" onClick={() => setViewMode(m)}
                   className={`px-1 py-2 rounded-lg border text-xs capitalize transition-colors ${
                     viewMode === m
