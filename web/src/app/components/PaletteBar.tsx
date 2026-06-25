@@ -7,11 +7,17 @@ interface Props {
   palette: PatternPalette[];
   selectedIndex: number;
   blinkIndex?: number | null;
+  hiddenColors: Set<number>;
   onSelect: (index: number) => void;
   onRightClickSwatch?: (index: number) => void;
+  onToggleColor: (index: number) => void;
+  onToggleAll: (showAll: boolean) => void;
 }
 
-export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, onSelect, onRightClickSwatch }: Props) {
+export default function PaletteBar({
+  palette, selectedIndex, blinkIndex = null,
+  hiddenColors, onSelect, onRightClickSwatch, onToggleColor, onToggleAll,
+}: Props) {
   const sel = palette[selectedIndex];
   const [blinkOn, setBlinkOn] = useState(true);
 
@@ -21,6 +27,8 @@ export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, 
     const id = setInterval(() => setBlinkOn(b => !b), 280);
     return () => clearInterval(id);
   }, [blinkIndex]);
+
+  const allVisible = hiddenColors.size === 0;
 
   return (
     <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch">
@@ -39,18 +47,32 @@ export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, 
 
       <div className="w-full h-px bg-gray-300 flex-none" />
 
-      {/* Swatches column — color + symbol squares per row */}
+      {/* Toggle-all row */}
+      {palette.length > 0 && (
+        <label className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer flex-none self-end pr-0.5">
+          <span>All</span>
+          <input
+            type="checkbox"
+            checked={allVisible}
+            onChange={e => onToggleAll(e.target.checked)}
+            style={{ width: 13, height: 13, cursor: 'pointer' }}
+          />
+        </label>
+      )}
+
+      {/* Swatches — color · symbol · visibility per row */}
       <div className="flex flex-col gap-1 overflow-y-auto flex-1">
         {palette.map((c, i) => {
           const isSelected = i === selectedIndex;
           const isBlink = i === blinkIndex && !blinkOn;
+          const isHidden = hiddenColors.has(i);
           return (
             <button
               key={c.number}
               type="button"
               title={`${c.symbol}  DMC ${c.number} — ${c.name}`}
               onClick={() => onSelect(i)}
-              onContextMenu={(e) => { e.preventDefault(); onRightClickSwatch?.(i); }}
+              onContextMenu={e => { e.preventDefault(); onRightClickSwatch?.(i); }}
               className="flex-none flex flex-row gap-0.5 rounded transition-transform hover:scale-105"
               style={{
                 outline: isSelected ? '2px solid #e11d48' : 'none',
@@ -59,35 +81,37 @@ export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, 
               }}
             >
               {/* Color square */}
-              <span
-                style={{
-                  display: 'block',
-                  width: 22, height: 22,
-                  backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
-                  border: '1px solid rgba(0,0,0,0.18)',
-                  borderRadius: 3,
-                  flexShrink: 0,
-                }}
-              />
-              {/* Symbol square — white background, symbol in DMC color */}
-              <span
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 22, height: 22,
-                  backgroundColor: '#fff',
-                  border: '1px solid rgba(0,0,0,0.18)',
-                  borderRadius: 3,
-                  flexShrink: 0,
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  fontWeight: 'bold',
-                  color: '#000',
-                  userSelect: 'none',
-                }}
-              >
+              <span style={{
+                display: 'block', width: 22, height: 22, flexShrink: 0,
+                backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
+                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
+                opacity: isHidden ? 0.35 : 1,
+              }} />
+              {/* Symbol square */}
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 22, height: 22, flexShrink: 0,
+                backgroundColor: '#fff',
+                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
+                fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000',
+                userSelect: 'none', opacity: isHidden ? 0.35 : 1,
+              }}>
                 {c.symbol}
+              </span>
+              {/* Visibility checkbox square */}
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 22, height: 22, flexShrink: 0,
+                backgroundColor: isHidden ? '#f3f4f6' : '#fff',
+                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
+              }}>
+                <input
+                  type="checkbox"
+                  checked={!isHidden}
+                  onChange={() => onToggleColor(i)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: 13, height: 13, cursor: 'pointer' }}
+                />
               </span>
             </button>
           );

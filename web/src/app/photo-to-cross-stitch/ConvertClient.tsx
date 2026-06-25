@@ -88,6 +88,7 @@ export default function ConvertPage() {
   }, [showFillMenu]);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
+  const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,6 +107,7 @@ export default function ConvertPage() {
     setRedoStack([]);
     setSelectedColor(0);
     setSelection(null);
+    setHiddenColors(new Set());
     setShowImportDialog(false);
   }
 
@@ -512,7 +514,7 @@ export default function ConvertPage() {
                 items: [
                   { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || palette.length === 0 },
                   { type: 'separator' },
-                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), gridRef.current]); setRedoStack([]); updateGrid(blankGrid()); setPalette([]); setSelection(null); setSelectedColor(0); } },
+                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), gridRef.current]); setRedoStack([]); updateGrid(blankGrid()); setPalette([]); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
                   { type: 'item', label: 'Open…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Save', disabled: true, onClick: noop },
                 ],
@@ -836,6 +838,7 @@ export default function ConvertPage() {
                 activeColorIndex={selectedColor}
                 penWidth={penWidth}
                 blinkColorIndex={blinkCells}
+                hiddenColors={hiddenColors}
                 selection={selection}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
@@ -852,8 +855,15 @@ export default function ConvertPage() {
               palette={palette}
               selectedIndex={selectedColor}
               blinkIndex={blinkSwatch}
+              hiddenColors={hiddenColors}
               onSelect={setSelectedColor}
               onRightClickSwatch={handleRightClickSwatch}
+              onToggleColor={i => setHiddenColors(prev => {
+                const next = new Set(prev);
+                if (next.has(i)) next.delete(i); else next.add(i);
+                return next;
+              })}
+              onToggleAll={showAll => setHiddenColors(showAll ? new Set() : new Set(palette.map((_, i) => i)))}
             />
           </div>
 

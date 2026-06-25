@@ -38,6 +38,7 @@ interface Props {
   activeColorIndex?: number;
   penWidth?: number;
   blinkColorIndex?: number | null;
+  hiddenColors?: Set<number>;
   selection?: SelectionRect | null;
   onPaint?: (row: number, col: number) => void;
   onFill?: (row: number, col: number) => void;
@@ -192,7 +193,7 @@ function buildAidaCell(cs: number): HTMLCanvasElement {
 export default function PatternCanvas({
   grid, palette, mode, cellSize = 12,
   editable, activeTool, drawMode = 'point',
-  activeColorIndex = 0, penWidth = 1, blinkColorIndex = null, selection = null,
+  activeColorIndex = 0, penWidth = 1, blinkColorIndex = null, hiddenColors, selection = null,
   onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint, onRightClick, onSelectionChange,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
@@ -208,6 +209,7 @@ export default function PatternCanvas({
   const crossLayerRef   = useRef<HTMLCanvasElement | null>(null); // persistent cross layer (incremental)
   const prevGridRef     = useRef<number[][] | null>(null);        // last rendered grid for diff
   const prevPaletteRef  = useRef<PatternPalette[] | null>(null);
+  const prevHiddenRef   = useRef<Set<number> | undefined>(undefined);
   const isSimStrokeRef   = useRef(false); // true during sim pencil stroke → suppress draw()
   const strokeCellsRef   = useRef<Set<string>>(new Set()); // accumulated cells (sim stroke)
   const lastStrokePosRef = useRef<[number, number] | null>(null);
@@ -288,7 +290,10 @@ export default function PatternCanvas({
         const mask = crossMaskRef.current;
         const prevG = prevGridRef.current;
         const paletteChanged = prevPaletteRef.current !== pal;
+        const hiddenChanged  = prevHiddenRef.current !== hiddenColors;
         prevPaletteRef.current = pal;
+        prevHiddenRef.current  = hiddenColors;
+        if (hiddenChanged) prevGridRef.current = null; // force full repaint when visibility changes
 
         // Reusable cell canvas for cross shape (colored, masked)
         const cell = document.createElement('canvas');
@@ -300,13 +305,17 @@ export default function PatternCanvas({
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             const ci = g[r][c];
-            const prevCi = prevG ? (prevG[r]?.[c] ?? -1) : undefined;
-            if (!paletteChanged && prevCi === ci) continue; // nothing changed here
+            const isHidden = ci >= 0 && (hiddenColors?.has(ci) ?? false);
+            const effectiveCi = isHidden ? -1 : ci;
+            const prevRawCi = prevG ? (prevG[r]?.[c] ?? -1) : undefined;
+            const prevEffective = prevRawCi === undefined ? undefined
+              : (prevRawCi >= 0 && (hiddenColors?.has(prevRawCi) ?? false) ? -1 : prevRawCi);
+            if (!paletteChanged && !hiddenChanged && prevEffective === effectiveCi) continue;
 
             clCtx.clearRect(c * cs, r * cs, cs, cs);
 
-            if (ci >= 0 && pal[ci]) {
-              const col = pal[ci];
+            if (effectiveCi >= 0 && pal[effectiveCi]) {
+              const col = pal[effectiveCi];
               cellCtx.clearRect(0, 0, cs, cs);
               cellCtx.globalCompositeOperation = 'source-over';
               cellCtx.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
@@ -340,7 +349,7 @@ export default function PatternCanvas({
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const ci = g[r][c];
-          const color = ci === -1 ? null : pal[ci];
+          const color = ci === -1 || (hiddenColors?.has(ci) ?? false) ? null : pal[ci];
           const px = c * cs + ML, py = r * cs + MT;
 
           if (!color) {
@@ -473,7 +482,7 @@ export default function PatternCanvas({
     crosses.src = '/simulation/Crosses.png';
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { draw(); }, [grid, palette, mode, cellSize]);
+  useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors]);
 
   useEffect(() => {
     if (blinkColorIndex == null) {
