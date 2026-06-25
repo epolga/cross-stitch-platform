@@ -6,6 +6,7 @@ import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/componen
 import PaletteBar from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
+import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS = [10, 15, 20, 25] as const;
@@ -97,6 +98,7 @@ export default function ConvertPage() {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [showFillMenu]);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -782,15 +784,10 @@ export default function ConvertPage() {
                 ],
               },
               {
-                label: 'Window',
-                items: [
-                  { type: 'item', label: 'Arrange', disabled: true, onClick: noop },
-                ],
-              },
-              {
                 label: 'Help',
                 items: [
-                  { type: 'item', label: 'About', disabled: true, onClick: noop },
+                  { type: 'item', label: 'How to use…', onClick: () => setHelpTab('howto') },
+                  { type: 'item', label: 'About…', onClick: () => setHelpTab('about') },
                 ],
               },
             ];
@@ -1063,6 +1060,12 @@ export default function ConvertPage() {
           onClose={() => setShowResizeDialog(false)}
         />
       )}
+
+      <HelpDialog
+        open={helpTab !== null}
+        initialTab={helpTab ?? 'howto'}
+        onClose={() => setHelpTab(null)}
+      />
     </div>
   );
 }
