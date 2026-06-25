@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import PatternCanvas, { type DrawMode } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
+import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS = [10, 15, 20, 25] as const;
@@ -87,6 +88,10 @@ export default function ConvertPage() {
   }, [showFillMenu]);
   const [selectedColor, setSelectedColor] = useState(0);
   const strokeSnapshot = useRef<number[][] | null>(null);
+  const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
+  const [blinkCells, setBlinkCells] = useState<number | null>(null);
+  const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blinkCellsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function updateGrid(g: number[][]) {
     gridRef.current = g;
@@ -227,6 +232,30 @@ export default function ConvertPage() {
     updateGrid(next);
   }
 
+  // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
+  function handleRightClickCell(row: number, col: number) {
+    const ci = gridRef.current[row]?.[col];
+    if (ci == null || ci < 0) return;
+    if (blinkSwatchTimer.current) clearTimeout(blinkSwatchTimer.current);
+    setBlinkSwatch(ci);
+    blinkSwatchTimer.current = setTimeout(() => setBlinkSwatch(null), 1680);
+  }
+
+  function handleRightClickSwatch(index: number) {
+    if (blinkCellsTimer.current) clearTimeout(blinkCellsTimer.current);
+    setBlinkCells(index);
+    blinkCellsTimer.current = setTimeout(() => setBlinkCells(null), 1680);
+  }
+
+  function clearAll() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const blank = g.map(r => r.map(() => -1));
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(blank);
+  }
+
   // Undo / Redo
   function undo() {
     if (!undoStack.length) return;
@@ -348,7 +377,7 @@ export default function ConvertPage() {
         <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">3. Edit your pattern</h2>
               <p className="text-xs text-gray-400 mt-0.5">
@@ -362,6 +391,93 @@ export default function ConvertPage() {
               {downloading ? 'Generating…' : '↓ Download PDF'}
             </button>
           </div>
+
+          {/* Menu bar */}
+          {(() => {
+            const noop = () => {};
+            const menus: MenuDef[] = [
+              {
+                label: 'File',
+                items: [
+                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading },
+                  { type: 'separator' },
+                  { type: 'item', label: 'New', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Open…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Save', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Edit',
+                items: [
+                  { type: 'item', label: 'Undo', shortcut: 'Ctrl+Z', disabled: !undoStack.length, onClick: undo },
+                  { type: 'item', label: 'Redo', shortcut: 'Ctrl+Y', disabled: !redoStack.length, onClick: redo },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Clear All', onClick: clearAll },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Select All', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Copy', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Paste', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'View',
+                items: [
+                  { type: 'item', label: 'Color', checked: viewMode === 'color', onClick: () => setViewMode('color') },
+                  { type: 'item', label: 'Symbol', checked: viewMode === 'symbol', onClick: () => setViewMode('symbol') },
+                  { type: 'item', label: 'Both', checked: viewMode === 'both', onClick: () => setViewMode('both') },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Zoom In', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Zoom Out', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Chart',
+                items: [
+                  { type: 'item', label: 'Properties…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Resize…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Crop…', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Palette',
+                items: [
+                  { type: 'item', label: 'Add Color…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Remove Unused', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Sort by Count', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Tools',
+                items: [
+                  { type: 'item', label: 'Pencil', checked: activeTool === 'pencil', onClick: () => setActiveTool('pencil') },
+                  { type: 'item', label: 'Fill', checked: activeTool === 'fill' && fillMode === 'flood', onClick: () => { setActiveTool('fill'); setFillMode('flood'); } },
+                  { type: 'item', label: 'Erase Fill', checked: activeTool === 'fill' && fillMode === 'erase', onClick: () => { setActiveTool('fill'); setFillMode('erase'); } },
+                ],
+              },
+              {
+                label: 'Import',
+                items: [
+                  { type: 'item', label: 'From Photo…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'From File…', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Window',
+                items: [
+                  { type: 'item', label: 'Arrange', disabled: true, onClick: noop },
+                ],
+              },
+              {
+                label: 'Help',
+                items: [
+                  { type: 'item', label: 'About', disabled: true, onClick: noop },
+                ],
+              },
+            ];
+            return <MenuBar menus={menus} />;
+          })()}
+
+          <div className="mb-4" />
 
           {/* Editor: sidebar + canvas */}
           <div className="flex gap-3">
@@ -511,11 +627,13 @@ export default function ConvertPage() {
                 drawMode={drawMode}
                 activeColorIndex={selectedColor}
                 penWidth={penWidth}
+                blinkColorIndex={blinkCells}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}
                 onStrokeEnd={handleStrokeEnd}
                 onShapePaint={handleShapePaint}
+                onRightClick={handleRightClickCell}
               />
             </div>
 
@@ -523,7 +641,9 @@ export default function ConvertPage() {
             <PaletteBar
               palette={pattern.palette}
               selectedIndex={selectedColor}
+              blinkIndex={blinkSwatch}
               onSelect={setSelectedColor}
+              onRightClickSwatch={handleRightClickSwatch}
             />
           </div>
 

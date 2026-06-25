@@ -1,15 +1,26 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 
 interface Props {
   palette: PatternPalette[];
   selectedIndex: number;
+  blinkIndex?: number | null;
   onSelect: (index: number) => void;
+  onRightClickSwatch?: (index: number) => void;
 }
 
-export default function PaletteBar({ palette, selectedIndex, onSelect }: Props) {
+export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, onSelect, onRightClickSwatch }: Props) {
   const sel = palette[selectedIndex];
+  const [blinkOn, setBlinkOn] = useState(true);
+
+  useEffect(() => {
+    if (blinkIndex == null) { setBlinkOn(true); return; }
+    setBlinkOn(true);
+    const id = setInterval(() => setBlinkOn(b => !b), 280);
+    return () => clearInterval(id);
+  }, [blinkIndex]);
 
   return (
     <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch">
@@ -36,6 +47,7 @@ export default function PaletteBar({ palette, selectedIndex, onSelect }: Props) 
             type="button"
             title={`${c.symbol}  DMC ${c.number} — ${c.name}`}
             onClick={() => onSelect(i)}
+            onContextMenu={(e) => { e.preventDefault(); onRightClickSwatch?.(i); }}
             className="flex-none rounded transition-transform hover:scale-110"
             style={{
               width: 22,
@@ -46,6 +58,7 @@ export default function PaletteBar({ palette, selectedIndex, onSelect }: Props) 
                 : '1px solid rgba(0,0,0,0.18)',
               outlineOffset: i === selectedIndex ? '2px' : '0',
               transform: i === selectedIndex ? 'scale(1.15)' : undefined,
+              opacity: i === blinkIndex && !blinkOn ? 0.15 : 1,
             }}
           />
         ))}
