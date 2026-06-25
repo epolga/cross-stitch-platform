@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import PatternCanvas from '@/app/components/PatternCanvas';
+import PatternCanvas, { type DrawMode } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
@@ -47,9 +47,21 @@ export default function ConvertPage() {
   const [redoStack, setRedoStack] = useState<number[][][]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('color');
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
+  const [drawMode, setDrawMode] = useState<DrawMode>('point');
   const [fillMode, setFillMode] = useState<FillMode>('flood');
+  const [showPencilMenu, setShowPencilMenu] = useState(false);
   const [showFillMenu, setShowFillMenu] = useState(false);
+  const pencilBtnRef = useRef<HTMLDivElement>(null);
   const fillBtnRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showPencilMenu) return;
+    function onOut(e: MouseEvent) {
+      if (!pencilBtnRef.current?.contains(e.target as Node)) setShowPencilMenu(false);
+    }
+    document.addEventListener('mousedown', onOut);
+    return () => document.removeEventListener('mousedown', onOut);
+  }, [showPencilMenu]);
 
   useEffect(() => {
     if (!showFillMenu) return;
@@ -162,6 +174,21 @@ export default function ConvertPage() {
     if (!before || before === gridRef.current) return; // nothing changed
     setUndoStack(s => [...s.slice(-49), before]);
     setRedoStack([]);
+  }
+
+  // Editor: shape paint (line / rect / ellipse) — one undo entry
+  function handleShapePaint(cells: [number, number][]) {
+    const g = gridRef.current;
+    if (!g.length || !cells.length) return;
+    const snapshot = g;
+    const newGrid = g.map(r => [...r]);
+    for (const [r, c] of cells) {
+      if (r >= 0 && r < newGrid.length && c >= 0 && c < newGrid[0].length)
+        newGrid[r][c] = selectedColor;
+    }
+    setUndoStack(s => [...s.slice(-49), snapshot]);
+    setRedoStack([]);
+    updateGrid(newGrid);
   }
 
   // Editor: fill bucket
@@ -346,17 +373,49 @@ export default function ConvertPage() {
               <div className="h-px bg-gray-200 my-1" />
 
               {/* Tools */}
-              {/* Pencil */}
-              <button type="button" onClick={() => setActiveTool('pencil')}
-                className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                  activeTool === 'pencil'
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                }`}
-              >
-                <span className="text-base leading-none">✏</span>
-                <span>Pencil</span>
-              </button>
+              {/* Pencil — with draw-mode submenu */}
+              {(() => {
+                const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
+                  { id: 'point',   icon: '·',  label: 'Point'     },
+                  { id: 'line',    icon: '╱',  label: 'Line'      },
+                  { id: 'rect',    icon: '▭',  label: 'Rectangle' },
+                  { id: 'ellipse', icon: '◯',  label: 'Ellipse'   },
+                ];
+                const cur = DRAW_MODES.find(m => m.id === drawMode)!;
+                return (
+                  <div ref={pencilBtnRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => { setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
+                      className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
+                        activeTool === 'pencil'
+                          ? 'bg-gray-900 text-white border-gray-900'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                      }`}
+                    >
+                      <span className="text-base leading-none">{cur.icon}</span>
+                      <span>{cur.label}</span>
+                      <span className={`leading-none ${activeTool === 'pencil' ? 'opacity-60' : 'opacity-40'}`}>Pen ▾</span>
+                    </button>
+                    {showPencilMenu && (
+                      <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-32">
+                        {DRAW_MODES.map(({ id, icon, label }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => { setDrawMode(id); setActiveTool('pencil'); setShowPencilMenu(false); }}
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <span className="w-3 text-center">{drawMode === id ? '✓' : ''}</span>
+                            <span className="w-4 text-center font-mono">{icon}</span>
+                            <span>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Fill — single button, dropdown submenu on click */}
               <div ref={fillBtnRef} className="relative">
@@ -419,10 +478,13 @@ export default function ConvertPage() {
                 mode={viewMode}
                 editable
                 activeTool={activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
+                drawMode={drawMode}
+                activeColorIndex={selectedColor}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}
                 onStrokeEnd={handleStrokeEnd}
+                onShapePaint={handleShapePaint}
               />
             </div>
           </div>
