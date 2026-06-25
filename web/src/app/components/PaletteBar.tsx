@@ -39,29 +39,59 @@ export default function PaletteBar({ palette, selectedIndex, blinkIndex = null, 
 
       <div className="w-full h-px bg-gray-300 flex-none" />
 
-      {/* Swatches column */}
+      {/* Swatches column — color + symbol squares per row */}
       <div className="flex flex-col gap-1 overflow-y-auto flex-1">
-        {palette.map((c, i) => (
-          <button
-            key={c.number}
-            type="button"
-            title={`${c.symbol}  DMC ${c.number} — ${c.name}`}
-            onClick={() => onSelect(i)}
-            onContextMenu={(e) => { e.preventDefault(); onRightClickSwatch?.(i); }}
-            className="flex-none rounded transition-transform hover:scale-110"
-            style={{
-              width: 22,
-              height: 22,
-              backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
-              outline: i === selectedIndex
-                ? '2.5px solid #e11d48'
-                : '1px solid rgba(0,0,0,0.18)',
-              outlineOffset: i === selectedIndex ? '2px' : '0',
-              transform: i === selectedIndex ? 'scale(1.15)' : undefined,
-              opacity: i === blinkIndex && !blinkOn ? 0.15 : 1,
-            }}
-          />
-        ))}
+        {palette.map((c, i) => {
+          const isSelected = i === selectedIndex;
+          const isBlink = i === blinkIndex && !blinkOn;
+          return (
+            <button
+              key={c.number}
+              type="button"
+              title={`${c.symbol}  DMC ${c.number} — ${c.name}`}
+              onClick={() => onSelect(i)}
+              onContextMenu={(e) => { e.preventDefault(); onRightClickSwatch?.(i); }}
+              className="flex-none flex flex-row gap-0.5 rounded transition-transform hover:scale-105"
+              style={{
+                outline: isSelected ? '2px solid #e11d48' : 'none',
+                outlineOffset: isSelected ? '2px' : '0',
+                opacity: isBlink ? 0.15 : 1,
+              }}
+            >
+              {/* Color square */}
+              <span
+                style={{
+                  display: 'block',
+                  width: 22, height: 22,
+                  backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
+                  border: '1px solid rgba(0,0,0,0.18)',
+                  borderRadius: 3,
+                  flexShrink: 0,
+                }}
+              />
+              {/* Symbol square — white background, symbol in DMC color */}
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 22, height: 22,
+                  backgroundColor: '#fff',
+                  border: '1px solid rgba(0,0,0,0.18)',
+                  borderRadius: 3,
+                  flexShrink: 0,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
+                  color: '#000',
+                  userSelect: 'none',
+                }}
+              >
+                {c.symbol}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
