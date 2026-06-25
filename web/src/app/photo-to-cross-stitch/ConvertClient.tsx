@@ -437,10 +437,6 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Clear All', onClick: clearAll },
                   { type: 'separator' },
                   { type: 'item', label: 'Cut Selection', disabled: !selection, onClick: handleCut },
-                  { type: 'separator' },
-                  { type: 'item', label: 'Select All', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Copy', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Paste', disabled: true, onClick: noop },
                 ],
               },
               {

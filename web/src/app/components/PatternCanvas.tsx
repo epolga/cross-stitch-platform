@@ -368,6 +368,12 @@ export default function PatternCanvas({
 
     if (activeTool === 'select') {
       startCell.current = null;
+      // plain click (no drag) → cancel selection
+      const sel = selRef.current;
+      if (sel && sel.r0 === sel.r1 && sel.c0 === sel.c1) {
+        selRef.current = null;
+        onSelectionChange?.(null);
+      }
       draw();
       return;
     }
