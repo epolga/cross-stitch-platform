@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import Image from 'next/image';
+import { useState, useRef, useEffect } from 'react';
 import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
 import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
-import type { ConvertedPattern } from '@/lib/pattern-converter';
-
-const COLOR_OPTIONS = [10, 15, 20, 25] as const;
+import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
+import type { ConvertedPattern, PatternPalette } from '@/lib/pattern-converter';
 type Tool = 'pencil' | 'fill' | 'select';
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both';
@@ -30,24 +28,16 @@ function floodFill(grid: number[][], row: number, col: number, newColor: number)
 }
 
 export default function ConvertPage() {
-  // Upload state
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [patWidth, setPatWidth] = useState(80);
-  const [patHeight, setPatHeight] = useState(80);
-  const [aspectRatio, setAspectRatio] = useState<number | null>(null); // naturalWidth / naturalHeight
-  const [lockAspect, setLockAspect] = useState(true);
-  const [numColors, setNumColors] = useState<10 | 15 | 20 | 25>(15);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Palette + blank canvas
+  const [palette, setPalette] = useState<PatternPalette[]>([]);
   const [downloading, setDownloading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const selectedFile = useRef<File | null>(null);
+  const [downloadError, setDownloadError] = useState('');
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Pattern + editor state
-  const [pattern, setPattern] = useState<ConvertedPattern | null>(null);
-  const [grid, setGrid] = useState<number[][]>([]);
-  const gridRef = useRef<number[][]>([]); // always points to latest grid for sync access
+  const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
+  const [grid, setGrid] = useState<number[][]>(blankGrid);
+  const gridRef = useRef<number[][]>(grid);
   const [undoStack, setUndoStack] = useState<number[][][]>([]);
   const [redoStack, setRedoStack] = useState<number[][][]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('color');
@@ -75,7 +65,6 @@ export default function ConvertPage() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!pattern) return;
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
@@ -87,7 +76,7 @@ export default function ConvertPage() {
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [undoStack, redoStack, pattern, selection, clipboard]);
+  }, [undoStack, redoStack, selection, clipboard]);
 
   useEffect(() => {
     if (!showFillMenu) return;
@@ -109,95 +98,25 @@ export default function ConvertPage() {
     setGrid(g);
   }
 
-  // File handling
-  function handleFile(file: File) {
-    if (!file.type.startsWith('image/')) { setError('Please upload an image file.'); return; }
-    if (file.size > 5 * 1024 * 1024) { setError('Image too large — max 5 MB.'); return; }
-    selectedFile.current = file;
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    setPattern(null);
-    updateGrid([]);
+  // Import from photo (called by ImportFromPhotoDialog on success)
+  function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
+    setPalette(data.palette);
+    updateGrid(paddedGrid);
     setUndoStack([]);
     setRedoStack([]);
-    setError('');
-    // Read natural dimensions to store aspect ratio (dimensions stay as chosen by user)
-    const img = document.createElement('img');
-    img.onload = () => {
-      setAspectRatio(img.naturalWidth / img.naturalHeight);
-    };
-    img.src = url;
-  }
-
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, []);
-
-  // Convert
-  async function convert() {
-    if (!selectedFile.current) return;
-    setLoading(true);
-    setError('');
-    try {
-      // Fit image inside patWidth×patHeight preserving aspect ratio
-      let innerW = patWidth;
-      let innerH = patHeight;
-      if (aspectRatio) {
-        const fitH = Math.round(patWidth / aspectRatio);
-        if (fitH <= patHeight) {
-          innerH = Math.max(10, fitH);
-        } else {
-          innerW = Math.max(10, Math.round(patHeight * aspectRatio));
-          innerH = patHeight;
-        }
-      }
-
-      const form = new FormData();
-      form.append('image', selectedFile.current);
-      form.append('width', String(innerW));
-      form.append('height', String(innerH));
-      form.append('colors', String(numColors));
-      const resp = await fetch('/api/convert', { method: 'POST', body: form });
-      if (!resp.ok) {
-        const { error: msg } = await resp.json().catch(() => ({ error: 'Conversion failed' }));
-        throw new Error(msg);
-      }
-      const data = await resp.json() as ConvertedPattern;
-
-      // Center inner grid inside the full patWidth×patHeight canvas, padding with -1
-      const padTop = Math.floor((patHeight - innerH) / 2);
-      const padLeft = Math.floor((patWidth - innerW) / 2);
-      const outerGrid: number[][] = Array.from({ length: patHeight }, () => Array(patWidth).fill(-1));
-      for (let r = 0; r < data.grid.length; r++)
-        for (let c = 0; c < data.grid[r].length; c++) {
-          const or = padTop + r, oc = padLeft + c;
-          if (or < patHeight && oc < patWidth) outerGrid[or][oc] = data.grid[r][c];
-        }
-
-      setPattern(data);
-      updateGrid(outerGrid);
-      setUndoStack([]);
-      setRedoStack([]);
-      setSelectedColor(0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Conversion failed');
-    } finally {
-      setLoading(false);
-    }
+    setSelectedColor(0);
+    setSelection(null);
+    setShowImportDialog(false);
   }
 
   // Download PDF from current (edited) grid
   async function downloadPdf() {
-    if (!pattern) return;
     setDownloading(true);
     try {
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: gridRef.current, palette: pattern.palette }),
+        body: JSON.stringify({ grid: gridRef.current, palette }),
       });
       if (!resp.ok) throw new Error('PDF generation failed');
       const blob = await resp.blob();
@@ -208,7 +127,7 @@ export default function ConvertPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Download failed');
+      setDownloadError(e instanceof Error ? e.message : 'Download failed');
     } finally {
       setDownloading(false);
     }
@@ -564,137 +483,25 @@ export default function ConvertPage() {
   return (
     <div className="space-y-6">
 
-      {/* Step 1: Upload */}
+      {/* Editor */}
       <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">1. Upload your photo</h2>
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-          className={`relative flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors p-8
-            ${dragOver ? 'border-rose-400 bg-rose-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-          />
-          {previewUrl ? (
-            <div className="relative w-48 h-48">
-              <Image src={previewUrl} alt="Selected photo" fill className="object-contain rounded" unoptimized />
-            </div>
-          ) : (
-            <>
-              <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <p className="text-gray-500">Drag and drop or <span className="text-rose-600 font-medium">click to upload</span></p>
-              <p className="text-xs text-gray-400">JPEG, PNG, WebP — max 5 MB</p>
-            </>
-          )}
-        </div>
-        {previewUrl && (
-          <button
-            type="button"
-            onClick={() => {
-              setPreviewUrl(null);
-              selectedFile.current = null;
-              setPattern(null);
-              if (fileRef.current) fileRef.current.value = '';
-            }}
-            className="mt-2 text-xs text-gray-400 hover:text-gray-600"
-          >
-            Remove photo
-          </button>
-        )}
-      </section>
-
-      {/* Step 2: Options */}
-      <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">2. Choose pattern size and colors</h2>
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[100px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Width (stitches)</label>
-            <input
-              type="number" min={10} max={500}
-              value={patWidth}
-              onChange={(e) => {
-                const w = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
-                setPatWidth(w);
-                if (lockAspect && aspectRatio)
-                  setPatHeight(Math.max(10, Math.min(500, Math.round(w / aspectRatio))));
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setLockAspect(l => !l)}
-            title={lockAspect ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
-            className={`mb-1 text-lg px-1 transition-opacity ${lockAspect ? 'opacity-100' : 'opacity-30'}`}
-          >
-            {lockAspect ? '🔗' : '🔓'}
-          </button>
-          <div className="flex-1 min-w-[100px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Height (stitches)</label>
-            <input
-              type="number" min={10} max={500}
-              value={patHeight}
-              onChange={(e) => {
-                const h = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
-                setPatHeight(h);
-                if (lockAspect && aspectRatio)
-                  setPatWidth(Math.max(10, Math.min(500, Math.round(h * aspectRatio))));
-              }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-            />
-          </div>
-          <div className="flex-1 min-w-[140px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">DMC colors</label>
-            <div className="flex gap-2">
-              {COLOR_OPTIONS.map(n => (
-                <button key={n} type="button" onClick={() => setNumColors(n)}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors
-                    ${numColors === n ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-300 hover:border-rose-300'}`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <button
-          type="button" onClick={convert} disabled={!previewUrl || loading}
-          className="mt-6 w-full rounded-lg bg-rose-500 py-3 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Converting…' : 'Generate pattern'}
-        </button>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-      </section>
-
-      {/* Step 3: Editor */}
-      {pattern && grid.length > 0 && (
-        <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
 
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">3. Edit your pattern</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Cross-Stitch Pattern Editor</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {grid[0]?.length ?? 0} × {grid.length} stitches · {pattern.palette.length} DMC colors
+                {grid[0]?.length ?? 0} × {grid.length} stitches{palette.length > 0 ? ` · ${palette.length} DMC colors` : ''}
               </p>
             </div>
             <button
-              type="button" onClick={downloadPdf} disabled={downloading}
+              type="button" onClick={downloadPdf} disabled={downloading || palette.length === 0}
               className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
             >
               {downloading ? 'Generating…' : '↓ Download PDF'}
             </button>
           </div>
+          {downloadError && <p className="mt-1 text-xs text-red-600">{downloadError}</p>}
 
           {/* Menu bar */}
           {(() => {
@@ -703,9 +510,9 @@ export default function ConvertPage() {
               {
                 label: 'File',
                 items: [
-                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading },
+                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || palette.length === 0 },
                   { type: 'separator' },
-                  { type: 'item', label: 'New', disabled: true, onClick: noop },
+                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), gridRef.current]); setRedoStack([]); updateGrid(blankGrid()); setPalette([]); setSelection(null); setSelectedColor(0); } },
                   { type: 'item', label: 'Open…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Save', disabled: true, onClick: noop },
                 ],
@@ -779,8 +586,7 @@ export default function ConvertPage() {
               {
                 label: 'Import',
                 items: [
-                  { type: 'item', label: 'From Photo…', disabled: true, onClick: noop },
-                  { type: 'item', label: 'From File…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'From Photo…', onClick: () => setShowImportDialog(true) },
                 ],
               },
               {
@@ -1019,7 +825,7 @@ export default function ConvertPage() {
             <div className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0">
               <PatternCanvas
                 grid={grid}
-                palette={pattern.palette}
+                palette={palette}
                 mode={viewMode}
                 editable
                 activeTool={activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
@@ -1040,7 +846,7 @@ export default function ConvertPage() {
 
             {/* Palette column — right of canvas */}
             <PaletteBar
-              palette={pattern.palette}
+              palette={palette}
               selectedIndex={selectedColor}
               blinkIndex={blinkSwatch}
               onSelect={setSelectedColor}
@@ -1049,17 +855,20 @@ export default function ConvertPage() {
           </div>
 
         </section>
-      )}
 
-      {pattern && (
-        <ResizeDialog
-          open={showResizeDialog}
-          currentW={grid[0]?.length ?? patWidth}
-          currentH={grid.length || patHeight}
-          onConfirm={handleResize}
-          onClose={() => setShowResizeDialog(false)}
-        />
-      )}
+      <ResizeDialog
+        open={showResizeDialog}
+        currentW={grid[0]?.length ?? 80}
+        currentH={grid.length || 80}
+        onConfirm={handleResize}
+        onClose={() => setShowResizeDialog(false)}
+      />
+
+      <ImportFromPhotoDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleImport}
+      />
 
       <HelpDialog
         open={helpTab !== null}
