@@ -49,6 +49,33 @@ function enforceNeighborConnectivity(grid: number[][]): number[][] {
   return g;
 }
 
+// Trim grid to content bounding box + exactly 1 empty border on each side.
+function sizeToDesign(grid: number[][]): number[][] | null {
+  const rows = grid.length;
+  if (!rows) return null;
+  const cols = grid[0].length;
+  let minRow = rows, maxRow = -1, minCol = cols, maxCol = -1;
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (grid[r][c] >= 0) {
+        if (r < minRow) minRow = r;
+        if (r > maxRow) maxRow = r;
+        if (c < minCol) minCol = c;
+        if (c > maxCol) maxCol = c;
+      }
+  if (maxRow === -1) return null;
+  const rStart = minRow - 1; // may be negative → empty row added via -1 fill
+  const cStart = minCol - 1;
+  const newRows = maxRow - minRow + 3; // content + 2 margins
+  const newCols = maxCol - minCol + 3;
+  return Array.from({ length: newRows }, (_, dr) =>
+    Array.from({ length: newCols }, (_, dc) => {
+      const or = rStart + dr, oc = cStart + dc;
+      return (or >= 0 && or < rows && oc >= 0 && oc < cols) ? grid[or][oc] : -1;
+    })
+  );
+}
+
 function floodFill(grid: number[][], row: number, col: number, newColor: number): number[][] {
   const rows = grid.length, cols = grid[0].length;
   const target = grid[row][col];
@@ -606,6 +633,15 @@ export default function ConvertPage() {
                 items: [
                   { type: 'item', label: 'Properties…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Resize…', onClick: () => setShowResizeDialog(true) },
+                  { type: 'item', label: 'Size to Design', onClick: () => {
+                    const g = gridRef.current;
+                    const next = sizeToDesign(g);
+                    if (!next) return;
+                    setUndoStack(s => [...s.slice(-49), g]);
+                    setRedoStack([]);
+                    updateGrid(next);
+                    setSelection(null);
+                  }},
                   { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
                 ],
               },
