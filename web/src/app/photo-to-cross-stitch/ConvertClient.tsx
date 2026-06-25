@@ -2,13 +2,13 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
-import PatternCanvas, { type DrawMode } from '@/app/components/PatternCanvas';
+import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS = [10, 15, 20, 25] as const;
-type Tool = 'pencil' | 'fill';
+type Tool = 'pencil' | 'fill' | 'select';
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both';
 
@@ -88,6 +88,7 @@ export default function ConvertPage() {
   }, [showFillMenu]);
   const [selectedColor, setSelectedColor] = useState(0);
   const strokeSnapshot = useRef<number[][] | null>(null);
+  const [selection, setSelection] = useState<SelectionRect | null>(null);
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -230,6 +231,27 @@ export default function ConvertPage() {
     setUndoStack(s => [...s.slice(-49), g]);
     setRedoStack([]);
     updateGrid(next);
+  }
+
+  // Clear selection when switching away from select tool
+  useEffect(() => {
+    if (activeTool !== 'select') setSelection(null);
+  }, [activeTool]);
+
+  function handleCut() {
+    if (!selection) return;
+    const g = gridRef.current;
+    if (!g.length) return;
+    const rMin = Math.min(selection.r0, selection.r1), rMax = Math.max(selection.r0, selection.r1);
+    const cMin = Math.min(selection.c0, selection.c1), cMax = Math.max(selection.c0, selection.c1);
+    const newGrid = g.map(r => [...r]);
+    for (let r = rMin; r <= rMax; r++)
+      for (let c = cMin; c <= cMax; c++)
+        newGrid[r][c] = -1;
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+    setSelection(null);
   }
 
   // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
@@ -413,6 +435,8 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Redo', shortcut: 'Ctrl+Y', disabled: !redoStack.length, onClick: redo },
                   { type: 'separator' },
                   { type: 'item', label: 'Clear All', onClick: clearAll },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Cut Selection', disabled: !selection, onClick: handleCut },
                   { type: 'separator' },
                   { type: 'item', label: 'Select All', disabled: true, onClick: noop },
                   { type: 'item', label: 'Copy', disabled: true, onClick: noop },
@@ -614,6 +638,30 @@ export default function ConvertPage() {
                   {m}
                 </button>
               ))}
+
+              <div className="h-px bg-gray-200 my-1" />
+
+              {/* Select tool */}
+              <button type="button" onClick={() => setActiveTool('select')}
+                className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                  activeTool === 'select'
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                }`}
+                title="Select region"
+              >
+                <span className="text-base leading-none">▦</span>
+                <span>Select</span>
+              </button>
+
+              {/* Cut selected region */}
+              <button type="button" onClick={handleCut} disabled={!selection}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Cut (clear selection)"
+              >
+                <span className="text-base leading-none">✂</span>
+                <span>Cut</span>
+              </button>
             </div>
 
             {/* Canvas */}
@@ -628,12 +676,14 @@ export default function ConvertPage() {
                 activeColorIndex={selectedColor}
                 penWidth={penWidth}
                 blinkColorIndex={blinkCells}
+                selection={selection}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}
                 onStrokeEnd={handleStrokeEnd}
                 onShapePaint={handleShapePaint}
                 onRightClick={handleRightClickCell}
+                onSelectionChange={setSelection}
               />
             </div>
 

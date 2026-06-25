@@ -7,6 +7,7 @@ const ML = 30; // left margin for row numbers
 const MT = 18; // top margin for column numbers
 
 export type DrawMode = 'point' | 'line' | 'rect' | 'ellipse';
+export type SelectionRect = { r0: number; c0: number; r1: number; c1: number };
 
 function expandCells(cells: [number, number][], width: number): [number, number][] {
   if (width <= 1) return cells;
@@ -32,15 +33,19 @@ interface Props {
   mode: 'color' | 'symbol' | 'both';
   cellSize?: number;
   editable?: boolean;
-  activeTool?: 'pencil' | 'fill' | 'erase-fill';
+  activeTool?: 'pencil' | 'fill' | 'erase-fill' | 'select';
   drawMode?: DrawMode;
   activeColorIndex?: number;
   penWidth?: number;
+  blinkColorIndex?: number | null;
+  selection?: SelectionRect | null;
   onPaint?: (row: number, col: number) => void;
   onFill?: (row: number, col: number) => void;
   onStrokeStart?: () => void;
   onStrokeEnd?: () => void;
   onShapePaint?: (cells: [number, number][]) => void;
+  onRightClick?: (row: number, col: number) => void;
+  onSelectionChange?: (sel: SelectionRect | null) => void;
 }
 
 // ── Shape algorithms ────────────────────────────────────────────
@@ -117,8 +122,8 @@ function shapeCells(
 export default function PatternCanvas({
   grid, palette, mode, cellSize = 12,
   editable, activeTool, drawMode = 'point',
-  activeColorIndex = 0, penWidth = 1,
-  onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint,
+  activeColorIndex = 0, penWidth = 1, blinkColorIndex = null, selection = null,
+  onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint, onRightClick, onSelectionChange,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const drawing     = useRef(false);
@@ -126,18 +131,23 @@ export default function PatternCanvas({
   const previewRef  = useRef<[number, number][]>([]);
 
   // Keep latest props in refs so draw() can always read current values
-  const gridRef      = useRef(grid);
-  const paletteRef   = useRef(palette);
-  const modeRef      = useRef(mode);
-  const cellSizeRef  = useRef(cellSize);
-  const activeColRef = useRef(activeColorIndex);
-  const penWidthRef  = useRef(penWidth);
+  const gridRef        = useRef(grid);
+  const paletteRef     = useRef(palette);
+  const modeRef        = useRef(mode);
+  const cellSizeRef    = useRef(cellSize);
+  const activeColRef   = useRef(activeColorIndex);
+  const penWidthRef    = useRef(penWidth);
+  const blinkColorRef  = useRef(blinkColorIndex);
+  const blinkOnRef     = useRef(false);
+  const selRef         = useRef<SelectionRect | null>(null);
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
   cellSizeRef.current  = cellSize;
   activeColRef.current = activeColorIndex;
   penWidthRef.current  = penWidth;
+  blinkColorRef.current = blinkColorIndex;
+  selRef.current        = selection;
 
   function draw() {
     const canvas = canvasRef.current;
@@ -217,6 +227,38 @@ export default function PatternCanvas({
     for (let c = 4; c < cols; c += 5)
       ctx.fillText(String(c + 1), c * cs + ML + cs / 2, MT - 2);
 
+    // Blink overlay for right-click highlight
+    const bci = blinkColorRef.current;
+    if (bci !== null && blinkOnRef.current) {
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#fff';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (g[r][c] === bci) {
+            const px = c * cs + ML, py = r * cs + MT;
+            ctx.fillRect(px, py, cs, cs);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Selection overlay (dashed rect + tint)
+    const sel = selRef.current;
+    if (sel) {
+      const rMin = Math.min(sel.r0, sel.r1), rMax = Math.max(sel.r0, sel.r1);
+      const cMin = Math.min(sel.c0, sel.c1), cMax = Math.max(sel.c0, sel.c1);
+      const x = cMin * cs + ML, y = rMin * cs + MT;
+      const w = (cMax - cMin + 1) * cs, h = (rMax - rMin + 1) * cs;
+      ctx.fillStyle = 'rgba(59,130,246,0.15)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
+      ctx.setLineDash([]);
+    }
+
     // Preview cells (ghost overlay for shape drawing)
     const preview = previewRef.current;
     if (preview.length > 0) {
@@ -240,6 +282,21 @@ export default function PatternCanvas({
 
   useEffect(() => { draw(); }, [grid, palette, mode, cellSize]);
 
+  useEffect(() => {
+    if (blinkColorIndex == null) {
+      blinkOnRef.current = false;
+      draw();
+      return;
+    }
+    blinkOnRef.current = true;
+    draw();
+    const id = setInterval(() => {
+      blinkOnRef.current = !blinkOnRef.current;
+      draw();
+    }, 280);
+    return () => clearInterval(id);
+  }, [blinkColorIndex]);
+
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>): [number, number] | null {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -258,6 +315,15 @@ export default function PatternCanvas({
     if (!editable || e.button !== 0) return;
     const cell = cellAt(e);
     if (!cell) return;
+    if (activeTool === 'select') {
+      drawing.current = true;
+      startCell.current = cell;
+      const sel = { r0: cell[0], c0: cell[1], r1: cell[0], c1: cell[1] };
+      selRef.current = sel;
+      draw();
+      onSelectionChange?.(sel);
+      return;
+    }
     if (activeTool === 'fill' || activeTool === 'erase-fill') {
       onFill?.(cell[0], cell[1]);
     } else if (drawMode === 'point') {
@@ -277,6 +343,14 @@ export default function PatternCanvas({
     if (!editable || !drawing.current) return;
     const cell = cellAt(e);
     if (!cell) return;
+    if (activeTool === 'select' && startCell.current) {
+      const [r0, c0] = startCell.current;
+      const sel = { r0, c0, r1: cell[0], c1: cell[1] };
+      selRef.current = sel;
+      draw();
+      onSelectionChange?.(sel);
+      return;
+    }
     if (activeTool !== 'pencil') return;
 
     if (drawMode === 'point') {
@@ -292,6 +366,11 @@ export default function PatternCanvas({
     if (!drawing.current) return;
     drawing.current = false;
 
+    if (activeTool === 'select') {
+      startCell.current = null;
+      draw();
+      return;
+    }
     if (activeTool === 'pencil' && drawMode !== 'point' && startCell.current) {
       const cell = cellAt(e);
       const [r0, c0] = startCell.current;
@@ -311,6 +390,11 @@ export default function PatternCanvas({
 
   function onLeave() {
     if (!drawing.current) return;
+    if (activeTool === 'select') {
+      drawing.current = false;
+      startCell.current = null;
+      return;
+    }
     // Cancel shape preview on leave; stroke continues if mouse re-enters
     if (drawMode !== 'point') {
       drawing.current = false;
@@ -321,6 +405,12 @@ export default function PatternCanvas({
       onStrokeEnd?.();
       drawing.current = false;
     }
+  }
+
+  function onContext(e: React.MouseEvent<HTMLCanvasElement>) {
+    e.preventDefault();
+    const cell = cellAt(e);
+    if (cell) onRightClick?.(cell[0], cell[1]);
   }
 
   const cursor = !editable ? 'default'
@@ -335,7 +425,7 @@ export default function PatternCanvas({
       onMouseMove={onMove}
       onMouseUp={onUp}
       onMouseLeave={onLeave}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={onContext}
     />
   );
 }
