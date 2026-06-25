@@ -55,6 +55,10 @@ export default function ConvertPage() {
   const [showFillMenu, setShowFillMenu] = useState(false);
   const pencilBtnRef = useRef<HTMLDivElement>(null);
   const fillBtnRef = useRef<HTMLDivElement>(null);
+  const [selectedColor, setSelectedColor] = useState(0);
+  const strokeSnapshot = useRef<number[][] | null>(null);
+  const [selection, setSelection] = useState<SelectionRect | null>(null);
+  const [clipboard, setClipboard] = useState<number[][] | null>(null);
 
   useEffect(() => {
     if (!showPencilMenu) return;
@@ -73,10 +77,13 @@ export default function ConvertPage() {
       const key = e.key.toLowerCase();
       if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+      if (key === 'c') { e.preventDefault(); handleCopy(); }
+      if (key === 'x') { e.preventDefault(); handleCut(); }
+      if (key === 'v') { e.preventDefault(); handlePaste(); }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [undoStack, redoStack, pattern]);
+  }, [undoStack, redoStack, pattern, selection, clipboard]);
 
   useEffect(() => {
     if (!showFillMenu) return;
@@ -86,9 +93,6 @@ export default function ConvertPage() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [showFillMenu]);
-  const [selectedColor, setSelectedColor] = useState(0);
-  const strokeSnapshot = useRef<number[][] | null>(null);
-  const [selection, setSelection] = useState<SelectionRect | null>(null);
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -238,20 +242,75 @@ export default function ConvertPage() {
     if (activeTool !== 'select') setSelection(null);
   }, [activeTool]);
 
+  function selectionBounds() {
+    if (!selection) return null;
+    return {
+      rMin: Math.min(selection.r0, selection.r1), rMax: Math.max(selection.r0, selection.r1),
+      cMin: Math.min(selection.c0, selection.c1), cMax: Math.max(selection.c0, selection.c1),
+    };
+  }
+
+  function handleCopy() {
+    const b = selectionBounds();
+    if (!b) return;
+    const g = gridRef.current;
+    const copied: number[][] = [];
+    for (let r = b.rMin; r <= b.rMax; r++) {
+      const row: number[] = [];
+      for (let c = b.cMin; c <= b.cMax; c++) row.push(g[r]?.[c] ?? -1);
+      copied.push(row);
+    }
+    setClipboard(copied);
+  }
+
   function handleCut() {
-    if (!selection) return;
+    const b = selectionBounds();
+    if (!b) return;
     const g = gridRef.current;
     if (!g.length) return;
-    const rMin = Math.min(selection.r0, selection.r1), rMax = Math.max(selection.r0, selection.r1);
-    const cMin = Math.min(selection.c0, selection.c1), cMax = Math.max(selection.c0, selection.c1);
+    // Copy first
+    const copied: number[][] = [];
+    for (let r = b.rMin; r <= b.rMax; r++) {
+      const row: number[] = [];
+      for (let c = b.cMin; c <= b.cMax; c++) row.push(g[r]?.[c] ?? -1);
+      copied.push(row);
+    }
+    setClipboard(copied);
+    // Then erase
     const newGrid = g.map(r => [...r]);
-    for (let r = rMin; r <= rMax; r++)
-      for (let c = cMin; c <= cMax; c++)
+    for (let r = b.rMin; r <= b.rMax; r++)
+      for (let c = b.cMin; c <= b.cMax; c++)
         newGrid[r][c] = -1;
     setUndoStack(s => [...s.slice(-49), g]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
+  }
+
+  function handlePaste() {
+    if (!clipboard || !clipboard.length) return;
+    const g = gridRef.current;
+    if (!g.length) return;
+    const rows = g.length, cols = g[0].length;
+    const b = selectionBounds();
+    const rStart = b ? b.rMin : 0;
+    const cStart = b ? b.cMin : 0;
+    const ph = clipboard.length, pw = clipboard[0].length;
+    const newGrid = g.map(r => [...r]);
+    for (let dr = 0; dr < ph; dr++)
+      for (let dc = 0; dc < pw; dc++) {
+        const r = rStart + dr, c = cStart + dc;
+        if (r < rows && c < cols) newGrid[r][c] = clipboard[dr][dc];
+      }
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+    // Move selection to cover the pasted area
+    setSelection({
+      r0: rStart, c0: cStart,
+      r1: Math.min(rStart + ph - 1, rows - 1),
+      c1: Math.min(cStart + pw - 1, cols - 1),
+    });
   }
 
   // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
@@ -436,7 +495,9 @@ export default function ConvertPage() {
                   { type: 'separator' },
                   { type: 'item', label: 'Clear All', onClick: clearAll },
                   { type: 'separator' },
-                  { type: 'item', label: 'Cut Selection', disabled: !selection, onClick: handleCut },
+                  { type: 'item', label: 'Copy', shortcut: '⌘C', disabled: !selection, onClick: handleCopy },
+                  { type: 'item', label: 'Cut', shortcut: '⌘X', disabled: !selection, onClick: handleCut },
+                  { type: 'item', label: 'Paste', shortcut: '⌘V', disabled: !clipboard, onClick: handlePaste },
                 ],
               },
               {
