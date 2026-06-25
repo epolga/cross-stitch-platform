@@ -515,6 +515,8 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Copy', shortcut: '⌘C', disabled: !selection, onClick: handleCopy },
                   { type: 'item', label: 'Cut', shortcut: '⌘X', disabled: !selection, onClick: handleCut },
                   { type: 'item', label: 'Paste', shortcut: '⌘V', disabled: !clipboard, onClick: handlePaste },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
                 ],
               },
               {
