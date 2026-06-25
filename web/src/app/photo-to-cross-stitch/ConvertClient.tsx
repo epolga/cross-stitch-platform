@@ -632,10 +632,12 @@ export default function ConvertPage() {
               {/* Pencil — with draw-mode submenu */}
               {(() => {
                 const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
-                  { id: 'point',   icon: '·',  label: 'Point'     },
-                  { id: 'line',    icon: '╱',  label: 'Line'      },
-                  { id: 'rect',    icon: '▭',  label: 'Rectangle' },
-                  { id: 'ellipse', icon: '◯',  label: 'Ellipse'   },
+                  { id: 'point',        icon: '·', label: 'Point'               },
+                  { id: 'line',         icon: '╱', label: 'Line'                },
+                  { id: 'rect',         icon: '▭', label: 'Rectangle (⇧=□)'    },
+                  { id: 'rect-fill',    icon: '▬', label: 'Rect Fill (⇧=□)'    },
+                  { id: 'ellipse',      icon: '◯', label: 'Ellipse (⇧=○)'      },
+                  { id: 'ellipse-fill', icon: '⬤', label: 'Ellipse Fill (⇧=○)' },
                 ];
                 const cur = DRAW_MODES.find(m => m.id === drawMode)!;
                 return (

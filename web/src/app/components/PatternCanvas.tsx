@@ -6,7 +6,7 @@ import type { PatternPalette } from '@/lib/pattern-converter';
 const ML = 30; // left margin for row numbers
 const MT = 18; // top margin for column numbers
 
-export type DrawMode = 'point' | 'line' | 'rect' | 'ellipse';
+export type DrawMode = 'point' | 'line' | 'rect' | 'rect-fill' | 'ellipse' | 'ellipse-fill';
 export type SelectionRect = { r0: number; c0: number; r1: number; c1: number };
 
 function expandCells(cells: [number, number][], width: number): [number, number][] {
@@ -107,13 +107,48 @@ function ellipseCells(r0: number, c0: number, r1: number, c1: number): [number, 
   return cells;
 }
 
+function rectFillCells(r0: number, c0: number, r1: number, c1: number): [number, number][] {
+  const rMin = Math.min(r0, r1), rMax = Math.max(r0, r1);
+  const cMin = Math.min(c0, c1), cMax = Math.max(c0, c1);
+  const cells: [number, number][] = [];
+  for (let r = rMin; r <= rMax; r++)
+    for (let c = cMin; c <= cMax; c++)
+      cells.push([r, c]);
+  return cells;
+}
+
+function ellipseFillCells(r0: number, c0: number, r1: number, c1: number): [number, number][] {
+  const rMin = Math.min(r0, r1), rMax = Math.max(r0, r1);
+  const cMin = Math.min(c0, c1), cMax = Math.max(c0, c1);
+  const cy = (rMin + rMax) / 2, cx = (cMin + cMax) / 2;
+  const a = (cMax - cMin) / 2, b = (rMax - rMin) / 2;
+  if (a === 0 && b === 0) return [[rMin, cMin]];
+  const cells: [number, number][] = [];
+  for (let r = rMin; r <= rMax; r++) {
+    const dy = r - cy;
+    const dx = b === 0 ? a : a * Math.sqrt(Math.max(0, 1 - (dy * dy) / (b * b)));
+    const cl = Math.ceil(cx - dx), cr = Math.floor(cx + dx);
+    for (let c = cl; c <= cr; c++) cells.push([r, c]);
+  }
+  return cells;
+}
+
+// Constrain r1/c1 so the bounding box is square (for Shift+rect/ellipse)
+function constrainToSquare(r0: number, c0: number, r1: number, c1: number): [number, number] {
+  const dr = r1 - r0, dc = c1 - c0;
+  const side = Math.min(Math.abs(dr), Math.abs(dc));
+  return [r0 + Math.sign(dr) * side, c0 + Math.sign(dc) * side];
+}
+
 function shapeCells(
   mode: DrawMode,
   r0: number, c0: number, r1: number, c1: number,
 ): [number, number][] {
-  if (mode === 'line')    return bresenhamLine(r0, c0, r1, c1);
-  if (mode === 'rect')    return rectCells(r0, c0, r1, c1);
-  if (mode === 'ellipse') return ellipseCells(r0, c0, r1, c1);
+  if (mode === 'line')         return bresenhamLine(r0, c0, r1, c1);
+  if (mode === 'rect')         return rectCells(r0, c0, r1, c1);
+  if (mode === 'rect-fill')    return rectFillCells(r0, c0, r1, c1);
+  if (mode === 'ellipse')      return ellipseCells(r0, c0, r1, c1);
+  if (mode === 'ellipse-fill') return ellipseFillCells(r0, c0, r1, c1);
   return [[r1, c1]]; // point
 }
 
@@ -182,15 +217,19 @@ export default function PatternCanvas({
   const paletteRef     = useRef(palette);
   const modeRef        = useRef(mode);
   const cellSizeRef    = useRef(cellSize);
+  const drawModeRef    = useRef(drawMode);
   const activeColRef   = useRef(activeColorIndex);
   const penWidthRef    = useRef(penWidth);
   const blinkColorRef  = useRef(blinkColorIndex);
   const blinkOnRef     = useRef(false);
   const selRef         = useRef<SelectionRect | null>(null);
+  const lastCellRef    = useRef<[number, number] | null>(null); // last mouse cell during shape drag
+  const shiftRef       = useRef(false);
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
   cellSizeRef.current  = cellSize;
+  drawModeRef.current  = drawMode;
   activeColRef.current = activeColorIndex;
   penWidthRef.current  = penWidth;
   blinkColorRef.current = blinkColorIndex;
@@ -451,6 +490,25 @@ export default function PatternCanvas({
     return () => clearInterval(id);
   }, [blinkColorIndex]);
 
+  // Live Shift key tracking — updates shape preview when Shift is pressed/released mid-drag
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Shift') return;
+      shiftRef.current = e.type === 'keydown';
+      const dm = drawModeRef.current;
+      if (!drawing.current || !startCell.current || !lastCellRef.current) return;
+      if (dm === 'point' || dm === 'line') return;
+      const [r0, c0] = startCell.current;
+      let [r1, c1] = lastCellRef.current;
+      if (shiftRef.current) [r1, c1] = constrainToSquare(r0, c0, r1, c1);
+      previewRef.current = expandCells(shapeCells(dm, r0, c0, r1, c1), penWidthRef.current);
+      draw();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Draw one line segment (or dot) showing the stroke path in simulation mode
   function directStrokeSegment(from: [number, number] | null, to: [number, number]) {
     const canvas = canvasRef.current;
@@ -568,8 +626,11 @@ export default function PatternCanvas({
         for (const [r, c] of painted) onPaint?.(r, c);
       }
     } else if (startCell.current) {
+      lastCellRef.current = cell;
       const [r0, c0] = startCell.current;
-      previewRef.current = expandCells(shapeCells(drawMode, r0, c0, cell[0], cell[1]), penWidthRef.current);
+      let [r1, c1]: [number, number] = [cell[0], cell[1]];
+      if (e.shiftKey && drawMode !== 'line') [r1, c1] = constrainToSquare(r0, c0, r1, c1);
+      previewRef.current = expandCells(shapeCells(drawMode, r0, c0, r1, c1), penWidthRef.current);
       draw();
     }
   }
@@ -592,10 +653,12 @@ export default function PatternCanvas({
     if (activeTool === 'pencil' && drawMode !== 'point' && startCell.current) {
       const cell = cellAt(e);
       const [r0, c0] = startCell.current;
-      const [r1, c1] = cell ?? [r0, c0];
+      let [r1, c1]: [number, number] = cell ?? [r0, c0];
+      if (e.shiftKey && drawMode !== 'line') [r1, c1] = constrainToSquare(r0, c0, r1, c1);
       const cells = expandCells(shapeCells(drawMode, r0, c0, r1, c1), penWidthRef.current);
       previewRef.current = [];
       startCell.current = null;
+      lastCellRef.current = null;
       onShapePaint?.(cells);
     } else if (drawMode === 'point') {
       previewRef.current = [];
@@ -629,6 +692,7 @@ export default function PatternCanvas({
       drawing.current = false;
       previewRef.current = [];
       startCell.current = null;
+      lastCellRef.current = null;
       draw();
     } else {
       drawing.current = false;
