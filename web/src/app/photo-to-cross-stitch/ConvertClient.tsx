@@ -518,10 +518,8 @@ export default function ConvertPage() {
                 onShapePaint={handleShapePaint}
               />
             </div>
-          </div>
 
-          {/* Palette bar — full width below canvas */}
-          <div className="mt-3">
+            {/* Palette column — right of canvas */}
             <PaletteBar
               palette={pattern.palette}
               selectedIndex={selectedColor}
