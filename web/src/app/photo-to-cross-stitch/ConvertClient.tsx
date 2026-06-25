@@ -65,6 +65,19 @@ export default function ConvertPage() {
   }, [showPencilMenu]);
 
   useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!pattern) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [undoStack, redoStack, pattern]);
+
+  useEffect(() => {
     if (!showFillMenu) return;
     function onClickOutside(e: MouseEvent) {
       if (!fillBtnRef.current?.contains(e.target as Node)) setShowFillMenu(false);
@@ -218,7 +231,8 @@ export default function ConvertPage() {
   function undo() {
     if (!undoStack.length) return;
     const prev = undoStack[undoStack.length - 1];
-    setRedoStack(s => [...s, gridRef.current]);
+    const current = gridRef.current; // capture before updateGrid changes it
+    setRedoStack(s => [...s, current]);
     updateGrid(prev);
     setUndoStack(s => s.slice(0, -1));
   }
@@ -226,7 +240,8 @@ export default function ConvertPage() {
   function redo() {
     if (!redoStack.length) return;
     const next = redoStack[redoStack.length - 1];
-    setUndoStack(s => [...s, gridRef.current]);
+    const current = gridRef.current; // capture before updateGrid changes it
+    setUndoStack(s => [...s, current]);
     updateGrid(next);
     setRedoStack(s => s.slice(0, -1));
   }
