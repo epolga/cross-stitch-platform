@@ -908,16 +908,16 @@ export default function ConvertPage() {
 
               <div className="h-px bg-gray-200 my-1" />
 
-              {/* Pen width control */}
-              <div className="flex flex-col items-center gap-0.5 px-1 py-1">
-                <span className="text-xs text-gray-500">Width</span>
-                <button type="button" onClick={() => setPenWidth(w => Math.min(9, w + 1))}
-                  className="w-full py-0.5 rounded border border-gray-300 text-sm hover:bg-gray-50 leading-none"
-                >+</button>
+              {/* Pen size control */}
+              <div className="flex flex-col items-center gap-1 px-1 py-1">
+                <span className="text-xs text-gray-500">Pen size</span>
                 <span className="text-sm font-mono font-bold text-gray-800">{penWidth}</span>
-                <button type="button" onClick={() => setPenWidth(w => Math.max(1, w - 1))}
-                  className="w-full py-0.5 rounded border border-gray-300 text-sm hover:bg-gray-50 leading-none"
-                >−</button>
+                <input
+                  type="range" min={1} max={9} value={penWidth}
+                  onChange={e => setPenWidth(parseInt(e.target.value))}
+                  className="w-full accent-rose-500"
+                  title={`Pen size: ${penWidth}`}
+                />
               </div>
 
               <div className="h-px bg-gray-200 my-1" />
