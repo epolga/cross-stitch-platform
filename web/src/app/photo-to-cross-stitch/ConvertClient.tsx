@@ -489,6 +489,7 @@ export default function ConvertPage() {
   function handleRightClickCell(row: number, col: number) {
     const ci = gridRef.current[row]?.[col];
     if (ci == null || ci < 0) return;
+    setSelectedColor(ci);
     if (blinkSwatchTimer.current) clearTimeout(blinkSwatchTimer.current);
     setBlinkSwatch(ci);
     blinkSwatchTimer.current = setTimeout(() => setBlinkSwatch(null), 1680);
