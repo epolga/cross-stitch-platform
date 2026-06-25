@@ -8,9 +8,46 @@ import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/componen
 import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
 import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
 import type { ConvertedPattern, PatternPalette } from '@/lib/pattern-converter';
-type Tool = 'pencil' | 'fill' | 'select';
+type Tool = 'pencil' | 'eraser' | 'fill' | 'select';
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
+
+// Ensure every colored cell has at least one 8-neighbor of the same color.
+// Isolated cells are replaced with the most common adjacent color.
+// Iterates until stable (max 8 passes).
+function enforceNeighborConnectivity(grid: number[][]): number[][] {
+  const rows = grid.length;
+  if (!rows) return grid;
+  const cols = grid[0].length;
+  const DIRS: [number, number][] = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const g = grid.map(r => [...r]);
+
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const ci = g[r][c];
+        if (ci < 0) continue;
+        const hasNeighbor = DIRS.some(([dr, dc]) => {
+          const nr = r + dr, nc = c + dc;
+          return nr >= 0 && nr < rows && nc >= 0 && nc < cols && g[nr][nc] === ci;
+        });
+        if (hasNeighbor) continue;
+        // Isolated — replace with most common 8-neighbor color
+        const freq: Record<number, number> = {};
+        for (const [dr, dc] of DIRS) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && g[nr][nc] >= 0)
+            freq[g[nr][nc]] = (freq[g[nr][nc]] ?? 0) + 1;
+        }
+        const best = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+        if (best) { g[r][c] = Number(best[0]); changed = true; }
+      }
+    }
+    if (!changed) break;
+  }
+  return g;
+}
 
 function floodFill(grid: number[][], row: number, col: number, newColor: number): number[][] {
   const rows = grid.length, cols = grid[0].length;
@@ -102,7 +139,7 @@ export default function ConvertPage() {
   // Import from photo (called by ImportFromPhotoDialog on success)
   function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
     setPalette(data.palette);
-    updateGrid(paddedGrid);
+    updateGrid(enforceNeighborConnectivity(paddedGrid));
     setUndoStack([]);
     setRedoStack([]);
     setSelectedColor(0);
@@ -142,9 +179,10 @@ export default function ConvertPage() {
 
   function handlePaint(row: number, col: number) {
     const g = gridRef.current;
-    if (!g.length || g[row][col] === selectedColor) return;
+    const paintColor = activeTool === 'eraser' ? -1 : selectedColor;
+    if (!g.length || g[row][col] === paintColor) return;
     const newRow = [...g[row]];
-    newRow[col] = selectedColor;
+    newRow[col] = paintColor;
     const newGrid = [...g];
     newGrid[row] = newRow;
     updateGrid(newGrid);
@@ -163,10 +201,11 @@ export default function ConvertPage() {
     const g = gridRef.current;
     if (!g.length || !cells.length) return;
     const snapshot = g;
+    const paintColor = activeTool === 'eraser' ? -1 : selectedColor;
     const newGrid = g.map(r => [...r]);
     for (const [r, c] of cells) {
       if (r >= 0 && r < newGrid.length && c >= 0 && c < newGrid[0].length)
-        newGrid[r][c] = selectedColor;
+        newGrid[r][c] = paintColor;
     }
     setUndoStack(s => [...s.slice(-49), snapshot]);
     setRedoStack([]);
@@ -582,6 +621,7 @@ export default function ConvertPage() {
                 label: 'Tools',
                 items: [
                   { type: 'item', label: 'Pencil', checked: activeTool === 'pencil', onClick: () => setActiveTool('pencil') },
+                  { type: 'item', label: 'Pen Eraser', checked: activeTool === 'eraser', onClick: () => setActiveTool('eraser') },
                   { type: 'item', label: 'Fill', checked: activeTool === 'fill' && fillMode === 'flood', onClick: () => { setActiveTool('fill'); setFillMode('flood'); } },
                   { type: 'item', label: 'Erase Fill', checked: activeTool === 'fill' && fillMode === 'erase', onClick: () => { setActiveTool('fill'); setFillMode('erase'); } },
                 ],
@@ -631,7 +671,7 @@ export default function ConvertPage() {
               <div className="h-px bg-gray-200 my-1" />
 
               {/* Tools */}
-              {/* Pencil — with draw-mode submenu */}
+              {/* Pen — draw-mode + eraser submenu */}
               {(() => {
                 const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
                   { id: 'point',        icon: '·', label: 'Point'               },
@@ -641,24 +681,27 @@ export default function ConvertPage() {
                   { id: 'ellipse',      icon: '◯', label: 'Ellipse (⇧=○)'      },
                   { id: 'ellipse-fill', icon: '⬤', label: 'Ellipse Fill (⇧=○)' },
                 ];
-                const cur = DRAW_MODES.find(m => m.id === drawMode)!;
+                const penActive = activeTool === 'pencil' || activeTool === 'eraser';
+                const cur = activeTool === 'eraser'
+                  ? { icon: '◻', label: 'Erase' }
+                  : DRAW_MODES.find(m => m.id === drawMode)!;
                 return (
                   <div ref={pencilBtnRef} className="relative">
                     <button
                       type="button"
-                      onClick={() => { setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
+                      onClick={() => { if (!penActive) setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
                       className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
-                        activeTool === 'pencil'
+                        penActive
                           ? 'bg-gray-900 text-white border-gray-900'
                           : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
                       }`}
                     >
                       <span className="text-base leading-none">{cur.icon}</span>
                       <span>{cur.label}</span>
-                      <span className={`leading-none ${activeTool === 'pencil' ? 'opacity-60' : 'opacity-40'}`}>Pen ▾</span>
+                      <span className={`leading-none ${penActive ? 'opacity-60' : 'opacity-40'}`}>Pen ▾</span>
                     </button>
                     {showPencilMenu && (
-                      <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-32">
+                      <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-36">
                         {DRAW_MODES.map(({ id, icon, label }) => (
                           <button
                             key={id}
@@ -666,11 +709,21 @@ export default function ConvertPage() {
                             onClick={() => { setDrawMode(id); setActiveTool('pencil'); setShowPencilMenu(false); }}
                             className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
                           >
-                            <span className="w-3 text-center">{drawMode === id ? '✓' : ''}</span>
+                            <span className="w-3 text-center">{activeTool === 'pencil' && drawMode === id ? '✓' : ''}</span>
                             <span className="w-4 text-center font-mono">{icon}</span>
                             <span>{label}</span>
                           </button>
                         ))}
+                        <div className="h-px bg-gray-100 my-1 mx-2" />
+                        <button
+                          type="button"
+                          onClick={() => { setActiveTool('eraser'); setShowPencilMenu(false); }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
+                        >
+                          <span className="w-3 text-center">{activeTool === 'eraser' ? '✓' : ''}</span>
+                          <span className="w-4 text-center font-mono">◻</span>
+                          <span>Erase</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -833,9 +886,9 @@ export default function ConvertPage() {
                 palette={palette}
                 mode={viewMode}
                 editable
-                activeTool={activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
+                activeTool={activeTool === 'eraser' ? 'pencil' : activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
                 drawMode={drawMode}
-                activeColorIndex={selectedColor}
+                activeColorIndex={activeTool === 'eraser' ? -1 : selectedColor}
                 penWidth={penWidth}
                 blinkColorIndex={blinkCells}
                 hiddenColors={hiddenColors}
