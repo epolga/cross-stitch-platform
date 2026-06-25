@@ -330,6 +330,128 @@ export default function ConvertPage() {
     setSelection(null);
   }
 
+  function handleFlipH() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const b = selectionBounds();
+    const newGrid = g.map(r => [...r]);
+    if (b) {
+      for (let r = b.rMin; r <= b.rMax; r++) {
+        const seg = newGrid[r].slice(b.cMin, b.cMax + 1).reverse();
+        for (let i = 0; i < seg.length; i++) newGrid[r][b.cMin + i] = seg[i];
+      }
+    } else {
+      for (const row of newGrid) row.reverse();
+    }
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+  }
+
+  function handleFlipV() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const b = selectionBounds();
+    const newGrid = g.map(r => [...r]);
+    if (b) {
+      const half = Math.floor((b.rMax - b.rMin + 1) / 2);
+      for (let i = 0; i < half; i++) {
+        const r1 = b.rMin + i, r2 = b.rMax - i;
+        for (let c = b.cMin; c <= b.cMax; c++)
+          [newGrid[r1][c], newGrid[r2][c]] = [newGrid[r2][c], newGrid[r1][c]];
+      }
+    } else {
+      newGrid.reverse();
+    }
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+  }
+
+  // ── Mirror (always whole grid — doubles one dimension) ──────────
+  function handleMirrorRight() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const newGrid = g.map(r => [...r, ...[...r].reverse()]);
+    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    updateGrid(newGrid);
+  }
+  function handleMirrorLeft() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const newGrid = g.map(r => [[...r].reverse(), ...r].flat() as number[]);
+    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    updateGrid(newGrid);
+  }
+  function handleMirrorBottom() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const flipped = [...g].reverse().map(r => [...r]);
+    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    updateGrid([...g.map(r => [...r]), ...flipped]);
+  }
+  function handleMirrorTop() {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const flipped = [...g].reverse().map(r => [...r]);
+    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    updateGrid([...flipped, ...g.map(r => [...r])]);
+  }
+
+  // ── Rotate helpers ───────────────────────────────────────────────
+  function rot90CW(src: number[][]): number[][] {
+    const rows = src.length, cols = src[0].length;
+    const out: number[][] = Array.from({length: cols}, () => Array(rows).fill(-1));
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        out[c][rows - 1 - r] = src[r][c];
+    return out;
+  }
+  function rot90CCW(src: number[][]): number[][] {
+    const rows = src.length, cols = src[0].length;
+    const out: number[][] = Array.from({length: cols}, () => Array(rows).fill(-1));
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        out[cols - 1 - c][r] = src[r][c];
+    return out;
+  }
+  function rot180(src: number[][]): number[][] {
+    return [...src].reverse().map(r => [...r].reverse());
+  }
+
+  function applyRotation(fn: (s: number[][]) => number[][]) {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const b = selectionBounds();
+    if (!b) {
+      setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+      updateGrid(fn(g));
+      return;
+    }
+    // Extract selection, rotate it, clear old area, paste rotated at (rMin, cMin)
+    const sub: number[][] = [];
+    for (let r = b.rMin; r <= b.rMax; r++)
+      sub.push(g[r].slice(b.cMin, b.cMax + 1));
+    const rotated = fn(sub);
+    const newGrid = g.map(r => [...r]);
+    // Clear old selection area
+    for (let r = b.rMin; r <= b.rMax; r++)
+      for (let c = b.cMin; c <= b.cMax; c++)
+        newGrid[r][c] = -1;
+    // Paste rotated (clip to grid bounds)
+    const rows = g.length, cols = g[0].length;
+    for (let dr = 0; dr < rotated.length; dr++)
+      for (let dc = 0; dc < rotated[0].length; dc++) {
+        const r = b.rMin + dr, c = b.cMin + dc;
+        if (r < rows && c < cols) newGrid[r][c] = rotated[dr][dc];
+      }
+    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    updateGrid(newGrid);
+    setSelection({ r0: b.rMin, c0: b.cMin,
+      r1: Math.min(b.rMin + rotated.length - 1, rows - 1),
+      c1: Math.min(b.cMin + rotated[0].length - 1, cols - 1) });
+  }
+
   // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
   function handleRightClickCell(row: number, col: number) {
     const ci = gridRef.current[row]?.[col];
@@ -517,6 +639,22 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Paste', shortcut: '⌘V', disabled: !clipboard, onClick: handlePaste },
                   { type: 'separator' },
                   { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
+                  { type: 'separator' },
+                  { type: 'submenu', label: 'Flip', items: [
+                    { type: 'item', label: 'Horizontal', onClick: handleFlipH },
+                    { type: 'item', label: 'Vertical', onClick: handleFlipV },
+                  ]},
+                  { type: 'submenu', label: 'Mirror', items: [
+                    { type: 'item', label: 'Right',  onClick: handleMirrorRight  },
+                    { type: 'item', label: 'Left',   onClick: handleMirrorLeft   },
+                    { type: 'item', label: 'Top',    onClick: handleMirrorTop    },
+                    { type: 'item', label: 'Bottom', onClick: handleMirrorBottom },
+                  ]},
+                  { type: 'submenu', label: 'Rotate', items: [
+                    { type: 'item', label: '90° Right', onClick: () => applyRotation(rot90CW)  },
+                    { type: 'item', label: '90° Left',  onClick: () => applyRotation(rot90CCW) },
+                    { type: 'item', label: '180°',      onClick: () => applyRotation(rot180)   },
+                  ]},
                 ],
               },
               {
@@ -746,6 +884,55 @@ export default function ConvertPage() {
               >
                 <span className="text-base leading-none">⊡</span>
                 <span>Crop</span>
+              </button>
+
+              <div className="h-px bg-gray-200 my-1" />
+
+              {/* Flip horizontal */}
+              <button type="button" onClick={handleFlipH}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
+                title="Flip horizontal (selection or whole design)"
+              >
+                <span className="text-base leading-none">↔</span>
+                <span>Flip H</span>
+              </button>
+
+              {/* Flip vertical */}
+              <button type="button" onClick={handleFlipV}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
+                title="Flip vertical (selection or whole design)"
+              >
+                <span className="text-base leading-none">↕</span>
+                <span>Flip V</span>
+              </button>
+
+              <div className="h-px bg-gray-200 my-1" />
+
+              {/* Rotate 90° clockwise */}
+              <button type="button" onClick={() => applyRotation(rot90CW)}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
+                title="Rotate 90° clockwise"
+              >
+                <span className="text-base leading-none">↻</span>
+                <span>Rot R</span>
+              </button>
+
+              {/* Rotate 90° counter-clockwise */}
+              <button type="button" onClick={() => applyRotation(rot90CCW)}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
+                title="Rotate 90° counter-clockwise"
+              >
+                <span className="text-base leading-none">↺</span>
+                <span>Rot L</span>
+              </button>
+
+              {/* Rotate 180° */}
+              <button type="button" onClick={() => applyRotation(rot180)}
+                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
+                title="Rotate 180°"
+              >
+                <span className="text-base leading-none">⟳</span>
+                <span>180°</span>
               </button>
             </div>
 
