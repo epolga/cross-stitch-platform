@@ -48,6 +48,7 @@ export default function ConvertPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('color');
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
   const [drawMode, setDrawMode] = useState<DrawMode>('point');
+  const [penWidth, setPenWidth] = useState(1);
   const [fillMode, setFillMode] = useState<FillMode>('flood');
   const [showPencilMenu, setShowPencilMenu] = useState(false);
   const [showFillMenu, setShowFillMenu] = useState(false);
@@ -456,6 +457,20 @@ export default function ConvertPage() {
 
               <div className="h-px bg-gray-200 my-1" />
 
+              {/* Pen width control */}
+              <div className="flex flex-col items-center gap-0.5 px-1 py-1">
+                <span className="text-xs text-gray-500">Width</span>
+                <button type="button" onClick={() => setPenWidth(w => Math.min(9, w + 1))}
+                  className="w-full py-0.5 rounded border border-gray-300 text-sm hover:bg-gray-50 leading-none"
+                >+</button>
+                <span className="text-sm font-mono font-bold text-gray-800">{penWidth}</span>
+                <button type="button" onClick={() => setPenWidth(w => Math.max(1, w - 1))}
+                  className="w-full py-0.5 rounded border border-gray-300 text-sm hover:bg-gray-50 leading-none"
+                >−</button>
+              </div>
+
+              <div className="h-px bg-gray-200 my-1" />
+
               {/* View mode */}
               {(['color', 'symbol', 'both'] as ViewMode[]).map(m => (
                 <button key={m} type="button" onClick={() => setViewMode(m)}
@@ -480,6 +495,7 @@ export default function ConvertPage() {
                 activeTool={activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
                 drawMode={drawMode}
                 activeColorIndex={selectedColor}
+                penWidth={penWidth}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}

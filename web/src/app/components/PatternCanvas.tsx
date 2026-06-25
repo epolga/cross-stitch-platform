@@ -8,6 +8,24 @@ const MT = 18; // top margin for column numbers
 
 export type DrawMode = 'point' | 'line' | 'rect' | 'ellipse';
 
+function expandCells(cells: [number, number][], width: number): [number, number][] {
+  if (width <= 1) return cells;
+  // halfLow + halfHigh = width - 1, giving exactly `width` cells in each axis
+  const halfLow  = Math.floor((width - 1) / 2);
+  const halfHigh = width - 1 - halfLow;
+  const seen = new Set<string>();
+  const result: [number, number][] = [];
+  for (const [r, c] of cells) {
+    for (let dr = -halfLow; dr <= halfHigh; dr++) {
+      for (let dc = -halfLow; dc <= halfHigh; dc++) {
+        const k = `${r + dr},${c + dc}`;
+        if (!seen.has(k)) { seen.add(k); result.push([r + dr, c + dc]); }
+      }
+    }
+  }
+  return result;
+}
+
 interface Props {
   grid: number[][];
   palette: PatternPalette[];
@@ -17,6 +35,7 @@ interface Props {
   activeTool?: 'pencil' | 'fill' | 'erase-fill';
   drawMode?: DrawMode;
   activeColorIndex?: number;
+  penWidth?: number;
   onPaint?: (row: number, col: number) => void;
   onFill?: (row: number, col: number) => void;
   onStrokeStart?: () => void;
@@ -98,7 +117,7 @@ function shapeCells(
 export default function PatternCanvas({
   grid, palette, mode, cellSize = 12,
   editable, activeTool, drawMode = 'point',
-  activeColorIndex = 0,
+  activeColorIndex = 0, penWidth = 1,
   onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
@@ -112,11 +131,13 @@ export default function PatternCanvas({
   const modeRef      = useRef(mode);
   const cellSizeRef  = useRef(cellSize);
   const activeColRef = useRef(activeColorIndex);
+  const penWidthRef  = useRef(penWidth);
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
   cellSizeRef.current  = cellSize;
   activeColRef.current = activeColorIndex;
+  penWidthRef.current  = penWidth;
 
   function draw() {
     const canvas = canvasRef.current;
@@ -242,12 +263,12 @@ export default function PatternCanvas({
     } else if (drawMode === 'point') {
       drawing.current = true;
       onStrokeStart?.();
-      onPaint?.(cell[0], cell[1]);
+      for (const [r, c] of expandCells([cell], penWidthRef.current)) onPaint?.(r, c);
     } else {
       // Shape tool — record start, show preview
       drawing.current = true;
       startCell.current = cell;
-      previewRef.current = [[cell[0], cell[1]]];
+      previewRef.current = expandCells([cell], penWidthRef.current);
       draw();
     }
   }
@@ -259,10 +280,10 @@ export default function PatternCanvas({
     if (activeTool !== 'pencil') return;
 
     if (drawMode === 'point') {
-      onPaint?.(cell[0], cell[1]);
+      for (const [r, c] of expandCells([cell], penWidthRef.current)) onPaint?.(r, c);
     } else if (startCell.current) {
       const [r0, c0] = startCell.current;
-      previewRef.current = shapeCells(drawMode, r0, c0, cell[0], cell[1]);
+      previewRef.current = expandCells(shapeCells(drawMode, r0, c0, cell[0], cell[1]), penWidthRef.current);
       draw();
     }
   }
@@ -275,7 +296,7 @@ export default function PatternCanvas({
       const cell = cellAt(e);
       const [r0, c0] = startCell.current;
       const [r1, c1] = cell ?? [r0, c0];
-      const cells = shapeCells(drawMode, r0, c0, r1, c1);
+      const cells = expandCells(shapeCells(drawMode, r0, c0, r1, c1), penWidthRef.current);
       previewRef.current = [];
       startCell.current = null;
       onShapePaint?.(cells);
