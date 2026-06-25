@@ -5,6 +5,7 @@ import Image from 'next/image';
 import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
+import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS = [10, 15, 20, 25] as const;
@@ -95,6 +96,7 @@ export default function ConvertPage() {
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [showFillMenu]);
+  const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -510,6 +512,34 @@ export default function ConvertPage() {
     updateGrid(blank);
   }
 
+  function handleResize(newW: number, newH: number, mode: ResizeMode, anchor: ResizeAnchor) {
+    const g = gridRef.current;
+    if (!g.length) return;
+    const srcH = g.length, srcW = g[0].length;
+    let newGrid: number[][];
+    if (mode === 'scale') {
+      newGrid = Array.from({ length: newH }, (_, r) =>
+        Array.from({ length: newW }, (_, c) =>
+          g[Math.floor(r * srcH / newH)]?.[Math.floor(c * srcW / newW)] ?? -1
+        )
+      );
+    } else {
+      const offR = anchor === 'center' ? Math.floor((newH - srcH) / 2) : 0;
+      const offC = anchor === 'center' ? Math.floor((newW - srcW) / 2) : 0;
+      newGrid = Array.from({ length: newH }, (_, r) =>
+        Array.from({ length: newW }, (_, c) => {
+          const sr = r - offR, sc = c - offC;
+          return sr >= 0 && sr < srcH && sc >= 0 && sc < srcW ? g[sr][sc] : -1;
+        })
+      );
+    }
+    setUndoStack(s => [...s.slice(-49), g]);
+    setRedoStack([]);
+    updateGrid(newGrid);
+    setSelection(null);
+    setShowResizeDialog(false);
+  }
+
   // Undo / Redo
   function undo() {
     if (!undoStack.length) return;
@@ -724,7 +754,7 @@ export default function ConvertPage() {
                 label: 'Chart',
                 items: [
                   { type: 'item', label: 'Properties…', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Resize…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Resize…', onClick: () => setShowResizeDialog(true) },
                   { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
                 ],
               },
@@ -1022,6 +1052,16 @@ export default function ConvertPage() {
           </div>
 
         </section>
+      )}
+
+      {pattern && (
+        <ResizeDialog
+          open={showResizeDialog}
+          currentW={grid[0]?.length ?? patWidth}
+          currentH={grid.length || patHeight}
+          onConfirm={handleResize}
+          onClose={() => setShowResizeDialog(false)}
+        />
       )}
     </div>
   );
