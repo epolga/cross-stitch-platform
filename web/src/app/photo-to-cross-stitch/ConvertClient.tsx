@@ -32,6 +32,8 @@ export default function ConvertPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [patWidth, setPatWidth] = useState(80);
   const [patHeight, setPatHeight] = useState(80);
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null); // naturalWidth / naturalHeight
+  const [lockAspect, setLockAspect] = useState(true);
   const [numColors, setNumColors] = useState<10 | 15 | 20 | 25>(15);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -108,12 +110,19 @@ export default function ConvertPage() {
     if (!file.type.startsWith('image/')) { setError('Please upload an image file.'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('Image too large — max 5 MB.'); return; }
     selectedFile.current = file;
-    setPreviewUrl(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
     setPattern(null);
     updateGrid([]);
     setUndoStack([]);
     setRedoStack([]);
     setError('');
+    // Read natural dimensions to store aspect ratio (dimensions stay as chosen by user)
+    const img = document.createElement('img');
+    img.onload = () => {
+      setAspectRatio(img.naturalWidth / img.naturalHeight);
+    };
+    img.src = url;
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -129,10 +138,23 @@ export default function ConvertPage() {
     setLoading(true);
     setError('');
     try {
+      // Fit image inside patWidth×patHeight preserving aspect ratio
+      let innerW = patWidth;
+      let innerH = patHeight;
+      if (aspectRatio) {
+        const fitH = Math.round(patWidth / aspectRatio);
+        if (fitH <= patHeight) {
+          innerH = Math.max(10, fitH);
+        } else {
+          innerW = Math.max(10, Math.round(patHeight * aspectRatio));
+          innerH = patHeight;
+        }
+      }
+
       const form = new FormData();
       form.append('image', selectedFile.current);
-      form.append('width', String(patWidth));
-      form.append('height', String(patHeight));
+      form.append('width', String(innerW));
+      form.append('height', String(innerH));
       form.append('colors', String(numColors));
       const resp = await fetch('/api/convert', { method: 'POST', body: form });
       if (!resp.ok) {
@@ -140,8 +162,19 @@ export default function ConvertPage() {
         throw new Error(msg);
       }
       const data = await resp.json() as ConvertedPattern;
+
+      // Center inner grid inside the full patWidth×patHeight canvas, padding with -1
+      const padTop = Math.floor((patHeight - innerH) / 2);
+      const padLeft = Math.floor((patWidth - innerW) / 2);
+      const outerGrid: number[][] = Array.from({ length: patHeight }, () => Array(patWidth).fill(-1));
+      for (let r = 0; r < data.grid.length; r++)
+        for (let c = 0; c < data.grid[r].length; c++) {
+          const or = padTop + r, oc = padLeft + c;
+          if (or < patHeight && oc < patWidth) outerGrid[or][oc] = data.grid[r][c];
+        }
+
       setPattern(data);
-      updateGrid(data.grid.map(r => [...r]));
+      updateGrid(outerGrid);
       setUndoStack([]);
       setRedoStack([]);
       setSelectedColor(0);
@@ -550,26 +583,44 @@ export default function ConvertPage() {
       {/* Step 2: Options */}
       <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">2. Choose pattern size and colors</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[100px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">Width (stitches)</label>
             <input
               type="number" min={10} max={500}
               value={patWidth}
-              onChange={(e) => setPatWidth(Math.max(10, Math.min(500, parseInt(e.target.value) || 10)))}
+              onChange={(e) => {
+                const w = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
+                setPatWidth(w);
+                if (lockAspect && aspectRatio)
+                  setPatHeight(Math.max(10, Math.min(500, Math.round(w / aspectRatio))));
+              }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
-          <div>
+          <button
+            type="button"
+            onClick={() => setLockAspect(l => !l)}
+            title={lockAspect ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+            className={`mb-1 text-lg px-1 transition-opacity ${lockAspect ? 'opacity-100' : 'opacity-30'}`}
+          >
+            {lockAspect ? '🔗' : '🔓'}
+          </button>
+          <div className="flex-1 min-w-[100px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">Height (stitches)</label>
             <input
               type="number" min={10} max={500}
               value={patHeight}
-              onChange={(e) => setPatHeight(Math.max(10, Math.min(500, parseInt(e.target.value) || 10)))}
+              onChange={(e) => {
+                const h = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
+                setPatHeight(h);
+                if (lockAspect && aspectRatio)
+                  setPatWidth(Math.max(10, Math.min(500, Math.round(h * aspectRatio))));
+              }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
-          <div>
+          <div className="flex-1 min-w-[140px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">DMC colors</label>
             <div className="flex gap-2">
               {COLOR_OPTIONS.map(n => (
