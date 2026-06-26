@@ -73,7 +73,10 @@ export default function PaletteBar({
 
       {/* Toggle-all row */}
       {palette.length > 0 && (
-        <label className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer flex-none self-end pr-0.5">
+        <label
+          title={allVisible ? 'All colors visible — click to hide all' : 'Some colors hidden — click to show all'}
+          className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer flex-none self-end pr-0.5"
+        >
           <span>All</span>
           <input
             type="checkbox"
@@ -105,7 +108,7 @@ export default function PaletteBar({
             >
               {/* Index number */}
               <span
-                title={`Entry ${i + 1} — click to highlight in canvas`}
+                title={`Entry ${i + 1} — click to select and highlight in canvas`}
                 onClick={handleClick}
                 style={{
                   ...squareBase,
@@ -119,7 +122,7 @@ export default function PaletteBar({
 
               {/* Color square */}
               <span
-                title={`DMC ${c.number} — ${c.name}`}
+                title={`DMC ${c.number} — ${c.name} (${c.stitchCount} stitches) — click to select`}
                 onClick={handleClick}
                 style={{
                   ...squareBase,
@@ -131,7 +134,7 @@ export default function PaletteBar({
 
               {/* Symbol square */}
               <span
-                title={`${c.symbol}`}
+                title={`Symbol: ${c.symbol} — click to select`}
                 onClick={handleClick}
                 style={{
                   ...squareBase,
@@ -147,21 +150,26 @@ export default function PaletteBar({
               {/* Edit button */}
               <button
                 type="button"
-                title="Edit this entry"
+                title="Edit entry — change color, symbol, move or merge"
                 onClick={e => openEditMenu(e, i)}
                 style={{
                   ...squareBase,
                   backgroundColor: '#fff',
-                  fontSize: 13, color: '#6b7280',
+                  color: '#6b7280',
                   cursor: 'pointer', border: '1px solid rgba(0,0,0,0.18)',
                 }}
                 className="hover:bg-gray-50 hover:text-gray-900"
               >
-                ⋮
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
               </button>
 
               {/* Visibility checkbox */}
-              <span style={{ ...squareBase, backgroundColor: isHidden ? '#f3f4f6' : '#fff' }}>
+              <span
+                title={isHidden ? 'Hidden — click to show' : 'Visible — click to hide'}
+                style={{ ...squareBase, backgroundColor: isHidden ? '#f3f4f6' : '#fff' }}
+              >
                 <input
                   type="checkbox"
                   checked={!isHidden}
