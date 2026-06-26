@@ -197,6 +197,21 @@ function shapeCells(
   return [[r1, c1]]; // point
 }
 
+// ── Cross stitch mask — generated at exact cell size so lines hit the corner holes precisely ──
+function buildCrossMask(ecs: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = ecs; c.height = ecs;
+  const ctx = c.getContext('2d')!;
+  const lw = Math.max(1.5, ecs * 0.13);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
+  // Bottom stitch first (/ diagonal), top stitch on top (\ diagonal)
+  ctx.beginPath(); ctx.moveTo(0, ecs); ctx.lineTo(ecs, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, 0);   ctx.lineTo(ecs, ecs); ctx.stroke();
+  return c;
+}
+
 // ── Programmatic Aida cell texture ───────────────────────────────
 function buildAidaCell(cs: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -246,8 +261,6 @@ export default function PatternCanvas({
   const previewRef  = useRef<[number, number][]>([]);
 
   // Simulation mode assets
-  const crossMaskRef    = useRef<HTMLCanvasElement | null>(null);
-  const simReadyRef     = useRef(false);
   const aidaCellCache   = useRef<{ cs: number; dpr: number; canvas: HTMLCanvasElement } | null>(null);
   const aidaLayerRef    = useRef<HTMLCanvasElement | null>(null); // persistent Aida background
   const crossLayerRef   = useRef<HTMLCanvasElement | null>(null); // persistent cross layer (incremental)
@@ -312,10 +325,7 @@ export default function PatternCanvas({
 
     if (vm === 'simulation') {
       // ── Simulation mode ────────────────────────────────────────
-      if (!simReadyRef.current || !crossMaskRef.current) {
-        ctx.fillStyle = '#EDE0C4';
-        ctx.fillRect(ML, MT, cols * cs, rows * cs);
-      } else {
+      {
         const w = cols * cs, h = rows * cs;
 
         // ── Aida layer: rebuild only when dimensions or cs change ──
@@ -340,7 +350,6 @@ export default function PatternCanvas({
         }
 
         const clCtx = crossLayerRef.current.getContext('2d')!;
-        const mask = crossMaskRef.current;
         const prevG = prevGridRef.current;
         const paletteChanged = prevPaletteRef.current !== pal;
         const hiddenChanged  = prevHiddenRef.current !== hiddenColors;
@@ -356,6 +365,8 @@ export default function PatternCanvas({
         // Hot loop then becomes a simple drawImage blit — no clip/shadow per cell.
         const cacheKey = `${ecs}|${pal.map(p => `${p.r},${p.g},${p.b}`).join('|')}`;
         if (colorCacheKeyRef.current !== cacheKey) {
+          // Build cross mask at this exact cell size — corner-to-corner so it aligns with Aida holes
+          const crossMask = buildCrossMask(ecs);
           colorCellCacheRef.current = pal.map(col => {
             // colored cross masked to cross shape
             const tmp = document.createElement('canvas');
@@ -364,7 +375,7 @@ export default function PatternCanvas({
             tc.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
             tc.fillRect(0, 0, ecs, ecs);
             tc.globalCompositeOperation = 'destination-in';
-            tc.drawImage(mask, 0, 0, ecs, ecs);
+            tc.drawImage(crossMask, 0, 0); // 1:1 — already ecs×ecs, no scaling
             // shadow baked and clipped to cell bounds
             const out = document.createElement('canvas');
             out.width = ecs; out.height = ecs;
@@ -519,31 +530,6 @@ export default function PatternCanvas({
       ctx.globalAlpha = 1;
     }
   }
-
-  // Load cross mask once on mount; Aida background is generated programmatically
-  useEffect(() => {
-    const crosses = document.createElement('img');
-    crosses.onload = () => {
-      const CROSS = 16;
-      const mc = document.createElement('canvas');
-      mc.width = CROSS; mc.height = CROSS;
-      const mctx = mc.getContext('2d')!;
-      mctx.drawImage(crosses, 0, 0, CROSS, CROSS, 0, 0, CROSS, CROSS);
-      // Crosses.png encodes the cross shape in its alpha channel (all pixels are black).
-      // Keep alpha as-is; set RGB to white so destination-in compositing uses the existing alpha.
-      const id = mctx.getImageData(0, 0, CROSS, CROSS);
-      const d = id.data;
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
-        // d[i + 3] unchanged — existing alpha IS the cross mask
-      }
-      mctx.putImageData(id, 0, 0);
-      crossMaskRef.current = mc;
-      simReadyRef.current = true;
-      draw();
-    };
-    crosses.src = '/simulation/Crosses.png';
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors]);
 
