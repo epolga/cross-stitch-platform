@@ -52,32 +52,55 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
 
           {tab === 'howto' && (
             <>
+              <div className="bg-rose-50 border border-rose-100 rounded-lg px-4 py-3 text-xs text-rose-700 leading-relaxed">
+                <b>Quick start:</b> Click <b>Import → From Photo…</b> in the menu bar, upload a photo, choose a size and number of colors, then click <b>Generate pattern</b>. Edit the result, then click <b>↓ Download PDF</b> to print it.
+              </div>
+
               <Section title="1. Upload a photo">
-                <p>Drag and drop a photo onto the upload area, or click it to browse. Supported formats: JPEG, PNG, WebP — up to 5 MB.</p>
+                <p>Open <b>Import → From Photo…</b> from the menu, then drag and drop your photo or click to browse. Supported formats: JPEG, PNG, WebP — up to 5 MB.</p>
+                <p className="text-gray-500">Any photo works — portraits, landscapes, animals, logos. Simple images with clear shapes and fewer colors convert best.</p>
               </Section>
 
               <Section title="2. Choose size and colors">
-                <p>Set the pattern width and height in stitches (default 80 × 80). The photo is fitted inside those dimensions preserving its aspect ratio — empty cells are added as padding.</p>
-                <p>Use the <b>🔗</b> button to lock width and height together while typing.</p>
-                <p>Choose how many DMC colors to use: 10, 15, 20, or 25. More colors = more detail, but harder to stitch.</p>
-                <p>Click <b>Generate pattern</b> to convert.</p>
+                <p>Set the pattern <b>width and height in stitches</b> (default 80 × 80). A good beginner size is 50–80 stitches wide. The photo fits inside those dimensions while keeping its proportions — empty cells are added as padding.</p>
+                <p>Use the <b>🔗</b> button to lock width and height together so the photo isn&apos;t stretched.</p>
+                <p>Choose how many <b>DMC thread colors</b> to use: 10, 15, 20, or 25. Fewer colors = simpler to stitch. Start with 10 or 15 if you&apos;re new to cross-stitch.</p>
+                <p>Click <b>Generate pattern</b> to convert. You can re-import at any time to try different settings.</p>
               </Section>
 
-              <Section title="3. Edit the pattern">
+              <Section title="3. Drawing tools (left toolbar)">
                 <ul className="space-y-1.5 list-none">
-                  <Li icon="·/╱/▭/◯"><b>Pencil</b> — draw cells. Click the button to cycle between Point, Line, Rectangle, and Ellipse modes.</Li>
-                  <Li icon="🪣"><b>Fill</b> — flood-fill a region with the active color. Switch to <b>Erase Fill</b> to clear a region instead.</Li>
-                  <Li icon="▦"><b>Select</b> — drag to select a rectangular region. Then use Cut / Copy / Paste / Crop.</Li>
-                  <Li icon="↔↕"><b>Flip H / V</b> — flip the selection (or the whole design if nothing is selected).</Li>
-                  <Li icon="↻↺"><b>Rotate</b> — rotate 90° right, 90° left, or 180° (selection or whole design).</Li>
+                  <Li icon="✏️"><b>Pen</b> — click cells to paint them with the active color. Click the <b>▾</b> arrow to switch between Point, Line, Rectangle, and Ellipse shapes. Drag the <b>Pen size</b> slider to paint multiple stitches at once.</Li>
+                  <Li icon="◻"><b>Pen Eraser</b> (inside the Pen ▾ menu) — erases individual stitches. Same shapes available.</Li>
+                  <Li icon="🪣"><b>Fill</b> — click any cell to flood-fill its entire connected area with the active color. Great for recoloring large regions. Use <b>Erase Fill</b> (Pen ▾ menu) to clear a region instead.</Li>
+                  <Li icon="↩"><b>Undo / Redo</b> — undo up to 50 steps with Ctrl+Z, redo with Ctrl+Y.</Li>
                 </ul>
               </Section>
 
-              <Section title="Color picking">
+              <Section title="4. Selecting and transforming">
+                <ul className="space-y-1.5 list-none">
+                  <Li icon="▦"><b>Select</b> — drag on the canvas to select a rectangular area. Then use <b>Cut</b>, <b>Copy</b> (Ctrl+C), <b>Paste</b> (Ctrl+V), or <b>Crop</b>.</Li>
+                  <Li icon="↔↕"><b>Flip H / Flip V</b> — mirror the design horizontally or vertically. Applies to the selection only if one exists, otherwise the whole design.</Li>
+                  <Li icon="↻↺"><b>Rot R / Rot L / 180°</b> — rotate the design 90° clockwise, counter-clockwise, or 180°. Applies to selection or whole design.</Li>
+                </ul>
+              </Section>
+
+              <Section title="5. The color palette (right panel)">
+                <p>The panel on the right lists all thread colors in your pattern. Each row shows:</p>
+                <ul className="space-y-1.5 list-none mt-1">
+                  <Li icon="🎨">A <b>color swatch</b> — click it to set that color as your active drawing color.</Li>
+                  <Li icon="◆">A <b>symbol</b> — the symbol used for that color in the printed PDF. Click to change it.</Li>
+                  <Li icon="✏️">A <b>pencil icon</b> — opens options to change the color, change the symbol, move its position, or merge it into another color.</Li>
+                  <Li icon="👁">An <b>eye checkbox</b> — hide or show that color on the canvas (useful when editing a specific area).</Li>
+                </ul>
+                <p className="mt-1">Use <b>Palette → Add Color…</b> to add extra DMC colors manually. Use <b>Palette → Remove Unused</b> to clean up colors with zero stitches.</p>
+              </Section>
+
+              <Section title="Color picking tips">
                 <ul className="space-y-1 list-none">
-                  <Li icon="🖱">Click a <b>swatch</b> in the palette column to set the active color.</Li>
-                  <Li icon="🖱"><b>Right-click a cell</b> to pick its color as active and blink its swatch.</Li>
-                  <Li icon="🖱"><b>Right-click a swatch</b> to blink all cells of that color on the canvas.</Li>
+                  <Li icon="🖱">Click a <b>color swatch</b> in the palette to make it the active drawing color.</Li>
+                  <Li icon="🖱"><b>Right-click a cell</b> on the canvas to instantly pick that cell&apos;s color and highlight its swatch.</Li>
+                  <Li icon="🖱"><b>Right-click a swatch</b> in the palette to blink all cells of that color on the canvas — useful for checking where a color is used.</Li>
                 </ul>
               </Section>
 
@@ -100,13 +123,23 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                 </table>
               </Section>
 
+              <Section title="View modes">
+                <ul className="space-y-1 list-none">
+                  <Li icon="🎨"><b>Color</b> — shows stitches as colored squares (default).</Li>
+                  <Li icon="◆"><b>Symbol</b> — shows stitches as chart symbols, exactly as they appear in the printed PDF.</Li>
+                  <Li icon="⊞"><b>Both</b> — shows color and symbol together. Useful when editing the pattern.</Li>
+                  <Li icon="🧵"><b>Preview</b> — approximates how the finished embroidery will look when stitched.</Li>
+                </ul>
+              </Section>
+
               <Section title="Resize & Crop">
-                <p><b>Chart → Resize…</b> — change the canvas dimensions. Choose <em>Resize canvas</em> to pad or crop edges (anchor top-left or center), or <em>Scale content</em> to stretch the whole pattern to the new size.</p>
-                <p><b>Edit → Crop to Selection</b> (or the Crop button) — trim the canvas to the selected region.</p>
+                <p><b>Chart → Resize…</b> — change the canvas dimensions. Choose <em>Resize canvas</em> to pad or trim the edges (anchored top-left or center), or <em>Scale content</em> to stretch the whole pattern to the new size.</p>
+                <p><b>Chart → Size to Design</b> — automatically trims empty border rows and columns to fit tightly around your stitches.</p>
+                <p><b>Edit → Crop to Selection</b> (or the Crop button) — trim the canvas to the selected area.</p>
               </Section>
 
               <Section title="Download">
-                <p>Click <b>↓ Download PDF</b> to export the current (edited) pattern as a print-ready PDF with a color key.</p>
+                <p>Click <b>↓ Download PDF</b> (top right) to export the current pattern as a print-ready PDF with a color key showing each DMC thread number and stitch count.</p>
               </Section>
             </>
           )}

@@ -17,6 +17,13 @@ type Snapshot = { grid: number[][], palette: PatternPalette[] };
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
 
+const VIEW_MODES: { id: ViewMode; label: string; title: string }[] = [
+  { id: 'color',      label: 'Color',   title: 'Color view — shows stitches as colored squares' },
+  { id: 'symbol',     label: 'Symbol',  title: 'Symbol view — shows stitches as chart symbols (same as in the printed PDF)' },
+  { id: 'both',       label: 'Both',    title: 'Color + Symbol — see both at once, useful when editing' },
+  { id: 'simulation', label: 'Preview', title: 'Preview — approximates how the finished embroidery will look when stitched' },
+];
+
 // Ensure every colored cell has at least one 8-neighbor of the same color.
 // Isolated cells are replaced with the most common adjacent color.
 // Iterates until stable (max 8 passes).
@@ -703,14 +710,21 @@ export default function ConvertPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Cross-Stitch Pattern Editor</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">Cross-Stitch Pattern Editor</h2>
+                <button type="button" onClick={() => setHelpTab('howto')}
+                  title="How to use this editor"
+                  className="w-5 h-5 rounded-full border border-gray-300 text-xs text-gray-400 hover:text-rose-500 hover:border-rose-400 transition-colors leading-none flex items-center justify-center flex-none"
+                >?</button>
+              </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                {grid[0]?.length ?? 0} × {grid.length} stitches{palette.length > 0 ? ` · ${palette.length} DMC colors` : ''}
+                {grid[0]?.length ?? 0} × {grid.length} stitches{palette.length > 0 ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}
               </p>
             </div>
             <button
               type="button" onClick={downloadPdf} disabled={downloading || palette.length === 0}
               className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
+              title={palette.length === 0 ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
             >
               {downloading ? 'Generating…' : '↓ Download PDF'}
             </button>
@@ -871,6 +885,7 @@ export default function ConvertPage() {
               </button>
 
               <div className="h-px bg-gray-200 my-1" />
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Draw</p>
 
               {/* Tools */}
               {/* Pen — draw-mode + eraser submenu */}
@@ -892,6 +907,7 @@ export default function ConvertPage() {
                     <button
                       type="button"
                       onClick={() => { if (!penActive) setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
+                      title="Draw stitches on the canvas — click ▾ to switch between point, line, rectangle, and ellipse shapes"
                       className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
                         penActive
                           ? 'bg-gray-900 text-white border-gray-900'
@@ -937,6 +953,7 @@ export default function ConvertPage() {
                 <button
                   type="button"
                   onClick={() => { setActiveTool('fill'); setShowFillMenu(s => !s); }}
+                  title="Flood fill — click a cell to fill the whole connected area with the active color — click ▾ to switch to Erase Fill"
                   className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
                     activeTool === 'fill'
                       ? 'bg-gray-900 text-white border-gray-900'
@@ -972,33 +989,35 @@ export default function ConvertPage() {
               <div className="h-px bg-gray-200 my-1" />
 
               {/* Pen size control */}
-              <div className="flex flex-col items-center gap-1 px-1 py-1">
+              <div className="flex flex-col items-center gap-1 px-1 py-1" title={`Pen size: paints a ${penWidth}×${penWidth} block of stitches at once`}>
                 <span className="text-xs text-gray-500">Pen size</span>
                 <span className="text-sm font-mono font-bold text-gray-800">{penWidth}</span>
                 <input
                   type="range" min={1} max={9} value={penWidth}
                   onChange={e => setPenWidth(parseInt(e.target.value))}
                   className="w-full accent-rose-500"
-                  title={`Pen size: ${penWidth}`}
+                  title={`Size ${penWidth} — paints a ${penWidth}×${penWidth} block of stitches at once`}
                 />
               </div>
 
               <div className="h-px bg-gray-200 my-1" />
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">View</p>
 
               {/* View mode */}
-              {(['color', 'symbol', 'both', 'simulation'] as ViewMode[]).map(m => (
-                <button key={m} type="button" onClick={() => setViewMode(m)}
-                  className={`px-1 py-2 rounded-lg border text-xs capitalize transition-colors ${
-                    viewMode === m
+              {VIEW_MODES.map(({ id, label, title }) => (
+                <button key={id} type="button" onClick={() => setViewMode(id)} title={title}
+                  className={`px-1 py-2 rounded-lg border text-xs transition-colors ${
+                    viewMode === id
                       ? 'bg-rose-500 text-white border-rose-500'
                       : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                   }`}
                 >
-                  {m}
+                  {label}
                 </button>
               ))}
 
               <div className="h-px bg-gray-200 my-1" />
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Select</p>
 
               {/* Select tool */}
               <button type="button" onClick={() => setActiveTool('select')}
@@ -1007,7 +1026,7 @@ export default function ConvertPage() {
                     ? 'bg-gray-900 text-white border-gray-900'
                     : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
                 }`}
-                title="Select region"
+                title="Select — drag on the canvas to select a rectangular area, then copy, cut, or crop it"
               >
                 <span className="text-base leading-none">▦</span>
                 <span>Select</span>
@@ -1016,7 +1035,7 @@ export default function ConvertPage() {
               {/* Cut selected region */}
               <button type="button" onClick={handleCut} disabled={!selection}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Cut (clear selection)"
+                title="Cut — copies the selected area and erases it (select a region first)"
               >
                 <span className="text-base leading-none">✂</span>
                 <span>Cut</span>
@@ -1025,18 +1044,19 @@ export default function ConvertPage() {
               {/* Crop to selection */}
               <button type="button" onClick={handleCrop} disabled={!selection}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Crop to selection"
+                title="Crop — trims the canvas to the selected area and discards the rest (select a region first)"
               >
                 <span className="text-base leading-none">⊡</span>
                 <span>Crop</span>
               </button>
 
               <div className="h-px bg-gray-200 my-1" />
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Transform</p>
 
               {/* Flip horizontal */}
               <button type="button" onClick={handleFlipH}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Flip horizontal (selection or whole design)"
+                title="Flip H — mirrors the design left-to-right (applies to selection if one exists, otherwise whole design)"
               >
                 <span className="text-base leading-none">↔</span>
                 <span>Flip H</span>
@@ -1045,18 +1065,16 @@ export default function ConvertPage() {
               {/* Flip vertical */}
               <button type="button" onClick={handleFlipV}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Flip vertical (selection or whole design)"
+                title="Flip V — mirrors the design top-to-bottom (applies to selection if one exists, otherwise whole design)"
               >
                 <span className="text-base leading-none">↕</span>
                 <span>Flip V</span>
               </button>
 
-              <div className="h-px bg-gray-200 my-1" />
-
               {/* Rotate 90° clockwise */}
               <button type="button" onClick={() => applyRotation(rot90CW)}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 90° clockwise"
+                title="Rotate 90° clockwise — turns the design to the right (applies to selection if one exists, otherwise whole design)"
               >
                 <span className="text-base leading-none">↻</span>
                 <span>Rot R</span>
@@ -1065,7 +1083,7 @@ export default function ConvertPage() {
               {/* Rotate 90° counter-clockwise */}
               <button type="button" onClick={() => applyRotation(rot90CCW)}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 90° counter-clockwise"
+                title="Rotate 90° counter-clockwise — turns the design to the left (applies to selection if one exists, otherwise whole design)"
               >
                 <span className="text-base leading-none">↺</span>
                 <span>Rot L</span>
@@ -1074,7 +1092,7 @@ export default function ConvertPage() {
               {/* Rotate 180° */}
               <button type="button" onClick={() => applyRotation(rot180)}
                 className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 180°"
+                title="Rotate 180° — flips the design upside down (applies to selection if one exists, otherwise whole design)"
               >
                 <span className="text-base leading-none">⟳</span>
                 <span>180°</span>
@@ -1082,7 +1100,16 @@ export default function ConvertPage() {
             </div>
 
             {/* Canvas */}
-            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0">
+            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
+              {palette.length === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-10 select-none">
+                  <span className="text-5xl mb-4">📷</span>
+                  <p className="text-sm font-semibold text-gray-500">No pattern loaded</p>
+                  <p className="text-xs text-gray-400 mt-2 max-w-[200px] leading-relaxed">
+                    Click <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above to convert a photo into a cross-stitch pattern
+                  </p>
+                </div>
+              )}
               <PatternCanvas
                 grid={grid}
                 palette={palette}

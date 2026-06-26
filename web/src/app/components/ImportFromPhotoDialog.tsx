@@ -94,10 +94,11 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold text-gray-900">Import from Photo</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
+        <p className="text-xs text-gray-500 mb-4">Upload any photo and we&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
 
         {/* Drop zone */}
         <div
@@ -133,7 +134,7 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
         )}
 
         {/* Size */}
-        <div className="flex items-end gap-2 mb-4">
+        <div className="flex items-end gap-2 mb-1">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Width (stitches)</label>
             <input type="number" min={10} max={500} value={patWidth}
@@ -162,12 +163,19 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
           </div>
         </div>
 
+        <p className="text-xs text-gray-400 mb-4">
+          A good beginner size is 50–80 stitches wide. Larger = more detail, but more stitches to complete.
+          The <span className="font-medium">🔗</span> button locks width and height together so the photo isn&apos;t stretched.
+        </p>
+
         {/* Colors */}
         <div className="mb-5">
-          <label className="block text-xs font-medium text-gray-600 mb-1">DMC colors</label>
+          <label className="block text-xs font-medium text-gray-600 mb-0.5">How many thread colors?</label>
+          <p className="text-xs text-gray-400 mb-2">Fewer colors = easier to stitch. Start with 10 or 15 if you&apos;re new to cross-stitch.</p>
           <div className="flex gap-2">
             {COLOR_OPTIONS.map(n => (
               <button key={n} type="button" onClick={() => setNumColors(n)}
+                title={n <= 10 ? 'Very simple, great for beginners' : n <= 15 ? 'Good balance of detail and simplicity' : n <= 20 ? 'More detailed, more thread colors to manage' : 'Maximum detail, most complex'}
                 className={`flex-1 py-1.5 rounded border text-sm font-medium transition-colors
                   ${numColors === n ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-300 hover:border-rose-300'}`}
               >{n}</button>
