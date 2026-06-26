@@ -10,6 +10,7 @@ import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
 import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
+import SavePatternDialog from '@/app/components/SavePatternDialog';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
@@ -120,7 +121,7 @@ function floodFill(grid: number[][], row: number, col: number, newColor: number)
 export default function ConvertPage() {
   // Palette + blank canvas
   const [palette, setPalette] = useState<PatternPalette[]>(DEFAULT_PALETTE);
-  const paletteRef = useRef<PatternPalette[]>([]);
+  const paletteRef = useRef<PatternPalette[]>(DEFAULT_PALETTE);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -179,6 +180,7 @@ export default function ConvertPage() {
       if (key === 'c') { e.preventDefault(); handleCopy(); }
       if (key === 'x') { e.preventDefault(); handleCut(); }
       if (key === 'v') { e.preventDefault(); handlePaste(); }
+      if (key === 's') { e.preventDefault(); setSaveDialogOpen(true); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
     }
@@ -196,6 +198,10 @@ export default function ConvertPage() {
   }, [showFillMenu]);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [patternName, setPatternName] = useState('');
+  const [patternLoadError, setPatternLoadError] = useState('');
+  const [patternLoading, setPatternLoading] = useState(false);
   const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
@@ -315,6 +321,61 @@ export default function ConvertPage() {
     setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
+  }
+
+  // Auto-load pattern from ?pattern=<id> URL param on mount
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('pattern');
+    if (!id) return;
+    setPatternLoading(true);
+    fetch(`/api/converter/patterns/${id}`)
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
+        return data;
+      })
+      .then(data => {
+        if (!Array.isArray(data.grid) || !Array.isArray(data.palette)) {
+          throw new Error('Invalid pattern data received');
+        }
+        if (data.palette.length === 0) {
+          throw new Error('Pattern link is broken: palette was not saved. Please re-save the pattern to get a new link.');
+        }
+        const nonEmpty = (data.grid as number[][]).flat().filter(v => v !== -1).length;
+        console.log('[load pattern]', {
+          name: data.name, width: data.width, height: data.height,
+          paletteColors: data.palette.length, nonEmptyCells: nonEmpty,
+          firstRow: (data.grid as number[][])[0]?.slice(0, 8),
+        });
+        updateGrid(data.grid);
+        updatePalette(data.palette);
+        setPatternName(data.name ?? '');
+      })
+      .catch(e => {
+        console.error('[load pattern]', e);
+        setPatternLoadError(e instanceof Error ? e.message : 'Failed to load pattern');
+      })
+      .finally(() => setPatternLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save current pattern, return shareable URL
+  async function handleSavePattern(name: string): Promise<string> {
+    const g = gridRef.current;
+    const pal = paletteRef.current;
+    const resp = await fetch('/api/converter/patterns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g }),
+    });
+    if (!resp.ok) {
+      const { error } = await resp.json().catch(() => ({ error: 'Save failed' }));
+      throw new Error(error);
+    }
+    const { id } = await resp.json();
+    setPatternName(name);
+    const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${id}`;
+    window.history.replaceState(null, '', `?pattern=${id}`);
+    return url;
   }
 
   // Clear selection when switching away from select tool
@@ -772,8 +833,18 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
                   { type: 'separator' },
                   { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), snap()]); setRedoStack([]); updateGrid(blankGrid()); updatePalette(DEFAULT_PALETTE); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
-                  { type: 'item', label: 'Open…', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Save', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Open from link…', onClick: () => {
+                    const raw = prompt('Paste a pattern link or ID:');
+                    if (!raw) return;
+                    const match = raw.match(/pattern=([0-9a-f-]{36})/i) ?? raw.match(/^([0-9a-f-]{36})$/i);
+                    const id = match?.[1];
+                    if (!id) { alert('Could not find a pattern ID in that link.'); return; }
+                    fetch(`/api/converter/patterns/${id}`)
+                      .then(r => r.ok ? r.json() : Promise.reject())
+                      .then(data => { updateGrid(data.grid); updatePalette(data.palette); setPatternName(data.name ?? ''); window.history.replaceState(null, '', `?pattern=${id}`); })
+                      .catch(() => alert('Pattern not found or link has expired.'));
+                  }},
+                  { type: 'item', label: 'Save & share…', shortcut: 'Ctrl+S', onClick: () => setSaveDialogOpen(true) },
                 ],
               },
               {
@@ -1145,6 +1216,18 @@ export default function ConvertPage() {
                 <span className="text-xs font-mono text-gray-600 flex-none w-8 text-right">{cellSize}px</span>
               </div>
 
+            {patternLoading && (
+              <div className="text-xs text-gray-500 px-1 flex items-center gap-2">
+                <span className="animate-spin">⏳</span> Loading pattern…
+              </div>
+            )}
+            {patternLoadError && (
+              <div className="text-xs text-red-600 px-1 flex items-center justify-between gap-2">
+                <span>⚠ {patternLoadError}</span>
+                <button type="button" onClick={() => setPatternLoadError('')} className="text-gray-400 hover:text-gray-600">×</button>
+              </div>
+            )}
+
             {/* Canvas */}
             <div ref={canvasWrapperRef} className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
               {!hasDesign && (
@@ -1254,6 +1337,13 @@ export default function ConvertPage() {
         palette={palette}
         onPick={handleMergeInto}
         onClose={() => setMergeIntoIndex(null)}
+      />
+
+      <SavePatternDialog
+        open={saveDialogOpen}
+        defaultName={patternName}
+        onSave={handleSavePattern}
+        onClose={() => setSaveDialogOpen(false)}
       />
     </div>
   );
