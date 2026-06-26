@@ -6,6 +6,7 @@ import type { DmcColor, PatternPalette } from '@/lib/pattern-converter';
 
 interface Props {
   open: boolean;
+  addMode?: boolean;
   paletteIndex: number;
   palette: PatternPalette[];
   onPick: (color: DmcColor) => void;
@@ -14,10 +15,11 @@ interface Props {
 
 const DMC: DmcColor[] = dmcColors as DmcColor[];
 
-export default function ColorPickerDialog({ open, paletteIndex, palette, onPick, onClose }: Props) {
+export default function ColorPickerDialog({ open, addMode = false, paletteIndex, palette, onPick, onClose }: Props) {
   const [search, setSearch] = useState('');
 
-  const currentNumber = palette[paletteIndex]?.number ?? '';
+  const entry = !addMode && paletteIndex >= 0 && paletteIndex < palette.length ? palette[paletteIndex] : null;
+  const currentNumber = entry?.number ?? '';
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -27,9 +29,8 @@ export default function ColorPickerDialog({ open, paletteIndex, palette, onPick,
     );
   }, [search]);
 
-  if (!open || paletteIndex < 0 || paletteIndex >= palette.length) return null;
-
-  const entry = palette[paletteIndex];
+  if (!open) return null;
+  if (!addMode && !entry) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -38,14 +39,18 @@ export default function ColorPickerDialog({ open, paletteIndex, palette, onPick,
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3 flex-none">
-          <h3 className="text-base font-semibold text-gray-900">Change Color</h3>
+          <h3 className="text-base font-semibold text-gray-900">{addMode ? 'Add Color' : 'Change Color'}</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
 
-        <p className="text-sm text-gray-500 mb-3 flex-none">
-          Editing entry {paletteIndex + 1}: <span className="font-mono font-bold text-gray-800">{entry.symbol}</span>{' '}
-          — currently DMC {entry.number} ({entry.name}).
-        </p>
+        {addMode ? (
+          <p className="text-sm text-gray-500 mb-3 flex-none">Pick a DMC color to add to the palette.</p>
+        ) : entry && (
+          <p className="text-sm text-gray-500 mb-3 flex-none">
+            Editing entry {paletteIndex + 1}: <span className="font-mono font-bold text-gray-800">{entry.symbol}</span>{' '}
+            — currently DMC {entry.number} ({entry.name}).
+          </p>
+        )}
 
         <input
           autoFocus
@@ -68,8 +73,8 @@ export default function ColorPickerDialog({ open, paletteIndex, palette, onPick,
                   title={`DMC ${c.number} — ${c.name}`}
                   onClick={() => onPick(c)}
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 48,
+                    height: 48,
                     backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
                     border: isCurrent ? '3px solid #e11d48' : '1px solid rgba(0,0,0,0.2)',
                     borderRadius: 4,
@@ -77,8 +82,9 @@ export default function ColorPickerDialog({ open, paletteIndex, palette, onPick,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 7,
+                    fontSize: 10,
                     fontFamily: 'monospace',
+                    fontWeight: 600,
                     color: lum > 140 ? '#000' : '#fff',
                     flexShrink: 0,
                     outline: isCurrent ? '2px solid #e11d48' : 'none',

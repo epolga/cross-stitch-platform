@@ -11,6 +11,7 @@ import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
+import { SYMBOLS } from '@/lib/symbols';
 type Tool = 'pencil' | 'eraser' | 'fill' | 'select';
 type Snapshot = { grid: number[][], palette: PatternPalette[] };
 type FillMode = 'flood' | 'erase';
@@ -162,6 +163,7 @@ export default function ConvertPage() {
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
   const [symbolPickerIndex, setSymbolPickerIndex] = useState<number | null>(null);
   const [colorPickerIndex, setColorPickerIndex] = useState<number | null>(null);
+  const [addColorPickerOpen, setAddColorPickerOpen] = useState(false);
   const [moveToIndex, setMoveToIndex] = useState<number | null>(null);
   const [mergeIntoIndex, setMergeIntoIndex] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -530,6 +532,18 @@ export default function ConvertPage() {
     setColorPickerIndex(null);
   }
 
+  function handleAddColor(dmcColor: DmcColor) {
+    const pal = paletteRef.current;
+    const usedSymbols = new Set(pal.map(p => p.symbol));
+    const symbol = SYMBOLS.find(s => !usedSymbols.has(s)) ?? '?';
+    const newEntry: PatternPalette = { ...dmcColor, symbol, stitchCount: 0 };
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette([...pal, newEntry]);
+    setSelectedColor(pal.length);
+    setAddColorPickerOpen(false);
+  }
+
   function handleMoveTo(targetOriginalIdx: number) {
     const sourceIdx = moveToIndex;
     if (sourceIdx === null) return;
@@ -780,7 +794,7 @@ export default function ConvertPage() {
               {
                 label: 'Palette',
                 items: [
-                  { type: 'item', label: 'Add Color…', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Add Color…', onClick: () => setAddColorPickerOpen(true) },
                   { type: 'item', label: 'Remove Unused', disabled: palette.length === 0, onClick: () => {
                     const g = gridRef.current;
                     const used = new Set<number>();
@@ -1109,6 +1123,7 @@ export default function ConvertPage() {
               onChangeSymbol={setSymbolPickerIndex}
               onMoveTo={setMoveToIndex}
               onMergeInto={setMergeIntoIndex}
+              onAddColor={() => setAddColorPickerOpen(true)}
             />
           </div>
 
@@ -1141,11 +1156,12 @@ export default function ConvertPage() {
         onClose={() => setSymbolPickerIndex(null)}
       />
       <ColorPickerDialog
-        open={colorPickerIndex !== null}
+        open={colorPickerIndex !== null || addColorPickerOpen}
+        addMode={addColorPickerOpen}
         paletteIndex={colorPickerIndex ?? -1}
         palette={palette}
-        onPick={handleChangeColor}
-        onClose={() => setColorPickerIndex(null)}
+        onPick={addColorPickerOpen ? handleAddColor : handleChangeColor}
+        onClose={() => { setColorPickerIndex(null); setAddColorPickerOpen(false); }}
       />
       <PickPaletteEntryDialog
         open={moveToIndex !== null}

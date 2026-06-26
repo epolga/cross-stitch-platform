@@ -16,6 +16,7 @@ interface Props {
   onChangeSymbol: (index: number) => void;
   onMoveTo: (index: number) => void;
   onMergeInto: (index: number) => void;
+  onAddColor?: () => void;
 }
 
 type EditMenu = { index: number; top: number; right: number };
@@ -23,7 +24,7 @@ type EditMenu = { index: number; top: number; right: number };
 export default function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
   hiddenColors, onSelect, onBlink, onToggleColor, onToggleAll,
-  onChangeColor, onChangeSymbol, onMoveTo, onMergeInto,
+  onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onAddColor,
 }: Props) {
   const sel = palette[selectedIndex];
   const [blinkOn, setBlinkOn] = useState(true);
@@ -85,6 +86,18 @@ export default function PaletteBar({
             style={{ width: 13, height: 13, cursor: 'pointer' }}
           />
         </label>
+      )}
+
+      {/* Add color button */}
+      {onAddColor && (
+        <button
+          type="button"
+          title="Add a new DMC color to the palette"
+          onClick={onAddColor}
+          className="flex-none w-full py-1 text-[10px] text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded border border-dashed border-gray-300 hover:border-gray-400 transition-colors"
+        >
+          + Add color
+        </button>
       )}
 
       {/* Swatches */}
