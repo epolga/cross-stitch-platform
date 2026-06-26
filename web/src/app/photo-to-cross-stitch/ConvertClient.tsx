@@ -810,6 +810,7 @@ export default function ConvertPage() {
                 >?</button>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
+                {patternName && <span className="font-medium text-gray-600">{patternName} · </span>}
                 {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}
               </p>
             </div>
