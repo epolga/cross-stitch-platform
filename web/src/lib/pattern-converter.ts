@@ -23,12 +23,30 @@ export interface ConvertedPattern {
 
 const DMC: DmcColor[] = dmcColors;
 
-// Pre-assign symbols: A-Z then circled digits ①-⑳ then other printable chars
+// Cross-stitch symbols ordered by visual distinctiveness at small cell sizes.
+// Geometric shapes first — assigned to the most-used colors.
 const SYMBOLS = [
+  // Solid shapes (most visually heavy — best at small sizes)
+  '■', '▲', '▼', '◆', '●', '★', '▪', '▶', '◀',
+  // Outline shapes
+  '□', '△', '▽', '◇', '○', '☆', '▫',
+  // Circled / boxed
+  '⊕', '⊗', '⊙', '⊞', '⊠', '⊡',
+  // Plus / cross family
+  '+', '×', '✚', '✛',
+  // Arrows
+  '↑', '↓', '←', '→', '↔', '↕', '↗', '↘', '↙', '↖',
+  // Math / set operators
+  '÷', '=', '≠', '≡', '∅', '∞', '∧', '∨', '∩', '∪', '∇', '∗', '≈', '±',
+  // Lines / slashes
+  '|', '‖', '/', '\\', '¬',
+  // Greek letters (distinct from Latin)
+  'Σ', 'Δ', 'Λ', 'Φ', 'Ψ', 'Ω', 'λ', 'μ',
+  // Latin uppercase / lowercase (fallback for large palettes)
   ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-  ...'①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳',
   ...'abcdefghijklmnopqrstuvwxyz',
-  ...'!#$%&*+/<=>?@^~',
+  // ASCII misc
+  '!', '#', '$', '%', '&', '<', '>', '?', '@', '^', '~', ':', ';', '*', '-', '·',
 ];
 
 function colorDist(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {

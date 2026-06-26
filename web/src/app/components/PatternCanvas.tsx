@@ -204,7 +204,7 @@ export default function PatternCanvas({
   // Simulation mode assets
   const crossMaskRef    = useRef<HTMLCanvasElement | null>(null);
   const simReadyRef     = useRef(false);
-  const aidaCellCache   = useRef<{ cs: number; canvas: HTMLCanvasElement } | null>(null);
+  const aidaCellCache   = useRef<{ cs: number; dpr: number; canvas: HTMLCanvasElement } | null>(null);
   const aidaLayerRef    = useRef<HTMLCanvasElement | null>(null); // persistent Aida background
   const crossLayerRef   = useRef<HTMLCanvasElement | null>(null); // persistent cross layer (incremental)
   const prevGridRef     = useRef<number[][] | null>(null);        // last rendered grid for diff
@@ -249,13 +249,19 @@ export default function PatternCanvas({
     if (!ctx) return;
 
     const rows = g.length, cols = g[0].length;
-    canvas.width  = cols * cs + ML;
-    canvas.height = rows * cs + MT;
+    const dpr = window.devicePixelRatio || 1;
+    const totalW = cols * cs + ML;
+    const totalH = rows * cs + MT;
+    canvas.width  = totalW * dpr;
+    canvas.height = totalH * dpr;
+    canvas.style.width  = `${totalW}px`;
+    canvas.style.height = `${totalH}px`;
+    ctx.scale(dpr, dpr);
 
-    // Margin backgrounds
+    // Margin backgrounds (CSS pixel coordinates — ctx is DPR-scaled)
     ctx.fillStyle = '#ddd';
-    ctx.fillRect(0, 0, ML, canvas.height);
-    ctx.fillRect(0, 0, canvas.width, MT);
+    ctx.fillRect(0, 0, ML, totalH);
+    ctx.fillRect(0, 0, totalW, MT);
 
     if (vm === 'simulation') {
       // ── Simulation mode ────────────────────────────────────────
@@ -266,22 +272,22 @@ export default function PatternCanvas({
         const w = cols * cs, h = rows * cs;
 
         // ── Aida layer: rebuild only when dimensions or cs change ──
-        if (!aidaLayerRef.current || aidaLayerRef.current.width !== w || aidaLayerRef.current.height !== h) {
-          if (!aidaCellCache.current || aidaCellCache.current.cs !== cs)
-            aidaCellCache.current = { cs, canvas: buildAidaCell(cs) };
+        if (!aidaLayerRef.current || aidaLayerRef.current.width !== w * dpr || aidaLayerRef.current.height !== h * dpr) {
+          if (!aidaCellCache.current || aidaCellCache.current.cs !== cs || aidaCellCache.current.dpr !== dpr)
+            aidaCellCache.current = { cs, dpr, canvas: buildAidaCell(cs * dpr) };
           const al = document.createElement('canvas');
-          al.width = w; al.height = h;
+          al.width = w * dpr; al.height = h * dpr;
           const alCtx = al.getContext('2d')!;
           const pat = alCtx.createPattern(aidaCellCache.current.canvas, 'repeat');
-          if (pat) { alCtx.fillStyle = pat; alCtx.fillRect(0, 0, w, h); }
+          if (pat) { alCtx.fillStyle = pat; alCtx.fillRect(0, 0, w * dpr, h * dpr); }
           aidaLayerRef.current = al;
           prevGridRef.current = null; // force full cross-layer rebuild
         }
 
         // ── Cross layer: persistent canvas, updated incrementally ──
-        if (!crossLayerRef.current || crossLayerRef.current.width !== w || crossLayerRef.current.height !== h) {
+        if (!crossLayerRef.current || crossLayerRef.current.width !== w * dpr || crossLayerRef.current.height !== h * dpr) {
           const cl = document.createElement('canvas');
-          cl.width = w; cl.height = h;
+          cl.width = w * dpr; cl.height = h * dpr;
           crossLayerRef.current = cl;
           prevGridRef.current = null;
         }
@@ -295,12 +301,13 @@ export default function PatternCanvas({
         prevHiddenRef.current  = hiddenColors;
         if (hiddenChanged) prevGridRef.current = null; // force full repaint when visibility changes
 
-        // Reusable cell canvas for cross shape (colored, masked)
+        // Reusable cell canvas for cross shape — physical pixels (cs * dpr)
+        const ecs = cs * dpr;
         const cell = document.createElement('canvas');
-        cell.width = cs; cell.height = cs;
+        cell.width = ecs; cell.height = ecs;
         const cellCtx = cell.getContext('2d')!;
-        const shadowBlur = Math.max(1, cs * 0.15);
-        const shadowOff  = Math.max(0.5, cs * 0.08);
+        const shadowBlur = Math.max(1, ecs * 0.15);
+        const shadowOff  = Math.max(0.5, ecs * 0.08);
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -312,27 +319,27 @@ export default function PatternCanvas({
               : (prevRawCi >= 0 && (hiddenColors?.has(prevRawCi) ?? false) ? -1 : prevRawCi);
             if (!paletteChanged && !hiddenChanged && prevEffective === effectiveCi) continue;
 
-            clCtx.clearRect(c * cs, r * cs, cs, cs);
+            clCtx.clearRect(c * ecs, r * ecs, ecs, ecs);
 
             if (effectiveCi >= 0 && pal[effectiveCi]) {
               const col = pal[effectiveCi];
-              cellCtx.clearRect(0, 0, cs, cs);
+              cellCtx.clearRect(0, 0, ecs, ecs);
               cellCtx.globalCompositeOperation = 'source-over';
               cellCtx.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
-              cellCtx.fillRect(0, 0, cs, cs);
+              cellCtx.fillRect(0, 0, ecs, ecs);
               cellCtx.globalCompositeOperation = 'destination-in';
-              cellCtx.drawImage(mask, 0, 0, cs, cs);
+              cellCtx.drawImage(mask, 0, 0, ecs, ecs);
 
               // Shadow clipped to cell bounds — no bleed into neighbours
               clCtx.save();
               clCtx.beginPath();
-              clCtx.rect(c * cs, r * cs, cs, cs);
+              clCtx.rect(c * ecs, r * ecs, ecs, ecs);
               clCtx.clip();
               clCtx.shadowColor = 'rgba(0,0,0,0.45)';
               clCtx.shadowBlur = shadowBlur;
               clCtx.shadowOffsetX = shadowOff;
               clCtx.shadowOffsetY = shadowOff;
-              clCtx.drawImage(cell, c * cs, r * cs);
+              clCtx.drawImage(cell, c * ecs, r * ecs);
               clCtx.restore();
             }
           }
@@ -341,8 +348,8 @@ export default function PatternCanvas({
         prevGridRef.current = g;
 
         // Composite Aida + crosses onto main canvas
-        ctx.drawImage(aidaLayerRef.current, ML, MT);
-        ctx.drawImage(crossLayerRef.current, ML, MT);
+        ctx.drawImage(aidaLayerRef.current!, ML, MT, w, h);
+        ctx.drawImage(crossLayerRef.current!, ML, MT, w, h);
       }
     } else {
       // ── Color / Symbol / Both modes ─────────────────────────────
@@ -563,10 +570,10 @@ export default function PatternCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
     const cs = cellSizeRef.current;
-    const col = Math.floor(((e.clientX - rect.left) * sx - ML) / cs);
-    const row = Math.floor(((e.clientY - rect.top)  * sy - MT) / cs);
+    // Use CSS pixel coordinates — ML/MT/cs are all in CSS pixels
+    const col = Math.floor(((e.clientX - rect.left) - ML) / cs);
+    const row = Math.floor(((e.clientY - rect.top)  - MT) / cs);
     const g = gridRef.current;
     const rows = g.length, cols = g[0]?.length ?? 0;
     if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
