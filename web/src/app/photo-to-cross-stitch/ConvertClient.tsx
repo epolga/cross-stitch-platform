@@ -9,6 +9,7 @@ import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
 import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
 import type { ConvertedPattern, PatternPalette } from '@/lib/pattern-converter';
 type Tool = 'pencil' | 'eraser' | 'fill' | 'select';
+type Snapshot = { grid: number[][], palette: PatternPalette[] };
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
 
@@ -94,6 +95,7 @@ function floodFill(grid: number[][], row: number, col: number, newColor: number)
 export default function ConvertPage() {
   // Palette + blank canvas
   const [palette, setPalette] = useState<PatternPalette[]>([]);
+  const paletteRef = useRef<PatternPalette[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -102,8 +104,8 @@ export default function ConvertPage() {
   const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
   const [grid, setGrid] = useState<number[][]>(blankGrid);
   const gridRef = useRef<number[][]>(grid);
-  const [undoStack, setUndoStack] = useState<number[][][]>([]);
-  const [redoStack, setRedoStack] = useState<number[][][]>([]);
+  const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('color');
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
   const [drawMode, setDrawMode] = useState<DrawMode>('point');
@@ -163,9 +165,16 @@ export default function ConvertPage() {
     setGrid(g);
   }
 
+  function updatePalette(p: PatternPalette[]) {
+    paletteRef.current = p;
+    setPalette(p);
+  }
+
+  function snap(): Snapshot { return { grid: gridRef.current, palette: paletteRef.current }; }
+
   // Import from photo (called by ImportFromPhotoDialog on success)
   function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
-    setPalette(data.palette);
+    updatePalette(data.palette);
     updateGrid(enforceNeighborConnectivity(paddedGrid));
     setUndoStack([]);
     setRedoStack([]);
@@ -219,7 +228,7 @@ export default function ConvertPage() {
     const before = strokeSnapshot.current;
     strokeSnapshot.current = null;
     if (!before || before === gridRef.current) return; // nothing changed
-    setUndoStack(s => [...s.slice(-49), before]);
+    setUndoStack(s => [...s.slice(-49), { grid: before, palette: paletteRef.current }]);
     setRedoStack([]);
   }
 
@@ -234,7 +243,7 @@ export default function ConvertPage() {
       if (r >= 0 && r < newGrid.length && c >= 0 && c < newGrid[0].length)
         newGrid[r][c] = paintColor;
     }
-    setUndoStack(s => [...s.slice(-49), snapshot]);
+    setUndoStack(s => [...s.slice(-49), { grid: snapshot, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
   }
@@ -245,7 +254,7 @@ export default function ConvertPage() {
     if (!g.length) return;
     const next = floodFill(g, row, col, selectedColor);
     if (next === g) return;
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
   }
@@ -256,7 +265,7 @@ export default function ConvertPage() {
     if (!g.length || g[row][col] === -1) return;
     const next = floodFill(g, row, col, -1);
     if (next === g) return;
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
   }
@@ -305,7 +314,7 @@ export default function ConvertPage() {
     for (let r = b.rMin; r <= b.rMax; r++)
       for (let c = b.cMin; c <= b.cMax; c++)
         newGrid[r][c] = -1;
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -326,7 +335,7 @@ export default function ConvertPage() {
         const r = rStart + dr, c = cStart + dc;
         if (r < rows && c < cols) newGrid[r][c] = clipboard[dr][dc];
       }
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     // Move selection to cover the pasted area
@@ -348,7 +357,7 @@ export default function ConvertPage() {
       for (let c = b.cMin; c <= b.cMax; c++) row.push(g[r]?.[c] ?? -1);
       newGrid.push(row);
     }
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -367,7 +376,7 @@ export default function ConvertPage() {
     } else {
       for (const row of newGrid) row.reverse();
     }
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
   }
@@ -387,7 +396,7 @@ export default function ConvertPage() {
     } else {
       newGrid.reverse();
     }
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
   }
@@ -397,28 +406,28 @@ export default function ConvertPage() {
     const g = gridRef.current;
     if (!g.length) return;
     const newGrid = g.map(r => [...r, ...[...r].reverse()]);
-    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid(newGrid);
   }
   function handleMirrorLeft() {
     const g = gridRef.current;
     if (!g.length) return;
     const newGrid = g.map(r => [[...r].reverse(), ...r].flat() as number[]);
-    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid(newGrid);
   }
   function handleMirrorBottom() {
     const g = gridRef.current;
     if (!g.length) return;
     const flipped = [...g].reverse().map(r => [...r]);
-    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid([...g.map(r => [...r]), ...flipped]);
   }
   function handleMirrorTop() {
     const g = gridRef.current;
     if (!g.length) return;
     const flipped = [...g].reverse().map(r => [...r]);
-    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid([...flipped, ...g.map(r => [...r])]);
   }
 
@@ -448,7 +457,7 @@ export default function ConvertPage() {
     if (!g.length) return;
     const b = selectionBounds();
     if (!b) {
-      setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+      setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
       updateGrid(fn(g));
       return;
     }
@@ -469,7 +478,7 @@ export default function ConvertPage() {
         const r = b.rMin + dr, c = b.cMin + dc;
         if (r < rows && c < cols) newGrid[r][c] = rotated[dr][dc];
       }
-    setUndoStack(s => [...s.slice(-49), g]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid(newGrid);
     setSelection({ r0: b.rMin, c0: b.cMin,
       r1: Math.min(b.rMin + rotated.length - 1, rows - 1),
@@ -496,7 +505,7 @@ export default function ConvertPage() {
     const g = gridRef.current;
     if (!g.length) return;
     const blank = g.map(r => r.map(() => -1));
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(blank);
   }
@@ -522,7 +531,7 @@ export default function ConvertPage() {
         })
       );
     }
-    setUndoStack(s => [...s.slice(-49), g]);
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -533,18 +542,18 @@ export default function ConvertPage() {
   function undo() {
     if (!undoStack.length) return;
     const prev = undoStack[undoStack.length - 1];
-    const current = gridRef.current; // capture before updateGrid changes it
-    setRedoStack(s => [...s, current]);
-    updateGrid(prev);
+    setRedoStack(s => [...s, snap()]);
+    updateGrid(prev.grid);
+    updatePalette(prev.palette);
     setUndoStack(s => s.slice(0, -1));
   }
 
   function redo() {
     if (!redoStack.length) return;
     const next = redoStack[redoStack.length - 1];
-    const current = gridRef.current; // capture before updateGrid changes it
-    setUndoStack(s => [...s, current]);
-    updateGrid(next);
+    setUndoStack(s => [...s, snap()]);
+    updateGrid(next.grid);
+    updatePalette(next.palette);
     setRedoStack(s => s.slice(0, -1));
   }
 
@@ -580,7 +589,7 @@ export default function ConvertPage() {
                 items: [
                   { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || palette.length === 0 },
                   { type: 'separator' },
-                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), gridRef.current]); setRedoStack([]); updateGrid(blankGrid()); setPalette([]); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
+                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), snap()]); setRedoStack([]); updateGrid(blankGrid()); updatePalette([]); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
                   { type: 'item', label: 'Open…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Save', disabled: true, onClick: noop },
                 ],
@@ -637,7 +646,7 @@ export default function ConvertPage() {
                     const g = gridRef.current;
                     const next = sizeToDesign(g);
                     if (!next) return;
-                    setUndoStack(s => [...s.slice(-49), g]);
+                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
                     setRedoStack([]);
                     updateGrid(next);
                     setSelection(null);
@@ -649,7 +658,27 @@ export default function ConvertPage() {
                 label: 'Palette',
                 items: [
                   { type: 'item', label: 'Add Color…', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Remove Unused', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Remove Unused', disabled: palette.length === 0, onClick: () => {
+                    const g = gridRef.current;
+                    const used = new Set<number>();
+                    for (const row of g) for (const ci of row) if (ci >= 0) used.add(ci);
+                    if (used.size === palette.length) return; // nothing to remove
+                    const newPalette = palette.filter((_, i) => used.has(i));
+                    const remap: Record<number, number> = {};
+                    let ni = 0;
+                    for (let i = 0; i < palette.length; i++) if (used.has(i)) remap[i] = ni++;
+                    const newGrid = g.map(row => row.map(ci => (ci >= 0 ? remap[ci] ?? -1 : -1)));
+                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+                    setRedoStack([]);
+                    updatePalette(newPalette);
+                    updateGrid(newGrid);
+                    setSelectedColor(c => remap[c] ?? 0);
+                    setHiddenColors(prev => {
+                      const next = new Set<number>();
+                      prev.forEach(i => { if (remap[i] != null) next.add(remap[i]); });
+                      return next;
+                    });
+                  }},
                   { type: 'item', label: 'Sort by Count', disabled: true, onClick: noop },
                 ],
               },
