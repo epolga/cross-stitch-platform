@@ -411,10 +411,11 @@ export default function PatternCanvas({
     for (let c = 4; c < cols; c += 5)
       ctx.fillText(String(c + 1), c * cs + ML + cs / 2, MT - 2);
 
-    // Blink overlay for right-click highlight
+    // Blink overlay — flash selected color's cells
     const bci = blinkColorRef.current;
     if (bci !== null && blinkOnRef.current) {
-      ctx.globalAlpha = 0.6;
+      // In simulation use lower alpha so threads stay partially visible through the flash
+      ctx.globalAlpha = vm === 'simulation' ? 0.4 : 0.6;
       ctx.fillStyle = '#fff';
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {

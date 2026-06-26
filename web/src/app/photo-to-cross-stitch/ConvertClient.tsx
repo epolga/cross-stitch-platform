@@ -7,7 +7,10 @@ import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
 import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
 import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
-import type { ConvertedPattern, PatternPalette } from '@/lib/pattern-converter';
+import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
+import ColorPickerDialog from '@/app/components/ColorPickerDialog';
+import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
+import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 type Tool = 'pencil' | 'eraser' | 'fill' | 'select';
 type Snapshot = { grid: number[][], palette: PatternPalette[] };
 type FillMode = 'flood' | 'erase';
@@ -157,6 +160,10 @@ export default function ConvertPage() {
   const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
+  const [symbolPickerIndex, setSymbolPickerIndex] = useState<number | null>(null);
+  const [colorPickerIndex, setColorPickerIndex] = useState<number | null>(null);
+  const [moveToIndex, setMoveToIndex] = useState<number | null>(null);
+  const [mergeIntoIndex, setMergeIntoIndex] = useState<number | null>(null);
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blinkCellsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -499,6 +506,122 @@ export default function ConvertPage() {
     if (blinkCellsTimer.current) clearTimeout(blinkCellsTimer.current);
     setBlinkCells(index);
     blinkCellsTimer.current = setTimeout(() => setBlinkCells(null), 1680);
+  }
+
+  function handleSymbolPick(symbol: string) {
+    const idx = symbolPickerIndex;
+    if (idx === null) return;
+    const alreadyUsed = paletteRef.current.some((p, i) => i !== idx && p.symbol === symbol);
+    if (alreadyUsed) return;
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette(paletteRef.current.map((p, i) => i === idx ? { ...p, symbol } : p));
+    setSymbolPickerIndex(null);
+  }
+
+  function handleChangeColor(dmcColor: DmcColor) {
+    const idx = colorPickerIndex;
+    if (idx === null) return;
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette(paletteRef.current.map((p, i) =>
+      i === idx ? { ...p, ...dmcColor } : p
+    ));
+    setColorPickerIndex(null);
+  }
+
+  function handleMoveTo(targetOriginalIdx: number) {
+    const sourceIdx = moveToIndex;
+    if (sourceIdx === null) return;
+    const pal = paletteRef.current;
+    const reduced = pal.map((_, i) => i).filter(i => i !== sourceIdx);
+    // Find insertion position in reduced array: insert BEFORE targetOriginalIdx
+    const insertionPos = reduced.indexOf(targetOriginalIdx);
+    if (insertionPos === -1) return;
+    applyMove(sourceIdx, insertionPos, pal);
+    setMoveToIndex(null);
+  }
+
+  function handleMoveToEnd() {
+    const sourceIdx = moveToIndex;
+    if (sourceIdx === null) return;
+    const pal = paletteRef.current;
+    applyMove(sourceIdx, pal.length - 1, pal);
+    setMoveToIndex(null);
+  }
+
+  function applyMove(sourceIdx: number, insertionPos: number, pal: PatternPalette[]) {
+    // Build permutation: reduce array (remove source), then insert source at insertionPos
+    const reduced = pal.map((_, i) => i).filter(i => i !== sourceIdx);
+    const perm = [
+      ...reduced.slice(0, insertionPos),
+      sourceIdx,
+      ...reduced.slice(insertionPos),
+    ];
+    // perm[newIdx] = oldIdx → build oldIdx → newIdx map
+    const oldToNew = new Array(pal.length);
+    perm.forEach((oldIdx, newIdx) => { oldToNew[oldIdx] = newIdx; });
+
+    const newPal = perm.map(oldIdx => pal[oldIdx]);
+    const newGrid = gridRef.current.map(row =>
+      row.map(ci => (ci < 0 ? ci : oldToNew[ci]))
+    );
+
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette(newPal);
+    updateGrid(newGrid);
+    setSelectedColor(c => oldToNew[c] ?? 0);
+    setHiddenColors(prev => {
+      const next = new Set<number>();
+      prev.forEach(ci => { if (oldToNew[ci] != null) next.add(oldToNew[ci]); });
+      return next;
+    });
+  }
+
+  function handleMergeInto(targetIdx: number) {
+    const sourceIdx = mergeIntoIndex;
+    if (sourceIdx === null || targetIdx === sourceIdx) return;
+    const pal = paletteRef.current;
+    const g = gridRef.current;
+
+    // Step 1: remap source cells to target
+    const step1 = g.map(row => row.map(ci => (ci === sourceIdx ? targetIdx : ci)));
+
+    // Step 2: remove source from palette; compact grid indices
+    const newPal = pal.filter((_, i) => i !== sourceIdx);
+    const finalGrid = step1.map(row =>
+      row.map(ci => {
+        if (ci < 0) return ci;
+        if (ci > sourceIdx) return ci - 1;
+        return ci;
+      })
+    );
+
+    // Recount stitches
+    const counts = new Array(newPal.length).fill(0);
+    for (const row of finalGrid) for (const ci of row) if (ci >= 0) counts[ci]++;
+    const finalPal = newPal.map((p, i) => ({ ...p, stitchCount: counts[i] }));
+
+    // Update selectedColor
+    let newSel = selectedColor;
+    if (newSel === sourceIdx) newSel = targetIdx > sourceIdx ? targetIdx - 1 : targetIdx;
+    else if (newSel > sourceIdx) newSel--;
+
+    // Update hiddenColors
+    const newHidden = new Set<number>();
+    for (const ci of hiddenColors) {
+      if (ci === sourceIdx) continue;
+      newHidden.add(ci > sourceIdx ? ci - 1 : ci);
+    }
+
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette(finalPal);
+    updateGrid(finalGrid);
+    setSelectedColor(newSel);
+    setHiddenColors(newHidden);
+    setMergeIntoIndex(null);
   }
 
   function clearAll() {
@@ -975,13 +1098,17 @@ export default function ConvertPage() {
               blinkIndex={blinkSwatch}
               hiddenColors={hiddenColors}
               onSelect={setSelectedColor}
-              onRightClickSwatch={handleRightClickSwatch}
+              onBlink={handleRightClickSwatch}
               onToggleColor={i => setHiddenColors(prev => {
                 const next = new Set(prev);
                 if (next.has(i)) next.delete(i); else next.add(i);
                 return next;
               })}
               onToggleAll={showAll => setHiddenColors(showAll ? new Set() : new Set(palette.map((_, i) => i)))}
+              onChangeColor={setColorPickerIndex}
+              onChangeSymbol={setSymbolPickerIndex}
+              onMoveTo={setMoveToIndex}
+              onMergeInto={setMergeIntoIndex}
             />
           </div>
 
@@ -1005,6 +1132,37 @@ export default function ConvertPage() {
         open={helpTab !== null}
         initialTab={helpTab ?? 'howto'}
         onClose={() => setHelpTab(null)}
+      />
+      <SymbolPickerDialog
+        open={symbolPickerIndex !== null}
+        paletteIndex={symbolPickerIndex ?? -1}
+        palette={palette}
+        onPick={handleSymbolPick}
+        onClose={() => setSymbolPickerIndex(null)}
+      />
+      <ColorPickerDialog
+        open={colorPickerIndex !== null}
+        paletteIndex={colorPickerIndex ?? -1}
+        palette={palette}
+        onPick={handleChangeColor}
+        onClose={() => setColorPickerIndex(null)}
+      />
+      <PickPaletteEntryDialog
+        open={moveToIndex !== null}
+        mode="moveTo"
+        sourceIndex={moveToIndex ?? -1}
+        palette={palette}
+        onPick={handleMoveTo}
+        onPickEnd={handleMoveToEnd}
+        onClose={() => setMoveToIndex(null)}
+      />
+      <PickPaletteEntryDialog
+        open={mergeIntoIndex !== null}
+        mode="mergeInto"
+        sourceIndex={mergeIntoIndex ?? -1}
+        palette={palette}
+        onPick={handleMergeInto}
+        onClose={() => setMergeIntoIndex(null)}
       />
     </div>
   );

@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import dmcColors from '@/data/dmc-colors.json';
+import { SYMBOLS } from '@/lib/symbols';
 
 export interface DmcColor {
   number: string;
@@ -23,31 +24,6 @@ export interface ConvertedPattern {
 
 const DMC: DmcColor[] = dmcColors;
 
-// Cross-stitch symbols ordered by visual distinctiveness at small cell sizes.
-// Geometric shapes first — assigned to the most-used colors.
-const SYMBOLS = [
-  // Solid shapes (most visually heavy — best at small sizes)
-  '■', '▲', '▼', '◆', '●', '★', '▪', '▶', '◀',
-  // Outline shapes
-  '□', '△', '▽', '◇', '○', '☆', '▫',
-  // Circled / boxed
-  '⊕', '⊗', '⊙', '⊞', '⊠', '⊡',
-  // Plus / cross family
-  '+', '×', '✚', '✛',
-  // Arrows
-  '↑', '↓', '←', '→', '↔', '↕', '↗', '↘', '↙', '↖',
-  // Math / set operators
-  '÷', '=', '≠', '≡', '∅', '∞', '∧', '∨', '∩', '∪', '∇', '∗', '≈', '±',
-  // Lines / slashes
-  '|', '‖', '/', '\\', '¬',
-  // Greek letters (distinct from Latin)
-  'Σ', 'Δ', 'Λ', 'Φ', 'Ψ', 'Ω', 'λ', 'μ',
-  // Latin uppercase / lowercase (fallback for large palettes)
-  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-  ...'abcdefghijklmnopqrstuvwxyz',
-  // ASCII misc
-  '!', '#', '$', '%', '&', '<', '>', '?', '@', '^', '~', ':', ';', '*', '-', '·',
-];
 
 function colorDist(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
   return (r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2;

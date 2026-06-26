@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 
 interface Props {
@@ -9,17 +9,26 @@ interface Props {
   blinkIndex?: number | null;
   hiddenColors: Set<number>;
   onSelect: (index: number) => void;
-  onRightClickSwatch?: (index: number) => void;
+  onBlink: (index: number) => void;
   onToggleColor: (index: number) => void;
   onToggleAll: (showAll: boolean) => void;
+  onChangeColor: (index: number) => void;
+  onChangeSymbol: (index: number) => void;
+  onMoveTo: (index: number) => void;
+  onMergeInto: (index: number) => void;
 }
+
+type EditMenu = { index: number; top: number; right: number };
 
 export default function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
-  hiddenColors, onSelect, onRightClickSwatch, onToggleColor, onToggleAll,
+  hiddenColors, onSelect, onBlink, onToggleColor, onToggleAll,
+  onChangeColor, onChangeSymbol, onMoveTo, onMergeInto,
 }: Props) {
   const sel = palette[selectedIndex];
   const [blinkOn, setBlinkOn] = useState(true);
+  const [editMenu, setEditMenu] = useState<EditMenu | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (blinkIndex == null) { setBlinkOn(true); return; }
@@ -28,10 +37,25 @@ export default function PaletteBar({
     return () => clearInterval(id);
   }, [blinkIndex]);
 
+  function openEditMenu(e: React.MouseEvent, index: number) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setEditMenu({ index, top: rect.top, right: window.innerWidth - rect.left + 4 });
+  }
+
   const allVisible = hiddenColors.size === 0;
+
+  const squareBase: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 22, height: 22, flexShrink: 0,
+    border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
+    userSelect: 'none',
+  };
 
   return (
     <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch">
+
       {/* Active color preview */}
       <div className="flex flex-col items-center gap-1 flex-none">
         <div
@@ -60,63 +84,135 @@ export default function PaletteBar({
         </label>
       )}
 
-      {/* Swatches — color · symbol · visibility per row */}
+      {/* Swatches */}
       <div className="flex flex-col gap-1 overflow-y-auto flex-1">
         {palette.map((c, i) => {
           const isSelected = i === selectedIndex;
-          const isBlink = i === blinkIndex && !blinkOn;
-          const isHidden = hiddenColors.has(i);
+          const isBlink   = i === blinkIndex && !blinkOn;
+          const isHidden  = hiddenColors.has(i);
+
+          const handleClick = () => { onSelect(i); onBlink(i); };
+
           return (
-            <button
+            <div
               key={c.number}
-              type="button"
-              title={`${c.symbol}  DMC ${c.number} — ${c.name}`}
-              onClick={() => onSelect(i)}
-              onContextMenu={e => { e.preventDefault(); onRightClickSwatch?.(i); }}
-              className="flex-none flex flex-row gap-0.5 rounded transition-transform hover:scale-105"
+              className="flex-none flex flex-row items-center gap-0.5 rounded"
               style={{
                 outline: isSelected ? '2px solid #e11d48' : 'none',
                 outlineOffset: isSelected ? '2px' : '0',
                 opacity: isBlink ? 0.15 : 1,
               }}
             >
+              {/* Index number */}
+              <span
+                title={`Entry ${i + 1} — click to highlight in canvas`}
+                onClick={handleClick}
+                style={{
+                  ...squareBase,
+                  fontSize: 9, fontFamily: 'monospace', color: '#6b7280',
+                  backgroundColor: '#f3f4f6', cursor: 'pointer',
+                  width: 18,
+                }}
+              >
+                {i + 1}
+              </span>
+
               {/* Color square */}
-              <span style={{
-                display: 'block', width: 22, height: 22, flexShrink: 0,
-                backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
-                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
-                opacity: isHidden ? 0.35 : 1,
-              }} />
+              <span
+                title={`DMC ${c.number} — ${c.name}`}
+                onClick={handleClick}
+                style={{
+                  ...squareBase,
+                  backgroundColor: `rgb(${c.r},${c.g},${c.b})`,
+                  opacity: isHidden ? 0.35 : 1,
+                  cursor: 'pointer',
+                }}
+              />
+
               {/* Symbol square */}
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 22, height: 22, flexShrink: 0,
-                backgroundColor: '#fff',
-                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
-                fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000',
-                userSelect: 'none', opacity: isHidden ? 0.35 : 1,
-              }}>
+              <span
+                title={`${c.symbol}`}
+                onClick={handleClick}
+                style={{
+                  ...squareBase,
+                  backgroundColor: '#fff',
+                  fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000',
+                  opacity: isHidden ? 0.35 : 1,
+                  cursor: 'pointer',
+                }}
+              >
                 {c.symbol}
               </span>
-              {/* Visibility checkbox square */}
-              <span style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 22, height: 22, flexShrink: 0,
-                backgroundColor: isHidden ? '#f3f4f6' : '#fff',
-                border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
-              }}>
+
+              {/* Edit button */}
+              <button
+                type="button"
+                title="Edit this entry"
+                onClick={e => openEditMenu(e, i)}
+                style={{
+                  ...squareBase,
+                  backgroundColor: '#fff',
+                  fontSize: 13, color: '#6b7280',
+                  cursor: 'pointer', border: '1px solid rgba(0,0,0,0.18)',
+                }}
+                className="hover:bg-gray-50 hover:text-gray-900"
+              >
+                ⋮
+              </button>
+
+              {/* Visibility checkbox */}
+              <span style={{ ...squareBase, backgroundColor: isHidden ? '#f3f4f6' : '#fff' }}>
                 <input
                   type="checkbox"
                   checked={!isHidden}
                   onChange={() => onToggleColor(i)}
-                  onClick={e => e.stopPropagation()}
                   style={{ width: 13, height: 13, cursor: 'pointer' }}
                 />
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
+
+      {/* Edit dropdown menu */}
+      {editMenu !== null && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setEditMenu(null)} />
+          <div
+            ref={menuRef}
+            className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 w-44"
+            style={{ top: editMenu.top, right: editMenu.right }}
+          >
+            {[
+              { label: 'Change Color', action: onChangeColor },
+              { label: 'Change Symbol', action: onChangeSymbol },
+            ].map(({ label, action }) => (
+              <button
+                key={label}
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                onClick={() => { action(editMenu.index); setEditMenu(null); }}
+              >
+                {label}
+              </button>
+            ))}
+            <div className="border-t border-gray-100 my-1" />
+            {[
+              { label: 'Move to…', action: onMoveTo },
+              { label: 'Merge into…', action: onMergeInto },
+            ].map(({ label, action }) => (
+              <button
+                key={label}
+                type="button"
+                className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                onClick={() => { action(editMenu.index); setEditMenu(null); }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
