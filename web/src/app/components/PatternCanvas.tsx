@@ -202,7 +202,7 @@ function buildCrossMask(ecs: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = ecs; c.height = ecs;
   const ctx = c.getContext('2d')!;
-  const lw = Math.max(1.5, ecs * 0.13);
+  const lw = Math.max(2.5, ecs * 0.32);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = lw;
   ctx.lineCap = 'round';
@@ -234,15 +234,6 @@ function buildAidaCell(cs: number): HTMLCanvasElement {
   ctx.lineWidth = 0.5;
   ctx.beginPath(); ctx.moveTo(half, 0); ctx.lineTo(half, cs); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(0, half); ctx.lineTo(cs, half); ctx.stroke();
-
-  // Needle holes at 4 corners (shared between adjacent stitches)
-  const hr = Math.max(0.8, cs * 0.13);
-  ctx.fillStyle = 'rgba(50,30,10,0.38)';
-  for (const [hx, hy] of [[0, 0], [cs, 0], [0, cs], [cs, cs]] as [number, number][]) {
-    ctx.beginPath();
-    ctx.arc(hx, hy, hr, 0, Math.PI * 2);
-    ctx.fill();
-  }
 
   return c;
 }
@@ -416,6 +407,22 @@ export default function PatternCanvas({
         // Composite Aida + crosses onto main canvas
         ctx.drawImage(aidaLayerRef.current!, ML, MT, w, h);
         ctx.drawImage(crossLayerRef.current!, ML, MT, w, h);
+
+        // Holes overlay — always on top of stitches so thread ends visibly enter the cloth
+        {
+          const hr = Math.max(0.5, cs * 0.11);
+          ctx.fillStyle = 'rgba(40,25,8,0.70)';
+          ctx.beginPath();
+          for (let r = 0; r <= rows; r++) {
+            for (let c = 0; c <= cols; c++) {
+              const hx = c * cs + ML;
+              const hy = r * cs + MT;
+              ctx.moveTo(hx + hr, hy);
+              ctx.arc(hx, hy, hr, 0, Math.PI * 2);
+            }
+          }
+          ctx.fill();
+        }
       }
     } else {
       // ── Color / Symbol / Both modes ─────────────────────────────

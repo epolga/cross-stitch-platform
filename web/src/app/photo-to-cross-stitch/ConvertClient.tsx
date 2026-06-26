@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
 import PaletteBar from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
@@ -12,16 +12,30 @@ import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 import { SYMBOLS } from '@/lib/symbols';
+import dmcColors from '@/data/dmc-colors.json';
+
+const DEFAULT_PALETTE_NUMBERS = [
+  'blanc', '310', '3371', '321', '666', '3716', '208',
+  '701', '996', '825', '725', '743', '433', '938', '945', 'ecru',
+];
+const DEFAULT_PALETTE: PatternPalette[] = (() => {
+  const dmc = dmcColors as { number: string; name: string; r: number; g: number; b: number }[];
+  return DEFAULT_PALETTE_NUMBERS.flatMap((num, i) => {
+    const c = dmc.find(d => d.number === num);
+    return c ? [{ ...c, symbol: SYMBOLS[i] ?? SYMBOLS[0], stitchCount: 0 }] : [];
+  });
+})();
+
 type Tool = 'pencil' | 'eraser' | 'fill' | 'select';
 type Snapshot = { grid: number[][], palette: PatternPalette[] };
 type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
 
 const VIEW_MODES: { id: ViewMode; label: string; title: string }[] = [
+  { id: 'simulation', label: 'Preview', title: 'Preview — approximates how the finished embroidery will look when stitched' },
   { id: 'color',      label: 'Color',   title: 'Color view — shows stitches as colored squares' },
   { id: 'symbol',     label: 'Symbol',  title: 'Symbol view — shows stitches as chart symbols (same as in the printed PDF)' },
   { id: 'both',       label: 'Both',    title: 'Color + Symbol — see both at once, useful when editing' },
-  { id: 'simulation', label: 'Preview', title: 'Preview — approximates how the finished embroidery will look when stitched' },
 ];
 
 // Ensure every colored cell has at least one 8-neighbor of the same color.
@@ -105,7 +119,7 @@ function floodFill(grid: number[][], row: number, col: number, newColor: number)
 
 export default function ConvertPage() {
   // Palette + blank canvas
-  const [palette, setPalette] = useState<PatternPalette[]>([]);
+  const [palette, setPalette] = useState<PatternPalette[]>(DEFAULT_PALETTE);
   const paletteRef = useRef<PatternPalette[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
@@ -115,9 +129,10 @@ export default function ConvertPage() {
   const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
   const [grid, setGrid] = useState<number[][]>(blankGrid);
   const gridRef = useRef<number[][]>(grid);
+  const hasDesign = useMemo(() => grid.some(row => row.some(c => c !== -1)), [grid]);
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
-  const [viewMode, setViewMode] = useState<ViewMode>('color');
+  const [viewMode, setViewMode] = useState<ViewMode>('simulation');
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
   const [drawMode, setDrawMode] = useState<DrawMode>('point');
   const [penWidth, setPenWidth] = useState(1);
@@ -718,13 +733,13 @@ export default function ConvertPage() {
                 >?</button>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                {grid[0]?.length ?? 0} × {grid.length} stitches{palette.length > 0 ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}
+                {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}
               </p>
             </div>
             <button
-              type="button" onClick={downloadPdf} disabled={downloading || palette.length === 0}
+              type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
               className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
-              title={palette.length === 0 ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
+              title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
             >
               {downloading ? 'Generating…' : '↓ Download PDF'}
             </button>
@@ -738,9 +753,9 @@ export default function ConvertPage() {
               {
                 label: 'File',
                 items: [
-                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || palette.length === 0 },
+                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
                   { type: 'separator' },
-                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), snap()]); setRedoStack([]); updateGrid(blankGrid()); updatePalette([]); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
+                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), snap()]); setRedoStack([]); updateGrid(blankGrid()); updatePalette(DEFAULT_PALETTE); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
                   { type: 'item', label: 'Open…', disabled: true, onClick: noop },
                   { type: 'item', label: 'Save', disabled: true, onClick: noop },
                 ],
@@ -809,7 +824,7 @@ export default function ConvertPage() {
                 label: 'Palette',
                 items: [
                   { type: 'item', label: 'Add Color…', onClick: () => setAddColorPickerOpen(true) },
-                  { type: 'item', label: 'Remove Unused', disabled: palette.length === 0, onClick: () => {
+                  { type: 'item', label: 'Remove Unused', disabled: !hasDesign, onClick: () => {
                     const g = gridRef.current;
                     const used = new Set<number>();
                     for (const row of g) for (const ci of row) if (ci >= 0) used.add(ci);
@@ -891,7 +906,7 @@ export default function ConvertPage() {
               {/* Pen — draw-mode + eraser submenu */}
               {(() => {
                 const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
-                  { id: 'point',        icon: '·', label: 'Point'               },
+                  { id: 'point',        icon: '✕', label: 'Stitch'              },
                   { id: 'line',         icon: '╱', label: 'Line'                },
                   { id: 'rect',         icon: '▭', label: 'Rectangle (⇧=□)'    },
                   { id: 'rect-fill',    icon: '▬', label: 'Rect Fill (⇧=□)'    },
@@ -900,7 +915,7 @@ export default function ConvertPage() {
                 ];
                 const penActive = activeTool === 'pencil' || activeTool === 'eraser';
                 const cur = activeTool === 'eraser'
-                  ? { icon: '◻', label: 'Erase' }
+                  ? { icon: '⌫', label: 'Erase' }
                   : DRAW_MODES.find(m => m.id === drawMode)!;
                 return (
                   <div ref={pencilBtnRef} className="relative">
@@ -939,7 +954,7 @@ export default function ConvertPage() {
                           className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
                         >
                           <span className="w-3 text-center">{activeTool === 'eraser' ? '✓' : ''}</span>
-                          <span className="w-4 text-center font-mono">◻</span>
+                          <span className="w-4 text-center font-mono">⌫</span>
                           <span>Erase</span>
                         </button>
                       </div>
@@ -1101,7 +1116,7 @@ export default function ConvertPage() {
 
             {/* Canvas */}
             <div className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
-              {palette.length === 0 && (
+              {!hasDesign && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-10 select-none">
                   <span className="text-5xl mb-4">📷</span>
                   <p className="text-sm font-semibold text-gray-500">No pattern loaded</p>
