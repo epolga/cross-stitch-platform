@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
+import { isPUA } from '@/lib/symbol-renderer';
+import SymbolPreview from '@/app/components/SymbolPreview';
 
 interface Props {
   palette: PatternPalette[];
@@ -64,9 +66,9 @@ export default function PaletteBar({
           style={{ backgroundColor: sel ? `rgb(${sel.r},${sel.g},${sel.b})` : '#fff' }}
         />
         {sel && (
-          <span className="text-[9px] font-mono text-gray-500 leading-tight text-center">
-            {sel.symbol}
-          </span>
+          isPUA(sel.symbol)
+            ? <SymbolPreview symbol={sel.symbol} size={14} color="#6b7280" />
+            : <span className="text-[9px] font-mono text-gray-500 leading-tight text-center">{sel.symbol}</span>
         )}
       </div>
 
@@ -147,17 +149,20 @@ export default function PaletteBar({
 
               {/* Symbol square */}
               <span
-                title={`Symbol: ${c.symbol} — click to select`}
+                title={`Symbol: click to select`}
                 onClick={handleClick}
                 style={{
                   ...squareBase,
                   backgroundColor: '#fff',
-                  fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000',
                   opacity: isHidden ? 0.35 : 1,
                   cursor: 'pointer',
+                  overflow: 'hidden',
                 }}
               >
-                {c.symbol}
+                {isPUA(c.symbol)
+                  ? <SymbolPreview symbol={c.symbol} size={18} color="#000" />
+                  : <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000' }}>{c.symbol}</span>
+                }
               </span>
 
               {/* Edit button */}

@@ -238,7 +238,7 @@ function filledPlus(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: nu
 
 // ── Registry ──────────────────────────────────────────────────────────────────
 
-const E = (n: number) => String.fromCodePoint(0xe000 + n);
+export const E = (n: number) => String.fromCodePoint(0xe000 + n);
 
 export const CUSTOM_SYMBOL_REGISTRY = new Map<string, SymbolDrawFn>([
   [E(1),  hatch],
@@ -267,6 +267,29 @@ export function isPUA(sym: string): boolean {
   const cp = sym.codePointAt(0) ?? 0;
   return cp >= 0xe000 && cp <= 0xf8ff;
 }
+
+export const CUSTOM_SYMBOL_NAMES = new Map<string, string>([
+  [E(1),  'Hatch'],
+  [E(2),  'Cross-hatch'],
+  [E(3),  'Checkerboard'],
+  [E(4),  'Top semicircle'],
+  [E(5),  'Bottom semicircle'],
+  [E(6),  'Left semicircle'],
+  [E(7),  'Right semicircle'],
+  [E(8),  'Concentric squares'],
+  [E(9),  'Top-right triangle'],
+  [E(10), 'Bottom-left triangle'],
+  [E(11), 'Top-left triangle'],
+  [E(12), 'Bottom-right triangle'],
+  [E(13), 'Vertical lines'],
+  [E(14), 'Horizontal lines'],
+  [E(15), 'Wave'],
+  [E(16), 'Four dots'],
+  [E(17), 'Snowflake'],
+  [E(18), 'Hourglass'],
+  [E(19), 'Diamond ring'],
+  [E(20), 'Filled plus'],
+]);
 
 // Draws a PUA custom symbol or a Unicode text character.
 // Caller must pre-set ctx.font/textAlign/textBaseline for the Unicode path.

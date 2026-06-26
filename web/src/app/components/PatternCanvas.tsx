@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
+import { drawSymbol } from '@/lib/symbol-renderer';
 
 const ML = 30; // left margin for row numbers
 
@@ -420,11 +421,11 @@ export default function PatternCanvas({
 
           if (vm === 'symbol' || vm === 'both') {
             const br = color.r + color.g + color.b;
-            ctx.fillStyle = vm === 'both' ? (br > 382 ? '#000' : '#fff') : '#000';
+            const symColor = vm === 'both' ? (br > 382 ? '#000' : '#fff') : '#000';
             ctx.font = `bold ${Math.max(cs - 4, 6)}px monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(color.symbol, px + cs / 2, py + cs / 2);
+            drawSymbol(ctx, color.symbol, px + cs / 2, py + cs / 2, cs, symColor);
           }
         }
       }

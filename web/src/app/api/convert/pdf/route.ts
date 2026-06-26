@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
+import { isPUA } from '@/lib/symbol-renderer';
+
+// PUA symbols are canvas-drawn; Helvetica can't render them — use entry number as fallback.
+function pdfSymbol(sym: string, index: number): string {
+  return isPUA(sym) ? String(index + 1) : sym;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +80,7 @@ export async function POST(request: NextRequest) {
           borderColor: rgb(0.6, 0.6, 0.6),
           borderWidth: 0.3,
         });
-        p2.drawText(c.symbol, {
+        p2.drawText(pdfSymbol(c.symbol, ci), {
           x: px + 3, y: py + 3, size: 7, font,
           color: rgb(0, 0, 0),
         });
@@ -103,7 +109,7 @@ export async function POST(request: NextRequest) {
         borderColor: rgb(0.5, 0.5, 0.5),
         borderWidth: 0.5,
       });
-      p3.drawText(c.symbol, { x: MARGIN, y: y + 3, size: 9, font });
+      p3.drawText(pdfSymbol(c.symbol, i), { x: MARGIN, y: y + 3, size: 9, font });
       p3.drawText(c.number, { x: MARGIN + 50, y: y + 3, size: 8, font });
       p3.drawText(c.name.slice(0, 30), { x: MARGIN + 100, y: y + 3, size: 8, font });
       p3.drawText(String(c.stitchCount), { x: MARGIN + 260, y: y + 3, size: 8, font });
