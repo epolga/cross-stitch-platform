@@ -26,8 +26,6 @@ export default function PickPaletteEntryDialog({
   const desc   = mode === 'moveTo'
     ? `Moving entry ${sourceIndex + 1}: ${source.symbol} DMC ${source.number} (${source.name}). Click which entry it should appear BEFORE.`
     : `Merging entry ${sourceIndex + 1}: ${source.symbol} DMC ${source.number} (${source.name}). All its stitches will become the chosen color. This entry will be removed.`;
-  const btnLabel = mode === 'moveTo' ? 'Move before' : 'Merge into';
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div

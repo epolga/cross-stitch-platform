@@ -97,7 +97,7 @@ export default function ColorPickerDialog({ open, addMode = false, paletteIndex,
             })}
           </div>
           {filtered.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">No DMC colors match "{search}"</p>
+            <p className="text-sm text-gray-400 text-center py-8">No DMC colors match &quot;{search}&quot;</p>
           )}
         </div>
 

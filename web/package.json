@@ -21,6 +21,7 @@
         "@aws-sdk/lib-dynamodb": "^3.803.0",
         "@fontsource/geist-mono": "^5.2.6",
         "@fontsource/geist-sans": "^5.2.5",
+        "@napi-rs/canvas": "^1.0.1",
         "@paypal/paypal-js": "^8.4.2",
         "@paypal/react-paypal-js": "^8.8.3",
         "@types/sharp": "^0.31.1",

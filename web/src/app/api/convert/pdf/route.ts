@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import type { PDFImage } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
-import { isPUA } from '@/lib/symbol-renderer';
-
-// PUA symbols are canvas-drawn; Helvetica can't render them — use entry number as fallback.
-function pdfSymbol(sym: string, index: number): string {
-  return isPUA(sym) ? String(index + 1) : sym;
-}
+import { renderSymbolToPng } from '@/lib/server-symbol-renderer';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +32,14 @@ export async function POST(request: NextRequest) {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
+    // Rasterize every unique palette symbol once → embed as PDFImage.
+    // This avoids WinAnsi encoding limits for both PUA and Unicode symbols.
+    const uniqueSymbols = [...new Set(palette.map(c => c.symbol))];
+    const symbolImages = new Map<string, PDFImage>();
+    for (const sym of uniqueSymbols) {
+      symbolImages.set(sym, await pdf.embedPng(renderSymbolToPng(sym)));
+    }
+
     // ── Page 1: Colored grid ─────────────────────────────────────────────────
     const colorPageW = MARGIN * 2 + cols * CELL;
     const colorPageH = MARGIN * 2 + rows * CELL + 20;
@@ -49,6 +53,7 @@ export async function POST(request: NextRequest) {
       for (let x = 0; x < cols; x++) {
         const ci = grid[y][x];
         const c = palette[ci];
+        if (!c) continue;
         const px = MARGIN + x * CELL;
         const py = colorPageH - MARGIN - 20 - (y + 1) * CELL;
         p1.drawRectangle({
@@ -80,10 +85,9 @@ export async function POST(request: NextRequest) {
           borderColor: rgb(0.6, 0.6, 0.6),
           borderWidth: 0.3,
         });
-        p2.drawText(pdfSymbol(c.symbol, ci), {
-          x: px + 3, y: py + 3, size: 7, font,
-          color: rgb(0, 0, 0),
-        });
+        if (!c) continue;
+        // 1pt padding inside the cell border
+        p2.drawImage(symbolImages.get(c.symbol)!, { x: px + 1, y: py + 1, width: CELL_SYM - 2, height: CELL_SYM - 2 });
       }
     }
 
@@ -109,7 +113,7 @@ export async function POST(request: NextRequest) {
         borderColor: rgb(0.5, 0.5, 0.5),
         borderWidth: 0.5,
       });
-      p3.drawText(pdfSymbol(c.symbol, i), { x: MARGIN, y: y + 3, size: 9, font });
+      p3.drawImage(symbolImages.get(c.symbol)!, { x: MARGIN, y: y + 1, width: 12, height: 12 });
       p3.drawText(c.number, { x: MARGIN + 50, y: y + 3, size: 8, font });
       p3.drawText(c.name.slice(0, 30), { x: MARGIN + 100, y: y + 3, size: 8, font });
       p3.drawText(String(c.stitchCount), { x: MARGIN + 260, y: y + 3, size: 8, font });
