@@ -257,6 +257,9 @@ export default function PatternCanvas({
   const isSimStrokeRef   = useRef(false); // true during sim pencil stroke → suppress draw()
   const strokeCellsRef   = useRef<Set<string>>(new Set()); // accumulated cells (sim stroke)
   const lastStrokePosRef = useRef<[number, number] | null>(null);
+  // Per-color pre-rendered cross canvases (shadow baked in) — rebuilt when palette or cs changes
+  const colorCellCacheRef = useRef<HTMLCanvasElement[]>([]);
+  const colorCacheKeyRef  = useRef<string>('');
 
   // Keep latest props in refs so draw() can always read current values
   const gridRef        = useRef(grid);
@@ -345,13 +348,40 @@ export default function PatternCanvas({
         prevHiddenRef.current  = hiddenColors;
         if (hiddenChanged) prevGridRef.current = null; // force full repaint when visibility changes
 
-        // Reusable cell canvas for cross shape — physical pixels (cs * dpr)
         const ecs = cs * dpr;
-        const cell = document.createElement('canvas');
-        cell.width = ecs; cell.height = ecs;
-        const cellCtx = cell.getContext('2d')!;
         const shadowBlur = Math.max(1, ecs * 0.15);
         const shadowOff  = Math.max(0.5, ecs * 0.08);
+
+        // Per-color cache: pre-render each color's cross with shadow baked in once.
+        // Hot loop then becomes a simple drawImage blit — no clip/shadow per cell.
+        const cacheKey = `${ecs}|${pal.map(p => `${p.r},${p.g},${p.b}`).join('|')}`;
+        if (colorCacheKeyRef.current !== cacheKey) {
+          colorCellCacheRef.current = pal.map(col => {
+            // colored cross masked to cross shape
+            const tmp = document.createElement('canvas');
+            tmp.width = ecs; tmp.height = ecs;
+            const tc = tmp.getContext('2d')!;
+            tc.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
+            tc.fillRect(0, 0, ecs, ecs);
+            tc.globalCompositeOperation = 'destination-in';
+            tc.drawImage(mask, 0, 0, ecs, ecs);
+            // shadow baked and clipped to cell bounds
+            const out = document.createElement('canvas');
+            out.width = ecs; out.height = ecs;
+            const oc = out.getContext('2d')!;
+            oc.save();
+            oc.beginPath(); oc.rect(0, 0, ecs, ecs); oc.clip();
+            oc.shadowColor = 'rgba(0,0,0,0.45)';
+            oc.shadowBlur = shadowBlur;
+            oc.shadowOffsetX = shadowOff;
+            oc.shadowOffsetY = shadowOff;
+            oc.drawImage(tmp, 0, 0);
+            oc.restore();
+            return out;
+          });
+          colorCacheKeyRef.current = cacheKey;
+          prevGridRef.current = null; // force full repaint after cache rebuild
+        }
 
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -364,27 +394,8 @@ export default function PatternCanvas({
             if (!paletteChanged && !hiddenChanged && prevEffective === effectiveCi) continue;
 
             clCtx.clearRect(c * ecs, r * ecs, ecs, ecs);
-
-            if (effectiveCi >= 0 && pal[effectiveCi]) {
-              const col = pal[effectiveCi];
-              cellCtx.clearRect(0, 0, ecs, ecs);
-              cellCtx.globalCompositeOperation = 'source-over';
-              cellCtx.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
-              cellCtx.fillRect(0, 0, ecs, ecs);
-              cellCtx.globalCompositeOperation = 'destination-in';
-              cellCtx.drawImage(mask, 0, 0, ecs, ecs);
-
-              // Shadow clipped to cell bounds — no bleed into neighbours
-              clCtx.save();
-              clCtx.beginPath();
-              clCtx.rect(c * ecs, r * ecs, ecs, ecs);
-              clCtx.clip();
-              clCtx.shadowColor = 'rgba(0,0,0,0.45)';
-              clCtx.shadowBlur = shadowBlur;
-              clCtx.shadowOffsetX = shadowOff;
-              clCtx.shadowOffsetY = shadowOff;
-              clCtx.drawImage(cell, c * ecs, r * ecs);
-              clCtx.restore();
+            if (effectiveCi >= 0 && colorCellCacheRef.current[effectiveCi]) {
+              clCtx.drawImage(colorCellCacheRef.current[effectiveCi], c * ecs, r * ecs);
             }
           }
         }
