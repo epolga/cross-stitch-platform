@@ -24,63 +24,121 @@ export interface ConvertedPattern {
 
 const DMC: DmcColor[] = dmcColors;
 
+// ── Color space conversion ───────────────────────────────────────────────────
 
-function colorDist(r1: number, g1: number, b1: number, r2: number, g2: number, b2: number): number {
-  return (r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2;
+type Lab = [number, number, number];
+
+function rgbToLab(r: number, g: number, b: number): Lab {
+  // sRGB → linear
+  let R = r / 255, G = g / 255, B = b / 255;
+  R = R > 0.04045 ? ((R + 0.055) / 1.055) ** 2.4 : R / 12.92;
+  G = G > 0.04045 ? ((G + 0.055) / 1.055) ** 2.4 : G / 12.92;
+  B = B > 0.04045 ? ((B + 0.055) / 1.055) ** 2.4 : B / 12.92;
+  // linear RGB → XYZ D65
+  const X = (R * 0.4124564 + G * 0.3575761 + B * 0.1804375) / 0.95047;
+  const Y = (R * 0.2126729 + G * 0.7151522 + B * 0.0721750) / 1.00000;
+  const Z = (R * 0.0193339 + G * 0.1191920 + B * 0.9503041) / 1.08883;
+  // XYZ → L*a*b*
+  const f = (t: number) => t > 0.008856 ? t ** (1 / 3) : 7.787 * t + 16 / 116;
+  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
 }
 
-function nearestDmc(r: number, g: number, b: number): number {
-  let best = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < DMC.length; i++) {
-    const d = colorDist(r, g, b, DMC[i].r, DMC[i].g, DMC[i].b);
+function labDist2(a: Lab, b: Lab): number {
+  return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+}
+
+// Pre-compute all DMC colors in LAB space once at module load
+const DMC_LAB: Lab[] = DMC.map(c => rgbToLab(c.r, c.g, c.b));
+
+function nearestDmcLab(lab: Lab): number {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < DMC_LAB.length; i++) {
+    const d = labDist2(lab, DMC_LAB[i]);
     if (d < bestDist) { bestDist = d; best = i; }
   }
   return best;
 }
 
-// Merge the smallest-count color cluster into its nearest neighbour until palette ≤ maxColors
-function reducePalette(grid: number[][], indexMap: number[], maxColors: number): number[] {
-  // indexMap[gridValue] = DMC index; returns new indexMap
-  const map = [...indexMap];
+// ── k-means++ in LAB space ───────────────────────────────────────────────────
 
-  while (true) {
-    // Count frequency
-    const freq = new Map<number, number>();
-    for (const row of grid) {
-      for (const v of row) {
-        const dmc = map[v];
-        freq.set(dmc, (freq.get(dmc) ?? 0) + 1);
+const KMEANS_MAX_SAMPLE = 5000; // sample for large images so k-means stays fast
+const KMEANS_MAX_ITER   = 25;
+
+function kmeansLab(
+  pixels: Lab[],
+  k: number,
+): { centroids: Lab[]; assignments: Int32Array } {
+  const n = pixels.length;
+  k = Math.min(k, n);
+
+  // For large grids, sample a subset for centroid computation
+  let sample: Lab[] = pixels;
+  if (n > KMEANS_MAX_SAMPLE) {
+    sample = [];
+    const step = n / KMEANS_MAX_SAMPLE;
+    for (let i = 0; i < KMEANS_MAX_SAMPLE; i++)
+      sample.push(pixels[Math.floor(i * step)]);
+  }
+  const ns = sample.length;
+
+  // k-means++ initialisation — spread initial centroids
+  const centroids: Lab[] = [[...sample[Math.floor(Math.random() * ns)]]];
+  for (let ci = 1; ci < k; ci++) {
+    const dists = sample.map(p => {
+      let minD = Infinity;
+      for (const c of centroids) { const d = labDist2(p, c); if (d < minD) minD = d; }
+      return minD;
+    });
+    const total = dists.reduce((s, d) => s + d, 0);
+    let rnd = Math.random() * total;
+    let chosen = ns - 1;
+    for (let i = 0; i < ns; i++) { rnd -= dists[i]; if (rnd <= 0) { chosen = i; break; } }
+    centroids.push([...sample[chosen]]);
+  }
+
+  // Iterate k-means on sample
+  const sAssign = new Int32Array(ns);
+  for (let iter = 0; iter < KMEANS_MAX_ITER; iter++) {
+    // Assign
+    let changed = false;
+    for (let i = 0; i < ns; i++) {
+      let best = 0, bestD = Infinity;
+      for (let j = 0; j < k; j++) {
+        const d = labDist2(sample[i], centroids[j]);
+        if (d < bestD) { bestD = d; best = j; }
       }
+      if (sAssign[i] !== best) { sAssign[i] = best; changed = true; }
     }
-    const unique = Array.from(freq.keys());
-    if (unique.length <= maxColors) break;
-
-    // Find rarest
-    let rarest = unique[0];
-    let rarestCount = freq.get(rarest)!;
-    for (const k of unique) {
-      if (freq.get(k)! < rarestCount) { rarest = k; rarestCount = freq.get(k)!; }
+    if (!changed) break;
+    // Update centroids
+    const sums: Lab[] = Array.from({ length: k }, () => [0, 0, 0] as Lab);
+    const counts = new Int32Array(k);
+    for (let i = 0; i < ns; i++) {
+      const j = sAssign[i];
+      sums[j][0] += sample[i][0]; sums[j][1] += sample[i][1]; sums[j][2] += sample[i][2];
+      counts[j]++;
     }
-
-    // Find nearest other unique color
-    const rc = DMC[rarest];
-    let nearest = -1;
-    let nearestDist = Infinity;
-    for (const k of unique) {
-      if (k === rarest) continue;
-      const d = colorDist(rc.r, rc.g, rc.b, DMC[k].r, DMC[k].g, DMC[k].b);
-      if (d < nearestDist) { nearestDist = d; nearest = k; }
-    }
-
-    // Remap all occurrences of rarest → nearest
-    for (let i = 0; i < map.length; i++) {
-      if (map[i] === rarest) map[i] = nearest;
+    for (let j = 0; j < k; j++) {
+      if (counts[j] > 0)
+        centroids[j] = [sums[j][0] / counts[j], sums[j][1] / counts[j], sums[j][2] / counts[j]];
     }
   }
 
-  return map;
+  // Final assignment of ALL pixels to converged centroids
+  const assignments = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    let best = 0, bestD = Infinity;
+    for (let j = 0; j < k; j++) {
+      const d = labDist2(pixels[i], centroids[j]);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    assignments[i] = best;
+  }
+
+  return { centroids, assignments };
 }
+
+// ── Main converter ───────────────────────────────────────────────────────────
 
 export async function convertImage(
   imageBuffer: Buffer,
@@ -88,7 +146,6 @@ export async function convertImage(
   targetHeight: number,
   maxColors: number,
 ): Promise<ConvertedPattern> {
-  // Resize to stitch grid
   const { data, info } = await sharp(imageBuffer)
     .resize(targetWidth, targetHeight, { fit: 'fill' })
     .removeAlpha()
@@ -97,64 +154,45 @@ export async function convertImage(
 
   const w = info.width;
   const h = info.height;
+  const n = w * h;
 
-  // Map each pixel → DMC index
-  const rawIndices: number[] = new Array(w * h);
-  for (let i = 0; i < w * h; i++) {
-    const r = data[i * 3];
-    const g = data[i * 3 + 1];
-    const b = data[i * 3 + 2];
-    rawIndices[i] = nearestDmc(r, g, b);
-  }
+  // Convert all pixels to LAB
+  const pixelsLab: Lab[] = new Array(n);
+  for (let i = 0; i < n; i++)
+    pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
 
-  // Collect unique DMC indices used
-  const uniqueSet = new Set(rawIndices);
-  const uniqueList = Array.from(uniqueSet);
+  // Run k-means in LAB space
+  const { centroids, assignments } = kmeansLab(pixelsLab, maxColors);
 
-  // indexMap: pixel value (0..uniqueList.length-1) → DMC array index
-  const pixelToDmc = new Map(uniqueList.map((dmc, i) => [dmc, i]));
-  const indexMap: number[] = uniqueList; // indexMap[i] = DMC index
+  // Snap each cluster centroid to nearest DMC color in LAB
+  const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c));
 
-  // Build grid using compact indices
-  const flatGrid: number[] = rawIndices.map(dmc => pixelToDmc.get(dmc)!);
+  // Map each pixel to its cluster's DMC index
+  const pixelDmc: number[] = Array.from(assignments, j => centroidDmc[j]);
 
-  // Reduce palette
-  const reducedMap = reducePalette(
-    Array.from({ length: h }, (_, y) => flatGrid.slice(y * w, (y + 1) * w)),
-    indexMap,
-    maxColors,
-  );
-
-  // Remap to final compact indices
-  const finalDmcSet = new Set(reducedMap);
-  const finalDmcList = Array.from(finalDmcSet);
-  const dmcToFinal = new Map(finalDmcList.map((dmc, i) => [dmc, i]));
-  const finalIndexMap: number[] = flatGrid.map(v => dmcToFinal.get(reducedMap[v])!);
-
-  // Build 2D grid
-  const grid: number[][] = Array.from({ length: h }, (_, y) =>
-    finalIndexMap.slice(y * w, (y + 1) * w)
-  );
+  // Build compact palette (dedup in case two centroids snapped to same DMC)
+  const uniqueDmc = Array.from(new Set(pixelDmc));
+  const dmcToIdx = new Map(uniqueDmc.map((dmc, i) => [dmc, i]));
+  const flatGrid  = pixelDmc.map(dmc => dmcToIdx.get(dmc)!);
 
   // Count stitches per color
-  const stitchCounts = new Array(finalDmcList.length).fill(0);
-  for (const v of finalIndexMap) stitchCounts[v]++;
+  const stitchCounts = new Array(uniqueDmc.length).fill(0);
+  for (const v of flatGrid) stitchCounts[v]++;
 
-  // Build palette sorted by stitch count desc
-  const paletteUnsorted: PatternPalette[] = finalDmcList.map((dmcIdx, i) => ({
-    ...DMC[dmcIdx],
-    symbol: '',
-    stitchCount: stitchCounts[i],
-  }));
-  paletteUnsorted.sort((a, b) => b.stitchCount - a.stitchCount);
-  paletteUnsorted.forEach((p, i) => { p.symbol = SYMBOLS[i] ?? '?'; });
+  // Sort palette by stitch count desc, assign symbols
+  const palette: PatternPalette[] = uniqueDmc
+    .map((dmcIdx, i) => ({ ...DMC[dmcIdx], symbol: '', stitchCount: stitchCounts[i] }))
+    .sort((a, b) => b.stitchCount - a.stitchCount);
+  palette.forEach((p, i) => { p.symbol = SYMBOLS[i] ?? '?'; });
 
-  // Remap grid to sorted palette order
-  const oldToNew = new Map(paletteUnsorted.map((p, newIdx) => {
-    const oldIdx = finalDmcList.findIndex(di => DMC[di].number === p.number);
-    return [oldIdx, newIdx];
-  }));
-  const sortedGrid = grid.map(row => row.map(v => oldToNew.get(v) ?? v));
+  // Remap grid indices to sorted palette order
+  const numberToNew = new Map(palette.map((p, ni) => [p.number, ni]));
+  const grid: number[][] = Array.from({ length: h }, (_, y) =>
+    Array.from({ length: w }, (_, x) => {
+      const dmcIdx = uniqueDmc[flatGrid[y * w + x]];
+      return numberToNew.get(DMC[dmcIdx].number) ?? 0;
+    })
+  );
 
-  return { grid: sortedGrid, palette: paletteUnsorted, width: w, height: h };
+  return { grid, palette, width: w, height: h };
 }
