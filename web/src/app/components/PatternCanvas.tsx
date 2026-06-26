@@ -4,6 +4,49 @@ import { useEffect, useRef } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 
 const ML = 30; // left margin for row numbers
+
+// Custom pen cursor — SVG parallelogram with tip at bottom-left (hotspot 1 14)
+const PEN_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">' +
+  '<path d="M12 0L16 4 4 16 0 16 0 12z" fill="#222" stroke="#fff" stroke-width="1"/>' +
+  '<path d="M0 12L0 16L4 16Z" fill="#555"/>' +
+  '</svg>'
+)}") 1 14, crosshair`;
+
+// Custom eraser cursor — pink rectangle (classic eraser shape), hotspot centre-bottom
+const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="14">' +
+  '<rect x="1" y="1" width="18" height="12" rx="2" fill="#f9a8d4" stroke="#9f1239" stroke-width="1.2"/>' +
+  '<rect x="1" y="7" width="18" height="6" rx="0 0 2 2" fill="#fbcfe8" stroke="#9f1239" stroke-width="0"/>' +
+  '<line x1="1" y1="7" x2="19" y2="7" stroke="#9f1239" stroke-width="1"/>' +
+  '</svg>'
+)}") 10 13, cell`;
+
+// Flood fill cursor — watering can with blue drops, hotspot at rose head
+const FLOOD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 28 28">' +
+  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#334155" stroke-width="2" stroke-linecap="round"/>' +
+  '<rect x="2" y="3" width="12" height="11" rx="3" fill="#475569" stroke="#cbd5e1" stroke-width="1.2"/>' +
+  '<path d="M14 10 Q20 10 22 15" stroke="#334155" stroke-width="2.5" stroke-linecap="round" fill="none"/>' +
+  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="#94a3b8" stroke="#cbd5e1" stroke-width="1"/>' +
+  '<line x1="20" y1="19" x2="19" y2="23" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<line x1="22" y1="19" x2="22" y2="24" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<line x1="24" y1="19" x2="25" y2="23" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
+  '</svg>'
+)}") 25 18, cell`;
+
+// Erase-fill cursor — same watering can with grey drops
+const ERASE_FILL_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 28 28">' +
+  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#334155" stroke-width="2" stroke-linecap="round"/>' +
+  '<rect x="2" y="3" width="12" height="11" rx="3" fill="#475569" stroke="#cbd5e1" stroke-width="1.2"/>' +
+  '<path d="M14 10 Q20 10 22 15" stroke="#334155" stroke-width="2.5" stroke-linecap="round" fill="none"/>' +
+  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>' +
+  '<line x1="20" y1="19" x2="19" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<line x1="22" y1="19" x2="22" y2="24" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<line x1="24" y1="19" x2="25" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
+  '</svg>'
+)}") 25 18, cell`;
 const MT = 18; // top margin for column numbers
 
 export type DrawMode = 'point' | 'line' | 'rect' | 'rect-fill' | 'ellipse' | 'ellipse-fill';
@@ -734,9 +777,13 @@ export default function PatternCanvas({
     if (cell) onRightClick?.(cell[0], cell[1]);
   }
 
+  const isEraser = activeTool === 'pencil' && activeColorIndex === -1;
   const cursor = !editable ? 'default'
-    : (activeTool === 'fill' || activeTool === 'erase-fill') ? 'cell'
-    : 'crosshair';
+    : activeTool === 'erase-fill' ? ERASE_FILL_CURSOR
+    : activeTool === 'fill' ? FLOOD_CURSOR
+    : activeTool === 'select' ? 'crosshair'
+    : isEraser ? ERASER_CURSOR
+    : PEN_CURSOR;
 
   return (
     <canvas

@@ -808,7 +808,7 @@ export default function ConvertPage() {
               {
                 label: 'Tools',
                 items: [
-                  { type: 'item', label: 'Pencil', checked: activeTool === 'pencil', onClick: () => setActiveTool('pencil') },
+                  { type: 'item', label: 'Pen', checked: activeTool === 'pencil', onClick: () => setActiveTool('pencil') },
                   { type: 'item', label: 'Pen Eraser', checked: activeTool === 'eraser', onClick: () => setActiveTool('eraser') },
                   { type: 'item', label: 'Fill', checked: activeTool === 'fill' && fillMode === 'flood', onClick: () => { setActiveTool('fill'); setFillMode('flood'); } },
                   { type: 'item', label: 'Erase Fill', checked: activeTool === 'fill' && fillMode === 'erase', onClick: () => { setActiveTool('fill'); setFillMode('erase'); } },
