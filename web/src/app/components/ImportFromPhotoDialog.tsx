@@ -3,7 +3,7 @@ import { useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
-const COLOR_OPTIONS = [10, 15, 20, 25] as const;
+const COLOR_OPTIONS = [5, 10, 20, 30, 40, 50, 100] as const;
 
 interface Props {
   open: boolean;
@@ -17,7 +17,7 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
   const [patHeight, setPatHeight] = useState(80);
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockAspect, setLockAspect] = useState(true);
-  const [numColors, setNumColors] = useState<10 | 15 | 20 | 25>(15);
+  const [numColors, setNumColors] = useState<5 | 10 | 20 | 30 | 40 | 50 | 100>(10);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
@@ -172,11 +172,11 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
         <div className="mb-5">
           <label className="block text-xs font-medium text-gray-600 mb-0.5">How many thread colors?</label>
           <p className="text-xs text-gray-400 mb-2">Fewer colors = easier to stitch. Start with 10 or 15 if you&apos;re new to cross-stitch.</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {COLOR_OPTIONS.map(n => (
               <button key={n} type="button" onClick={() => setNumColors(n)}
-                title={n <= 10 ? 'Very simple, great for beginners' : n <= 15 ? 'Good balance of detail and simplicity' : n <= 20 ? 'More detailed, more thread colors to manage' : 'Maximum detail, most complex'}
-                className={`flex-1 py-1.5 rounded border text-sm font-medium transition-colors
+                title={n <= 5 ? 'Very simple — great for total beginners' : n <= 10 ? 'Simple, great for beginners' : n <= 20 ? 'Good balance of detail and simplicity' : n <= 40 ? 'More detailed, more thread colors to manage' : n <= 50 ? 'Complex, rich in color detail' : 'Maximum detail — suitable for advanced stitchers'}
+                className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors
                   ${numColors === n ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-300 hover:border-rose-300'}`}
               >{n}</button>
             ))}

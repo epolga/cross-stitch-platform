@@ -7,7 +7,7 @@ const VALID_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif
 const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_DIM = 10;
 const MAX_DIM = 500;
-const VALID_COLORS = new Set([10, 15, 20, 25]);
+const VALID_COLORS = new Set([5, 10, 20, 30, 40, 50, 100]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image too large (max 5 MB)' }, { status: 400 });
     if (width < MIN_DIM || width > MAX_DIM) return NextResponse.json({ error: `Width must be ${MIN_DIM}–${MAX_DIM}` }, { status: 400 });
     if (height < MIN_DIM || height > MAX_DIM) return NextResponse.json({ error: `Height must be ${MIN_DIM}–${MAX_DIM}` }, { status: 400 });
-    if (!VALID_COLORS.has(colors)) return NextResponse.json({ error: 'Colors must be 10, 15, 20, or 25' }, { status: 400 });
+    if (!VALID_COLORS.has(colors)) return NextResponse.json({ error: 'Colors must be 5, 10, 20, 30, 40, 50, or 100' }, { status: 400 });
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const pattern = await convertImage(buffer, width, height, colors);

@@ -136,6 +136,8 @@ export default function ConvertPage() {
   const [activeTool, setActiveTool] = useState<Tool>('pencil');
   const [drawMode, setDrawMode] = useState<DrawMode>('point');
   const [penWidth, setPenWidth] = useState(1);
+  const [cellSize, setCellSize] = useState(12);
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const [fillMode, setFillMode] = useState<FillMode>('flood');
   const [showPencilMenu, setShowPencilMenu] = useState(false);
   const [showFillMenu, setShowFillMenu] = useState(false);
@@ -145,6 +147,18 @@ export default function ConvertPage() {
   const strokeSnapshot = useRef<number[][] | null>(null);
   const [selection, setSelection] = useState<SelectionRect | null>(null);
   const [clipboard, setClipboard] = useState<number[][] | null>(null);
+
+  useEffect(() => {
+    const el = canvasWrapperRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setCellSize(s => Math.max(4, Math.min(40, s + (e.deltaY < 0 ? 1 : -1))));
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   useEffect(() => {
     if (!showPencilMenu) return;
@@ -165,6 +179,8 @@ export default function ConvertPage() {
       if (key === 'c') { e.preventDefault(); handleCopy(); }
       if (key === 'x') { e.preventDefault(); handleCut(); }
       if (key === 'v') { e.preventDefault(); handlePaste(); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -799,8 +815,8 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Both', checked: viewMode === 'both', onClick: () => setViewMode('both') },
                   { type: 'item', label: 'Simulation', checked: viewMode === 'simulation', onClick: () => setViewMode('simulation') },
                   { type: 'separator' },
-                  { type: 'item', label: 'Zoom In', disabled: true, onClick: noop },
-                  { type: 'item', label: 'Zoom Out', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Zoom In',  shortcut: 'Ctrl+↑', onClick: () => setCellSize(s => Math.min(40, s + 2)) },
+                  { type: 'item', label: 'Zoom Out', shortcut: 'Ctrl+↓', onClick: () => setCellSize(s => Math.max(4, s - 2)) },
                 ],
               },
               {
@@ -1114,8 +1130,23 @@ export default function ConvertPage() {
               </button>
             </div>
 
+            {/* Canvas column */}
+            <div className="flex-1 flex flex-col gap-2 min-w-0">
+
+              {/* Zoom bar */}
+              <div className="flex items-center gap-3 px-1">
+                <span className="text-xs text-gray-500 flex-none">Zoom</span>
+                <input
+                  type="range" min={4} max={40} value={cellSize}
+                  onChange={e => setCellSize(parseInt(e.target.value))}
+                  className="flex-1 accent-rose-500"
+                  title="Drag to zoom in or out — or hold Ctrl and scroll on the canvas"
+                />
+                <span className="text-xs font-mono text-gray-600 flex-none w-8 text-right">{cellSize}px</span>
+              </div>
+
             {/* Canvas */}
-            <div className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
+            <div ref={canvasWrapperRef} className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
               {!hasDesign && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-10 select-none">
                   <span className="text-5xl mb-4">📷</span>
@@ -1129,6 +1160,7 @@ export default function ConvertPage() {
                 grid={grid}
                 palette={palette}
                 mode={viewMode}
+                cellSize={cellSize}
                 editable
                 activeTool={activeTool === 'eraser' ? 'pencil' : activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
                 drawMode={drawMode}
@@ -1146,6 +1178,7 @@ export default function ConvertPage() {
                 onSelectionChange={setSelection}
               />
             </div>
+            </div>{/* end canvas column */}
 
             {/* Palette column — right of canvas */}
             <PaletteBar
