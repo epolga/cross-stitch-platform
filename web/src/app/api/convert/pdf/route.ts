@@ -213,52 +213,77 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Page map ───────────────────────────────────────────────────────────────
+    // ── Notes + Page map ──────────────────────────────────────────────────────
     {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
-      p.drawText('Page Map', { x: MARGIN, y: PAGE_H - MARGIN - 16, size: 12, font: fontBold });
-      p.drawText(
-        `The chart is printed across ${totalChartPages} pages (${pageRows} row${pageRows !== 1 ? 's' : ''} × ${pageCols} column${pageCols !== 1 ? 's' : ''} of pages).`,
-        { x: MARGIN, y: PAGE_H - MARGIN - 32, size: 9, font, color: rgb(0.35, 0.35, 0.35) },
-      );
-      p.drawText(
-        `Pattern size: ${cols} × ${rows} stitches · ${usedPalette.length} colors`,
-        { x: MARGIN, y: PAGE_H - MARGIN - 44, size: 9, font, color: rgb(0.35, 0.35, 0.35) },
-      );
 
-      const cellW = Math.min(140, (PAGE_W - MARGIN * 2) / pageCols);
-      const cellH = Math.min(100, (PAGE_H * 0.55) / pageRows);
-      const mapX = MARGIN;
-      const mapY = PAGE_H - MARGIN - 70;
+      // Title
+      centerText(p, 'Notes', PAGE_H - MARGIN - 20, 20, fontBold, NAVY);
+
+      // Info block — 14-count Aida measurements
+      const COUNT = 14;
+      const wIn  = (cols / COUNT).toFixed(1);
+      const hIn  = (rows / COUNT).toFixed(1);
+      const wMm  = Math.round(cols / COUNT * 25.4);
+      const hMm  = Math.round(rows / COUNT * 25.4);
+      const swIn = ((cols / COUNT) + 4).toFixed(1);
+      const shIn = ((rows / COUNT) + 4).toFixed(1);
+      const swMm = Math.round((cols / COUNT + 4) * 25.4);
+      const shMm = Math.round((rows / COUNT + 4) * 25.4);
+
+      const infoLines = [
+        'Material Type:  Aida Generic White',
+        'Sewing Count:  14/inch   or   55/100mm',
+        `Design Size:  ${cols} x ${rows} stitches`,
+        `Sewn Design Size:  ${wIn} x ${hIn} inches   or   ${wMm} x ${hMm} mm`,
+        `Suggested Material Size:  ${swIn} x ${shIn} inches   or   ${swMm} x ${shMm} mm`,
+        'Stitch Style:  Cross-stitch Using 2 strands',
+      ];
+
+      const infoLineH = 15;
+      const infoStartY = PAGE_H - MARGIN - 44;
+      const maxInfoW = Math.max(...infoLines.map(l => font.widthOfTextAtSize(l, 9)));
+      const infoX = (PAGE_W - maxInfoW) / 2;
+      for (let i = 0; i < infoLines.length; i++) {
+        p.drawText(infoLines[i], {
+          x: infoX, y: infoStartY - i * infoLineH,
+          size: 9, font, color: NAVY,
+        });
+      }
+
+      // Intro text for grid
+      const introY = infoStartY - infoLines.length * infoLineH - 28;
+      const introLine1 = 'Below is a plan showing how the chart pages fit together.';
+      const introLine2 = 'The page number is shown at the top left of each chart page.';
+      const introX = (PAGE_W - Math.max(font.widthOfTextAtSize(introLine1, 9), font.widthOfTextAtSize(introLine2, 9))) / 2;
+      p.drawText(introLine1, { x: introX, y: introY, size: 9, font, color: NAVY });
+      p.drawText(introLine2, { x: introX, y: introY - 14, size: 9, font, color: NAVY });
+
+      // Grid — cells labeled A:1, B:1, A:2, B:2 …
+      const gridTopY   = introY - 32;
+      const gridAvailH = gridTopY - MARGIN;
+      const gridAvailW = PAGE_W - MARGIN * 2;
+      const cellW = Math.min(200, gridAvailW / pageCols);
+      const cellH = Math.min(200, gridAvailH / pageRows);
+      const gridTotalW = cellW * pageCols;
+      const gridX = MARGIN + (gridAvailW - gridTotalW) / 2;
 
       for (let pr = 0; pr < pageRows; pr++) {
         for (let pc = 0; pc < pageCols; pc++) {
-          const pageNum = firstChartPageNum + pr * pageCols + pc;
-          const mx = mapX + pc * cellW;
-          const my = mapY - pr * cellH;
+          const mx = gridX + pc * cellW;
+          const my = gridTopY - (pr + 1) * cellH;
+          const label = `${String.fromCharCode(65 + pc)}:${pr + 1}`;
 
           p.drawRectangle({
-            x: mx, y: my - cellH, width: cellW, height: cellH,
-            color: rgb(0.97, 0.97, 0.97),
-            borderColor: rgb(0.4, 0.4, 0.4), borderWidth: 1,
+            x: mx, y: my, width: cellW, height: cellH,
+            color: rgb(1, 1, 1),
+            borderColor: rgb(0.15, 0.15, 0.15), borderWidth: 1,
           });
 
-          const pageLabel = `Page ${pageNum}`;
-          const plw = fontBold.widthOfTextAtSize(pageLabel, 10);
-          p.drawText(pageLabel, {
-            x: mx + (cellW - plw) / 2, y: my - cellH / 2,
-            size: 10, font: fontBold,
-          });
-
-          const r0 = pr * ROWS_PER + 1;
-          const r1 = Math.min((pr + 1) * ROWS_PER, rows);
-          const c0 = pc * COLS_PER + 1;
-          const c1 = Math.min((pc + 1) * COLS_PER, cols);
-          const rangeLabel = `rows ${r0}–${r1} · cols ${c0}–${c1}`;
-          const rlw = font.widthOfTextAtSize(rangeLabel, 7);
-          p.drawText(rangeLabel, {
-            x: mx + (cellW - rlw) / 2, y: my - cellH + 6,
-            size: 7, font, color: rgb(0.45, 0.45, 0.45),
+          const lw = font.widthOfTextAtSize(label, 11);
+          p.drawText(label, {
+            x: mx + (cellW - lw) / 2, y: my + cellH / 2 - 5,
+            size: 11, font, color: NAVY,
           });
         }
       }
@@ -275,11 +300,11 @@ export async function POST(request: NextRequest) {
 
         const p = pdf.addPage([PAGE_W, PAGE_H]);
 
-        // Header
-        const headerText = `Rows ${r0 + 1}–${r1} · Cols ${c0 + 1}–${c1}`;
-        p.drawText(headerText, {
+        // Header — A:1 label top-left, title top-right
+        const chartLabel = `${String.fromCharCode(65 + pc)}:${pr + 1}`;
+        p.drawText(chartLabel, {
           x: MARGIN, y: PAGE_H - MARGIN - 14,
-          size: 8, font, color: rgb(0.4, 0.4, 0.4),
+          size: 9, font: fontBold, color: NAVY,
         });
         p.drawText(title, {
           x: PAGE_W - MARGIN - fontBold.widthOfTextAtSize(title, 8),
