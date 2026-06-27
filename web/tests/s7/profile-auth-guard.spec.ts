@@ -4,22 +4,23 @@ import { expect, test } from '@playwright/test';
 // Without it, the client-side auth check redirects to /.
 
 test.describe('Profile auth guard', () => {
+  // 20s timeout on all three: Next.js dev compiles profile pages on first parallel access,
+  // which can exceed 10s when multiple workers hit the server simultaneously.
   test('/profile redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile');
-    await page.waitForURL(url => url.pathname === '/', { timeout: 10_000 });
+    await page.waitForURL(url => url.pathname === '/', { timeout: 20_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
   test('/profile/patterns redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile/patterns');
-    // 20s: Next.js dev may need extra compilation time on first access
     await page.waitForURL(url => url.pathname === '/', { timeout: 20_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
   test('/profile/votes redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile/votes');
-    await page.waitForURL(url => url.pathname === '/', { timeout: 10_000 });
+    await page.waitForURL(url => url.pathname === '/', { timeout: 20_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 

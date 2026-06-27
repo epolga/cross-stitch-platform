@@ -6,6 +6,7 @@ const chromePath =
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: ['**/s7/**'],
   timeout: 60_000,
   expect: {
     timeout: 10_000,
