@@ -482,6 +482,7 @@ export function AuthControl() {
 
   const handleLogout = (): void => {
     console.log('Logging out...');
+    void fetch('/api/auth/logout', { method: 'POST' });
     if (typeof window !== 'undefined') {
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('userEmail');
@@ -616,23 +617,13 @@ export function AuthControl() {
       {isLoggedIn ? (
         <>
           {currentFirstName && (
-            currentUserVotesCount > 0 ? (
-              <Link
-                href="/profile/votes"
-                className={firstNameBadgeLinkClass}
-                aria-label={`Open profile for ${currentFirstName}`}
-                title={`Open your private profile with ${currentUserVotesCount} voted design${currentUserVotesCount === 1 ? '' : 's'}`}
-              >
-                {`Hi ${currentFirstName}!`}
-              </Link>
-            ) : (
-              <span
-                className={firstNameBadgeClass}
-                aria-label={`Logged in as ${currentFirstName}`}
-              >
-                {`Hi ${currentFirstName}!`}
-              </span>
-            )
+            <Link
+              href="/profile"
+              className={firstNameBadgeLinkClass}
+              aria-label={`Open profile for ${currentFirstName}`}
+            >
+              {`Hi ${currentFirstName}!`}
+            </Link>
           )}
           {currentFirstName && <span className="text-gray-400 text-lg">|</span>}
           <button

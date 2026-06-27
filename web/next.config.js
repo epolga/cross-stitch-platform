@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['@napi-rs/canvas'],
   outputFileTracingRoot: __dirname,
   /*output: "standalone",*/
   productionBrowserSourceMaps: false,

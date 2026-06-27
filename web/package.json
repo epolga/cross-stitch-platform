@@ -10,7 +10,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:e2e": "playwright test",
-        "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts"
+        "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts",
+        "test:e2e:s7": "playwright test --config=playwright.s7.config.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.104.1",
@@ -21,13 +22,18 @@
         "@aws-sdk/lib-dynamodb": "^3.803.0",
         "@fontsource/geist-mono": "^5.2.6",
         "@fontsource/geist-sans": "^5.2.5",
+        "@napi-rs/canvas": "^1.0.1",
         "@paypal/paypal-js": "^8.4.2",
         "@paypal/react-paypal-js": "^8.8.3",
+        "@types/sharp": "^0.31.1",
         "aws-sdk": "^2.1692.0",
         "axios": "^1.12.2",
+        "jose": "^6.2.3",
         "next": "^15.5.18",
+        "pdf-lib": "^1.17.1",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "sharp": "^0.35.2",
         "sitemap": "^8.0.0",
         "source-map-support": "^0.5.21"
     },

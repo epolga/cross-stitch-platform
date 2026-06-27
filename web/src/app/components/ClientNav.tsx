@@ -187,7 +187,6 @@ export default function ClientNav() {
               >
                 My thoughts
               </Link>
-
               {/* Articles as submenu on mobile */}
               <div className="mt-2">
                 <button

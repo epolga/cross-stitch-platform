@@ -20,6 +20,7 @@ const dynamoDBClient = new DynamoDBClient({
 });
 
 export type VerifiedUserProfile = {
+  userId: string; // stable cid UUID
   email: string;
   firstName?: string;
 };
@@ -80,6 +81,7 @@ async function verifyUserInSecondaryTable(
       if (dbEmail === normalizedEmail) {
         console.log('User found in secondary table (case-insensitive match)');
         return {
+          userId: item.cid?.S ?? item.ID?.S ?? normalizedEmail,
           email: normalizedEmail,
           firstName: normalizeDisplayName(item.FirstName?.S || item.UserName?.S),
         };
@@ -770,6 +772,7 @@ export async function verifyUserWithProfile(
     }
 
     return {
+      userId: Items[0].cid?.S ?? Items[0].ID?.S ?? normalizedEmail,
       email: normalizedEmail,
       firstName: normalizeDisplayName(
         Items[0].FName?.S || Items[0].FirstName?.S || Items[0].UserName?.S,
