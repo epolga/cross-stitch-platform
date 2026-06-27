@@ -328,25 +328,23 @@ const UNICODE_DRAW = new Map<string, DrawFn>([
 // Strategy: PUA and listed Unicode symbols → explicit canvas drawing (font-independent).
 // Other symbols (ASCII, Latin, Greek) → fall through to fillText with monospace.
 // Draw at logical 16px with 4× canvas scale → 64px output embedded at ~12pt in the PDF.
-export function renderSymbolToPng(symbol: string): Buffer {
+export function renderSymbolToPng(symbol: string, color = '#000000'): Buffer {
   const SCALE = 4;
   const logical = 16;
   const canvas = createCanvas(logical * SCALE, logical * SCALE);
   const ctx = canvas.getContext('2d') as unknown as CanvasRenderingContext2D;
   ctx.scale(SCALE, SCALE);
-  ctx.fillStyle = '#000000';
-  ctx.strokeStyle = '#000000';
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
 
   const unicodeFn = UNICODE_DRAW.get(symbol);
   if (unicodeFn) {
     unicodeFn(ctx, logical / 2, logical / 2, logical);
   } else {
-    // PUA symbols and anything else — drawSymbol handles PUA via CUSTOM_SYMBOL_REGISTRY,
-    // and falls back to fillText for ASCII/Latin/Greek (which monospace covers fine).
     ctx.font = `bold ${Math.max(logical - 4, 6)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    drawSymbol(ctx, symbol, logical / 2, logical / 2, logical, '#000000');
+    drawSymbol(ctx, symbol, logical / 2, logical / 2, logical, color);
   }
 
   return canvas.toBuffer('image/png');

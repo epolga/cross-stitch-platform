@@ -50,10 +50,11 @@ function centerText(page: PDFPage, text: string, y: number, size: number, font: 
 
 export async function POST(request: NextRequest) {
   try {
-    const { grid, palette, title = 'Cross-Stitch Pattern' } = await request.json() as {
+    const { grid, palette, title = 'Cross-Stitch Pattern', chartMode = 'symbol' } = await request.json() as {
       grid: number[][];
       palette: PatternPalette[];
       title?: string;
+      chartMode?: 'symbol' | 'color-symbol' | 'color';
     };
 
     if (!grid?.length || !palette?.length) {
@@ -70,11 +71,15 @@ export async function POST(request: NextRequest) {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Rasterize every unique symbol once (only for used colors)
+    // Rasterize every unique symbol — black always, white only for color-symbol mode
     const uniqueSymbols = [...new Set(usedPalette.map(c => c.symbol))];
-    const symbolImages = new Map<string, PDFImage>();
+    const symbolImages      = new Map<string, PDFImage>();
+    const symbolImagesWhite = new Map<string, PDFImage>();
     for (const sym of uniqueSymbols) {
       symbolImages.set(sym, await pdf.embedPng(renderSymbolToPng(sym)));
+      if (chartMode === 'color-symbol') {
+        symbolImagesWhite.set(sym, await pdf.embedPng(renderSymbolToPng(sym, '#ffffff')));
+      }
     }
 
     // Pre-compute tiling dimensions so we know page numbers before adding pages
@@ -368,7 +373,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Cell contents (symbols)
+        // Cell contents
         for (let r = r0; r < r1; r++) {
           for (let c = c0; c < c1; c++) {
             const ci = grid[r][c];
@@ -376,8 +381,15 @@ export async function POST(request: NextRequest) {
             if (!pal) continue;
             const cx = gx + (c - c0) * CHART_CELL;
             const cy = gy - (r - r0 + 1) * CHART_CELL;
-            const img = symbolImages.get(pal.symbol);
-            if (img) p.drawImage(img, { x: cx + 1, y: cy + 1, width: CHART_CELL - 2, height: CHART_CELL - 2 });
+            if (chartMode === 'color' || chartMode === 'color-symbol') {
+              p.drawRectangle({ x: cx, y: cy, width: CHART_CELL, height: CHART_CELL, color: col(pal.r, pal.g, pal.b) });
+            }
+            if (chartMode !== 'color') {
+              const lum = (pal.r * 299 + pal.g * 587 + pal.b * 114) / 1000;
+              const imgMap = (chartMode === 'color-symbol' && lum < 128) ? symbolImagesWhite : symbolImages;
+              const img = imgMap.get(pal.symbol);
+              if (img) p.drawImage(img, { x: cx + 1, y: cy + 1, width: CHART_CELL - 2, height: CHART_CELL - 2 });
+            }
           }
         }
 

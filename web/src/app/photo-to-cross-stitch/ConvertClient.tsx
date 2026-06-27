@@ -203,6 +203,8 @@ export default function ConvertPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [showModeDialog, setShowModeDialog] = useState(false);
+  const [pendingPdfTitle, setPendingPdfTitle] = useState('');
   const [patternLoadError, setPatternLoadError] = useState('');
   const [patternLoading, setPatternLoading] = useState(false);
   const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
@@ -244,13 +246,13 @@ export default function ConvertPage() {
   }
 
   // Download PDF from current (edited) grid
-  async function doDownloadPdf(title: string) {
+  async function doDownloadPdf(title: string, chartMode: 'symbol' | 'color-symbol' | 'color' = 'symbol') {
     setDownloading(true);
     try {
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: gridRef.current, palette, title }),
+        body: JSON.stringify({ grid: gridRef.current, palette, title, chartMode }),
       });
       if (!resp.ok) throw new Error('PDF generation failed');
       const blob = await resp.blob();
@@ -273,7 +275,8 @@ export default function ConvertPage() {
       setShowNamePrompt(true);
       return;
     }
-    doDownloadPdf(patternName);
+    setPendingPdfTitle(patternName);
+    setShowModeDialog(true);
   }
 
   // Editor: stroke (pencil drag)
@@ -1363,7 +1366,8 @@ export default function ConvertPage() {
                   const name = nameInput.trim() || 'Cross-Stitch Pattern';
                   setPatternName(nameInput.trim());
                   setShowNamePrompt(false);
-                  doDownloadPdf(name);
+                  setPendingPdfTitle(name);
+                  setShowModeDialog(true);
                 }
                 if (e.key === 'Escape') setShowNamePrompt(false);
               }}
@@ -1377,16 +1381,48 @@ export default function ConvertPage() {
                   const name = nameInput.trim() || 'Cross-Stitch Pattern';
                   setPatternName(nameInput.trim());
                   setShowNamePrompt(false);
-                  doDownloadPdf(name);
+                  setPendingPdfTitle(name);
+                  setShowModeDialog(true);
                 }}
                 className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 transition-colors"
-              >Set name &amp; download</button>
+              >Set name &amp; continue</button>
               <button
                 type="button"
-                onClick={() => { setShowNamePrompt(false); doDownloadPdf('Cross-Stitch Pattern'); }}
+                onClick={() => { setShowNamePrompt(false); setPendingPdfTitle('Cross-Stitch Pattern'); setShowModeDialog(true); }}
                 className="py-2 px-3 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
               >Skip</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showModeDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowModeDialog(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Chart rendering mode</h3>
+            <p className="text-xs text-gray-500 mb-3">How should stitches be drawn on chart pages?</p>
+            <div className="flex flex-col gap-2">
+              {([
+                ['symbol',       'Symbols only',   'Black & white symbols — easiest to stitch from'],
+                ['color-symbol', 'Color & Symbol', 'Coloured background with symbol overlay'],
+                ['color',        'Color only',     'Solid colour fill, no symbols'],
+              ] as const).map(([mode, label, desc]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => { setShowModeDialog(false); doDownloadPdf(pendingPdfTitle, mode); }}
+                  className="flex flex-col items-start px-4 py-3 rounded-lg border border-gray-200 hover:border-rose-400 hover:bg-rose-50 text-left transition-colors"
+                >
+                  <span className="text-sm font-medium text-gray-800">{label}</span>
+                  <span className="text-xs text-gray-500">{desc}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowModeDialog(false)}
+              className="mt-3 w-full py-2 rounded-lg border border-gray-200 text-sm text-gray-500 hover:bg-gray-50 transition-colors"
+            >Cancel</button>
           </div>
         </div>
       )}
