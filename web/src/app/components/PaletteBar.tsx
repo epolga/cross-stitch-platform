@@ -1,15 +1,18 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { isPUA } from '@/lib/symbol-renderer';
 import SymbolPreview from '@/app/components/SymbolPreview';
+
+export type PaletteBarHandle = { scrollTo(index: number): void };
 
 interface Props {
   palette: PatternPalette[];
   selectedIndex: number;
   blinkIndex?: number | null;
   hiddenColors: Set<number>;
+  maxHeight?: number;
   onSelect: (index: number) => void;
   onBlink: (index: number) => void;
   onToggleColor: (index: number) => void;
@@ -23,15 +26,21 @@ interface Props {
 
 type EditMenu = { index: number; top: number; right: number };
 
-export default function PaletteBar({
+const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
-  hiddenColors, onSelect, onBlink, onToggleColor, onToggleAll,
+  hiddenColors, maxHeight, onSelect, onBlink, onToggleColor, onToggleAll,
   onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onAddColor,
-}: Props) {
+}: Props, ref) {
   const sel = palette[selectedIndex];
   const [blinkOn, setBlinkOn] = useState(true);
   const [editMenu, setEditMenu] = useState<EditMenu | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  useImperativeHandle(ref, () => ({
+    scrollTo(index: number) {
+      rowRefs.current[index]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+  }));
 
   useEffect(() => {
     if (blinkIndex == null) { setBlinkOn(true); return; }
@@ -57,7 +66,7 @@ export default function PaletteBar({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch">
+    <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch overflow-hidden" style={maxHeight ? { maxHeight } : undefined}>
 
       {/* Active color preview */}
       <div className="flex flex-col items-center gap-1 flex-none">
@@ -114,6 +123,7 @@ export default function PaletteBar({
           return (
             <div
               key={c.number}
+              ref={el => { rowRefs.current[i] = el; }}
               className="flex-none flex flex-row items-center gap-0.5 rounded"
               style={{
                 outline: isSelected ? '2px solid #e11d48' : 'none',
@@ -241,4 +251,6 @@ export default function PaletteBar({
       )}
     </div>
   );
-}
+});
+
+export default PaletteBar;

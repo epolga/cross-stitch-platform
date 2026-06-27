@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
-import PaletteBar from '@/app/components/PaletteBar';
+import PaletteBar, { type PaletteBarHandle } from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
 import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
@@ -139,6 +139,8 @@ export default function ConvertPage() {
   const [penWidth, setPenWidth] = useState(1);
   const [cellSize, setCellSize] = useState(12);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const paletteBarRef = useRef<PaletteBarHandle>(null);
+  const [paletteMaxHeight, setPaletteMaxHeight] = useState<number | undefined>(undefined);
   const [fillMode, setFillMode] = useState<FillMode>('flood');
   const [showPencilMenu, setShowPencilMenu] = useState(false);
   const pencilBtnRef = useRef<HTMLDivElement>(null);
@@ -157,6 +159,14 @@ export default function ConvertPage() {
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  useEffect(() => {
+    const el = canvasWrapperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setPaletteMaxHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -583,11 +593,16 @@ export default function ConvertPage() {
       c1: Math.min(b.cMin + rotated[0].length - 1, cols - 1) });
   }
 
-  // Right-click: cell → blink its swatch; swatch → blink its cells on canvas
+  // Right-click: empty cell → switch to matching eraser; filled cell → pick color + blink swatch
   function handleRightClickCell(row: number, col: number) {
     const ci = gridRef.current[row]?.[col];
-    if (ci == null || ci < 0) return;
+    if (ci == null || ci < 0) {
+      if (activeTool === 'pencil') setActiveTool('eraser');
+      else if (activeTool === 'fill' && fillMode === 'flood') setFillMode('erase');
+      return;
+    }
     setSelectedColor(ci);
+    paletteBarRef.current?.scrollTo(ci);
     if (blinkSwatchTimer.current) clearTimeout(blinkSwatchTimer.current);
     setBlinkSwatch(ci);
     blinkSwatchTimer.current = setTimeout(() => setBlinkSwatch(null), 1680);
@@ -1211,8 +1226,10 @@ export default function ConvertPage() {
 
             {/* Palette column — right of canvas */}
             <PaletteBar
+              ref={paletteBarRef}
               palette={palette}
               selectedIndex={selectedColor}
+              maxHeight={paletteMaxHeight}
               blinkIndex={blinkSwatch}
               hiddenColors={hiddenColors}
               onSelect={setSelectedColor}
