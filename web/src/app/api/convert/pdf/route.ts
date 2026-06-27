@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFString } from 'pdf-lib';
 import type { PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { renderSymbolToPng } from '@/lib/server-symbol-renderer';
@@ -93,7 +93,19 @@ export async function POST(request: NextRequest) {
       // Title
       const titleSize = title.length > 30 ? 20 : title.length > 20 ? 24 : 28;
       centerText(p, title, PAGE_H - MARGIN - 44, titleSize, fontBold, rgb(0.05, 0.05, 0.05));
-      centerText(p, 'cross-stitch.com', PAGE_H - MARGIN - 64, 11, font, rgb(0.45, 0.45, 0.45));
+      const siteUrl = 'https://cross-stitch.com';
+      const siteSize = 11;
+      const siteW = font.widthOfTextAtSize(siteUrl, siteSize);
+      const siteX = (PAGE_W - siteW) / 2;
+      const siteY = PAGE_H - MARGIN - 64;
+      p.drawText(siteUrl, { x: siteX, y: siteY, size: siteSize, font, color: rgb(0.1, 0.3, 0.75) });
+      const linkAnnot = pdf.context.obj({
+        Type: 'Annot', Subtype: 'Link',
+        Rect: [siteX, siteY - 2, siteX + siteW, siteY + siteSize],
+        Border: [0, 0, 0],
+        A: { Type: 'Action', S: 'URI', URI: PDFString.of(siteUrl) },
+      });
+      p.node.addAnnot(pdf.context.register(linkAnnot));
 
       // Stitch count line
       const stitchLine = `${cols} × ${rows} stitches · ${usedPalette.length} colors`;
