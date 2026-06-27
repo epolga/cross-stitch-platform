@@ -22,6 +22,12 @@ export default function PickPaletteEntryDialog({
     .map((entry, i) => ({ entry, i }))
     .filter(({ i }) => i !== sourceIndex);
 
+  if (mode === 'mergeInto') {
+    const dist = (e: typeof source) =>
+      Math.sqrt((e.r - source.r) ** 2 + (e.g - source.g) ** 2 + (e.b - source.b) ** 2);
+    others.sort((a, b) => dist(a.entry) - dist(b.entry));
+  }
+
   const title  = mode === 'moveTo' ? 'Move to…' : 'Merge into…';
   const desc   = mode === 'moveTo'
     ? `Moving entry ${sourceIndex + 1}: ${source.symbol} DMC ${source.number} (${source.name}). Click which entry it should appear BEFORE.`
@@ -40,7 +46,7 @@ export default function PickPaletteEntryDialog({
         <p className="text-sm text-gray-500 mb-3 flex-none">{desc}</p>
 
         <div className="overflow-y-auto flex-1 flex flex-col gap-1">
-          {others.map(({ entry, i }) => (
+          {others.map(({ entry, i }, slot) => (
             <button
               key={entry.number}
               type="button"
@@ -58,6 +64,9 @@ export default function PickPaletteEntryDialog({
               />
               <span className="font-mono text-sm font-bold text-gray-800 w-5 shrink-0 text-center">{entry.symbol}</span>
               <span className="text-sm text-gray-700 truncate">DMC {entry.number} — {entry.name}</span>
+              {mode === 'mergeInto' && slot === 0 && (
+                <span className="ml-auto shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-100 text-rose-600">Nearest</span>
+              )}
             </button>
           ))}
 
