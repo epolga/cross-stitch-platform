@@ -244,7 +244,7 @@ export default function ConvertPage() {
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: gridRef.current, palette }),
+        body: JSON.stringify({ grid: gridRef.current, palette, title: patternName || 'Cross-Stitch Pattern' }),
       });
       if (!resp.ok) throw new Error('PDF generation failed');
       const blob = await resp.blob();
