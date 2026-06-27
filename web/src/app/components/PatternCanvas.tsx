@@ -6,13 +6,19 @@ import { drawSymbol } from '@/lib/symbol-renderer';
 
 const ML = 30; // left margin for row numbers
 
-// Custom pen cursor — SVG parallelogram with tip at bottom-left (hotspot 1 14)
-const PEN_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">' +
-  '<path d="M12 0L16 4 4 16 0 16 0 12z" fill="#222" stroke="#fff" stroke-width="1"/>' +
-  '<path d="M0 12L0 16L4 16Z" fill="#555"/>' +
-  '</svg>'
-)}") 1 14, crosshair`;
+// Custom needle cursor — silver needle, sharp tip bottom-left, thread from eye matches active color
+function penCursor(threadColor: string) {
+  return `url("data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">' +
+    '<polygon points="24,1 30,7 1,31" fill="#D0D0D0" stroke="#555" stroke-width="1.2" stroke-linejoin="round"/>' +
+    '<line x1="25" y1="2" x2="2" y2="29" stroke="white" stroke-width="0.9" stroke-linecap="butt" opacity="0.85"/>' +
+    '<ellipse cx="25" cy="5" rx="5.5" ry="2" transform="rotate(-45,25,5)" fill="#444"/>' +
+    '<ellipse cx="25" cy="5" rx="2.8" ry="0.85" transform="rotate(-45,25,5)" fill="#E0E0E0"/>' +
+    `<path d="M 26 2 Q 35 -4 33 8 Q 31 18 23 15" fill="none" stroke="rgba(0,0,0,0.25)" stroke-width="5" stroke-linecap="round"/>` +
+    `<path d="M 26 2 Q 35 -4 33 8 Q 31 18 23 15" fill="none" stroke="${threadColor}" stroke-width="3" stroke-linecap="round"/>` +
+    '</svg>'
+  )}") 1 31, crosshair`;
+}
 
 // Custom eraser cursor — pink rectangle (classic eraser shape), hotspot centre-bottom
 const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
@@ -36,13 +42,13 @@ const FLOOD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '</svg>'
 )}") 25 18, cell`;
 
-// Erase-fill cursor — same watering can with grey drops
+// Erase-fill cursor — outlined watering can (no fill) with grey drops
 const ERASE_FILL_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 28 28">' +
-  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#334155" stroke-width="2" stroke-linecap="round"/>' +
-  '<rect x="2" y="3" width="12" height="11" rx="3" fill="#475569" stroke="#cbd5e1" stroke-width="1.2"/>' +
-  '<path d="M14 10 Q20 10 22 15" stroke="#334155" stroke-width="2.5" stroke-linecap="round" fill="none"/>' +
-  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>' +
+  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>' +
+  '<rect x="2" y="3" width="12" height="11" rx="3" fill="none" stroke="#64748b" stroke-width="1.5"/>' +
+  '<path d="M14 10 Q20 10 22 15" stroke="#64748b" stroke-width="2" stroke-linecap="round" fill="none"/>' +
+  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="none" stroke="#64748b" stroke-width="1.5"/>' +
   '<line x1="20" y1="19" x2="19" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
   '<line x1="22" y1="19" x2="22" y2="24" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
   '<line x1="24" y1="19" x2="25" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
@@ -783,12 +789,16 @@ export default function PatternCanvas({
   }
 
   const isEraser = activeTool === 'pencil' && activeColorIndex === -1;
+  const activeColor = palette[activeColorIndex ?? 0];
+  const threadHex = activeColor
+    ? `#${activeColor.r.toString(16).padStart(2,'0')}${activeColor.g.toString(16).padStart(2,'0')}${activeColor.b.toString(16).padStart(2,'0')}`
+    : '#DC2626';
   const cursor = !editable ? 'default'
     : activeTool === 'erase-fill' ? ERASE_FILL_CURSOR
     : activeTool === 'fill' ? FLOOD_CURSOR
     : activeTool === 'select' ? 'crosshair'
     : isEraser ? ERASER_CURSOR
-    : PEN_CURSOR;
+    : penCursor(threadHex);
 
   return (
     <canvas
