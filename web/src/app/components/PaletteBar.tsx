@@ -60,7 +60,7 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
 
   const squareBase: React.CSSProperties = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 22, height: 22, flexShrink: 0,
+    width: 18, height: 18, flexShrink: 0,
     border: '1px solid rgba(0,0,0,0.18)', borderRadius: 3,
     userSelect: 'none',
   };
@@ -137,9 +137,9 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                 onClick={handleClick}
                 style={{
                   ...squareBase,
-                  fontSize: 9, fontFamily: 'monospace', color: '#6b7280',
+                  fontSize: 11, fontFamily: 'monospace', color: '#6b7280',
                   backgroundColor: '#f3f4f6', cursor: 'pointer',
-                  width: 18,
+                  width: 22,
                 }}
               >
                 {i + 1}
@@ -170,8 +170,8 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                 }}
               >
                 {isPUA(c.symbol)
-                  ? <SymbolPreview symbol={c.symbol} size={18} color="#000" />
-                  : <span style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 'bold', color: '#000' }}>{c.symbol}</span>
+                  ? <SymbolPreview symbol={c.symbol} size={14} color="#000" />
+                  : <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold', color: '#000' }}>{c.symbol}</span>
                 }
               </span>
 
