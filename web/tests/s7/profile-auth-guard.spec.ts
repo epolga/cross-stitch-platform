@@ -6,19 +6,20 @@ import { expect, test } from '@playwright/test';
 test.describe('Profile auth guard', () => {
   test('/profile redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile');
-    await page.waitForURL('/', { timeout: 10_000 });
+    await page.waitForURL(url => url.pathname === '/', { timeout: 10_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
   test('/profile/patterns redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile/patterns');
-    await page.waitForURL('/', { timeout: 10_000 });
+    // 20s: Next.js dev may need extra compilation time on first access
+    await page.waitForURL(url => url.pathname === '/', { timeout: 20_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 
   test('/profile/votes redirects unauthenticated users to /', async ({ page }) => {
     await page.goto('/profile/votes');
-    await page.waitForURL('/', { timeout: 10_000 });
+    await page.waitForURL(url => url.pathname === '/', { timeout: 10_000 });
     expect(page.url()).toMatch(/\/$/);
   });
 

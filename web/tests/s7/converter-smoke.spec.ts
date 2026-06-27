@@ -20,7 +20,8 @@ test.describe('Converter page', () => {
   test('shows Import menu item in the File menu', async ({ page }) => {
     await page.goto('/photo-to-cross-stitch');
     await page.getByRole('button', { name: 'File' }).click();
-    await expect(page.getByText('New Pattern')).toBeVisible();
+    // 'New Pattern' also exists on the toolbar; .last() targets the dropdown item
+    await expect(page.getByRole('button', { name: 'New Pattern' }).last()).toBeVisible();
     await expect(page.getByText('Save & share…')).toBeVisible();
   });
 
