@@ -200,6 +200,9 @@ export default function ConvertPage() {
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [patternName, setPatternName] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [patternLoadError, setPatternLoadError] = useState('');
   const [patternLoading, setPatternLoading] = useState(false);
   const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
@@ -227,6 +230,9 @@ export default function ConvertPage() {
 
   // Import from photo (called by ImportFromPhotoDialog on success)
   function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
+    setPatternName('');
+    setNameInput('');
+    setEditingName(true);
     updatePalette(data.palette);
     updateGrid(enforceNeighborConnectivity(paddedGrid));
     setUndoStack([]);
@@ -238,13 +244,13 @@ export default function ConvertPage() {
   }
 
   // Download PDF from current (edited) grid
-  async function downloadPdf() {
+  async function doDownloadPdf(title: string) {
     setDownloading(true);
     try {
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: gridRef.current, palette, title: patternName || 'Cross-Stitch Pattern' }),
+        body: JSON.stringify({ grid: gridRef.current, palette, title }),
       });
       if (!resp.ok) throw new Error('PDF generation failed');
       const blob = await resp.blob();
@@ -259,6 +265,15 @@ export default function ConvertPage() {
     } finally {
       setDownloading(false);
     }
+  }
+
+  function downloadPdf() {
+    if (!patternName) {
+      setNameInput('');
+      setShowNamePrompt(true);
+      return;
+    }
+    doDownloadPdf(patternName);
   }
 
   // Editor: stroke (pencil drag)
@@ -814,10 +829,34 @@ export default function ConvertPage() {
                   className="w-5 h-5 rounded-full border border-gray-300 text-xs text-gray-400 hover:text-rose-500 hover:border-rose-400 transition-colors leading-none flex items-center justify-center flex-none"
                 >?</button>
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {patternName && <span className="font-medium text-gray-600">{patternName} · </span>}
-                {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}
-              </p>
+              <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-400">
+                {editingName ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onBlur={() => { setPatternName(nameInput.trim()); setEditingName(false); }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { setPatternName(nameInput.trim()); setEditingName(false); }
+                      if (e.key === 'Escape') setEditingName(false);
+                    }}
+                    placeholder="Pattern name"
+                    className="text-xs font-medium text-gray-700 border-b border-rose-300 outline-none bg-transparent w-36"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setNameInput(patternName); setEditingName(true); }}
+                    title="Click to rename"
+                    className="flex items-center gap-0.5 font-medium text-gray-600 hover:text-rose-500 group transition-colors"
+                  >
+                    {patternName || <span className="text-gray-400 font-normal">Untitled</span>}
+                    <span className="opacity-0 group-hover:opacity-60 transition-opacity text-[10px]">✏</span>
+                  </button>
+                )}
+                <span>· {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}</span>
+              </div>
             </div>
             <button
               type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
@@ -1308,6 +1347,49 @@ export default function ConvertPage() {
         onSave={handleSavePattern}
         onClose={() => setSaveDialogOpen(false)}
       />
+
+      {showNamePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowNamePrompt(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Name your pattern</h3>
+            <p className="text-xs text-gray-500 mb-3">This name will appear on the PDF cover page.</p>
+            <input
+              autoFocus
+              type="text"
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const name = nameInput.trim() || 'Cross-Stitch Pattern';
+                  setPatternName(nameInput.trim());
+                  setShowNamePrompt(false);
+                  doDownloadPdf(name);
+                }
+                if (e.key === 'Escape') setShowNamePrompt(false);
+              }}
+              placeholder="e.g. Autumn Leaves"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-rose-300"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const name = nameInput.trim() || 'Cross-Stitch Pattern';
+                  setPatternName(nameInput.trim());
+                  setShowNamePrompt(false);
+                  doDownloadPdf(name);
+                }}
+                className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 transition-colors"
+              >Set name &amp; download</button>
+              <button
+                type="button"
+                onClick={() => { setShowNamePrompt(false); doDownloadPdf('Cross-Stitch Pattern'); }}
+                className="py-2 px-3 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >Skip</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

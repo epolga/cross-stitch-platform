@@ -50,12 +50,15 @@ export async function POST(request: NextRequest) {
     const rows = grid.length;
     const cols = grid[0].length;
 
+    // Only show colors that are actually placed in the pattern
+    const usedPalette = palette.filter(c => c.stitchCount > 0);
+
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-    // Rasterize every unique symbol once
-    const uniqueSymbols = [...new Set(palette.map(c => c.symbol))];
+    // Rasterize every unique symbol once (only for used colors)
+    const uniqueSymbols = [...new Set(usedPalette.map(c => c.symbol))];
     const symbolImages = new Map<string, PDFImage>();
     for (const sym of uniqueSymbols) {
       symbolImages.set(sym, await pdf.embedPng(renderSymbolToPng(sym)));
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
     const pageCols = Math.ceil(cols / COLS_PER);
     const pageRows = Math.ceil(rows / ROWS_PER);
     const totalChartPages = pageCols * pageRows;
-    const keyPagesCount = Math.ceil(palette.length / KEY_ENTRIES_PER_PAGE);
+    const keyPagesCount = Math.ceil(usedPalette.length / KEY_ENTRIES_PER_PAGE);
 
     // PDF page order: 1 cover · 2..1+keyPagesCount color key · 2+keyPagesCount page map · then chart pages
     const firstChartPageNum = 3 + keyPagesCount;
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest) {
       centerText(p, 'cross-stitch.com', PAGE_H - MARGIN - 64, 11, font, rgb(0.45, 0.45, 0.45));
 
       // Stitch count line
-      const stitchLine = `${cols} × ${rows} stitches · ${palette.length} colors`;
+      const stitchLine = `${cols} × ${rows} stitches · ${usedPalette.length} colors`;
       centerText(p, stitchLine, PAGE_H - MARGIN - 80, 9, font, rgb(0.55, 0.55, 0.55));
 
       // Color preview — draw scaled grid
@@ -146,14 +149,14 @@ export async function POST(request: NextRequest) {
 
       for (let slot = 0; slot < KEY_ENTRIES_PER_PAGE; slot++) {
         const i = baseIdx + slot;
-        if (i >= palette.length) break;
+        if (i >= usedPalette.length) break;
 
         const isRight = slot >= KEY_ENTRIES_PER_COL;
         const row = slot % KEY_ENTRIES_PER_COL;
         const cx = isRight ? COL2_X : MARGIN;
         const ey = PAGE_H - MARGIN - 48 - row * KEY_ROW;
 
-        const c = palette[i];
+        const c = usedPalette[i];
         // Swatch
         p.drawRectangle({
           x: cx - 14, y: ey, width: 12, height: 12,
@@ -179,7 +182,7 @@ export async function POST(request: NextRequest) {
         { x: MARGIN, y: PAGE_H - MARGIN - 32, size: 9, font, color: rgb(0.35, 0.35, 0.35) },
       );
       p.drawText(
-        `Pattern size: ${cols} × ${rows} stitches · ${palette.length} colors`,
+        `Pattern size: ${cols} × ${rows} stitches · ${usedPalette.length} colors`,
         { x: MARGIN, y: PAGE_H - MARGIN - 44, size: 9, font, color: rgb(0.35, 0.35, 0.35) },
       );
 
