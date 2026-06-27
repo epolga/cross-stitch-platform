@@ -24,9 +24,22 @@ const COLS_PER = Math.floor(CHART_W / CHART_CELL);
 const ROWS_PER = Math.floor(CHART_H / CHART_CELL);
 
 // Color key layout
-const KEY_ROW = 16;
-const KEY_ENTRIES_PER_COL = Math.floor((PAGE_H - MARGIN * 2 - 40) / KEY_ROW);
-const KEY_ENTRIES_PER_PAGE = KEY_ENTRIES_PER_COL * 2;
+const KEY_ROW_H = 18;          // row height
+const KEY_HDR_BLOCK = 66;      // title + column headers + divider
+const KEY_ROWS_PER_PAGE = Math.floor((PAGE_H - MARGIN * 2 - KEY_HDR_BLOCK) / KEY_ROW_H);
+const SWATCH_W = 12;
+const SWATCH_H = KEY_ROW_H - 4;
+
+// Key column X positions — each wide enough for its header text at 7pt bold
+const KX_COLOR = MARGIN;           // "Color" ~22pt wide
+const KX_SYM   = MARGIN + 34;     // "Symbol" ~25pt wide
+const KX_CATNO = MARGIN + 74;     // "Cat No." ~27pt; values right-aligned +50
+const KX_BRAND = MARGIN + 130;    // "Brand" / "D.M.C."
+const KX_TYPE  = MARGIN + 195;    // "Type" / "Stranded Cotton" ~53pt
+const KX_ST    = MARGIN + 340;    // "Stitches"; values right-aligned +48
+const KX_SK    = MARGIN + 400;    // "Skeins"; values right-aligned +40
+
+const NAVY = rgb(0.04, 0.10, 0.30);
 
 function col(r: number, g: number, b: number) { return rgb(r / 255, g / 255, b / 255); }
 
@@ -68,7 +81,7 @@ export async function POST(request: NextRequest) {
     const pageCols = Math.ceil(cols / COLS_PER);
     const pageRows = Math.ceil(rows / ROWS_PER);
     const totalChartPages = pageCols * pageRows;
-    const keyPagesCount = Math.ceil(usedPalette.length / KEY_ENTRIES_PER_PAGE);
+    const keyPagesCount = Math.ceil(usedPalette.length / KEY_ROWS_PER_PAGE);
 
     // PDF page order: 1 cover · 2..1+keyPagesCount color key · 2+keyPagesCount page map · then chart pages
     const firstChartPageNum = 3 + keyPagesCount;
@@ -118,58 +131,85 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Pages 2-N: Color key ────────────────────────────────────────────────
+    const KEY_ROW_START_Y = PAGE_H - MARGIN - KEY_HDR_BLOCK;
+
     for (let pageIdx = 0; pageIdx < keyPagesCount; pageIdx++) {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
-      p.drawText('Color Key', { x: MARGIN, y: PAGE_H - MARGIN - 16, size: 12, font: fontBold });
 
-      const colHeaders = (cx: number, labelY: number) => {
-        p.drawText('Sym', { x: cx, y: labelY, size: 7, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-        p.drawText('DMC #', { x: cx + 20, y: labelY, size: 7, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-        p.drawText('Color Name', { x: cx + 58, y: labelY, size: 7, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-        p.drawText('Sts', { x: cx + 175, y: labelY, size: 7, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-      };
-
-      const COL2_X = MARGIN + (PAGE_W - MARGIN * 2) / 2 + 4;
-      colHeaders(MARGIN, PAGE_H - MARGIN - 32);
-      colHeaders(COL2_X, PAGE_H - MARGIN - 32);
-
-      // Divider line
-      p.drawLine({
-        start: { x: MARGIN, y: PAGE_H - MARGIN - 35 },
-        end: { x: PAGE_W - MARGIN, y: PAGE_H - MARGIN - 35 },
-        thickness: 0.4, color: rgb(0.75, 0.75, 0.75),
+      // "Key" title — centered, large navy
+      const keyTitleW = fontBold.widthOfTextAtSize('Key', 20);
+      p.drawText('Key', {
+        x: (PAGE_W - keyTitleW) / 2, y: PAGE_H - MARGIN - 22,
+        size: 20, font: fontBold, color: NAVY,
       });
+      if (keyPagesCount > 1) {
+        const sub = `Page ${pageIdx + 1} of ${keyPagesCount}`;
+        const subW = font.widthOfTextAtSize(sub, 7);
+        p.drawText(sub, {
+          x: (PAGE_W - subW) / 2, y: PAGE_H - MARGIN - 34,
+          size: 7, font, color: rgb(0.5, 0.5, 0.5),
+        });
+      }
+
+      // Column headers
+      const hdrY = PAGE_H - MARGIN - 50;
+      for (const [x, label] of [
+        [KX_COLOR, 'Color'], [KX_SYM, 'Symbol'],
+        [KX_CATNO, 'Cat No.'], [KX_BRAND, 'Brand'], [KX_TYPE, 'Type'],
+        [KX_ST, 'Stitches'], [KX_SK, 'Skeins'],
+      ] as [number, string][]) {
+        p.drawText(label, { x, y: hdrY, size: 7, font: fontBold, color: NAVY });
+      }
+
+      // Divider below headers
       p.drawLine({
-        start: { x: (PAGE_W) / 2, y: PAGE_H - MARGIN - 35 },
-        end: { x: (PAGE_W) / 2, y: MARGIN },
-        thickness: 0.4, color: rgb(0.85, 0.85, 0.85),
+        start: { x: MARGIN, y: PAGE_H - MARGIN - 56 },
+        end: { x: PAGE_W - MARGIN, y: PAGE_H - MARGIN - 56 },
+        thickness: 0.4, color: rgb(0.72, 0.72, 0.72),
       });
 
-      const baseIdx = pageIdx * KEY_ENTRIES_PER_PAGE;
+      const baseIdx = pageIdx * KEY_ROWS_PER_PAGE;
 
-      for (let slot = 0; slot < KEY_ENTRIES_PER_PAGE; slot++) {
+      for (let slot = 0; slot < KEY_ROWS_PER_PAGE; slot++) {
         const i = baseIdx + slot;
         if (i >= usedPalette.length) break;
 
-        const isRight = slot >= KEY_ENTRIES_PER_COL;
-        const row = slot % KEY_ENTRIES_PER_COL;
-        const cx = isRight ? COL2_X : MARGIN;
-        const ey = PAGE_H - MARGIN - 48 - row * KEY_ROW;
-
         const c = usedPalette[i];
-        // Swatch
+        const rowBottom = KEY_ROW_START_Y - (slot + 1) * KEY_ROW_H;
+        const swatchY   = rowBottom + 2;
+        const textY     = rowBottom + KEY_ROW_H / 2 - 3;
+
+        // Colour swatch
         p.drawRectangle({
-          x: cx - 14, y: ey, width: 12, height: 12,
+          x: KX_COLOR, y: swatchY, width: SWATCH_W, height: SWATCH_H,
           color: col(c.r, c.g, c.b),
           borderColor: rgb(0.5, 0.5, 0.5), borderWidth: 0.4,
         });
-        // Symbol
+
+        // Symbol box (white with coloured border)
+        p.drawRectangle({
+          x: KX_SYM, y: swatchY, width: SWATCH_W, height: SWATCH_H,
+          color: rgb(1, 1, 1),
+          borderColor: col(c.r, c.g, c.b), borderWidth: 1,
+        });
         const img = symbolImages.get(c.symbol);
-        if (img) p.drawImage(img, { x: cx, y: ey, width: 12, height: 12 });
-        // Text
-        p.drawText(c.number, { x: cx + 20, y: ey + 2, size: 7, font });
-        p.drawText(c.name.slice(0, 24), { x: cx + 58, y: ey + 2, size: 7, font });
-        p.drawText(String(c.stitchCount), { x: cx + 175, y: ey + 2, size: 7, font });
+        if (img) p.drawImage(img, { x: KX_SYM + 1, y: swatchY + 1, width: SWATCH_W - 2, height: SWATCH_H - 2 });
+
+        // Cat No.
+        p.drawText(c.number, { x: KX_CATNO, y: textY, size: 7, font, color: NAVY });
+
+        // Brand
+        p.drawText('D.M.C.', { x: KX_BRAND, y: textY, size: 7, font, color: NAVY });
+
+        // Type
+        p.drawText('Stranded Cotton', { x: KX_TYPE, y: textY, size: 7, font, color: NAVY });
+
+        // Stitches
+        p.drawText(String(c.stitchCount), { x: KX_ST, y: textY, size: 7, font, color: NAVY });
+
+        // Skeins (approx 1800 stitches per DMC skein)
+        const skeins = Math.max(0.1, Math.round(c.stitchCount / 1800 * 10) / 10);
+        p.drawText(skeins.toFixed(1), { x: KX_SK, y: textY, size: 7, font, color: NAVY });
       }
     }
 
