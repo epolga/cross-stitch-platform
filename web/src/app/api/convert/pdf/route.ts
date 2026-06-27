@@ -64,8 +64,12 @@ export async function POST(request: NextRequest) {
     const rows = grid.length;
     const cols = grid[0].length;
 
-    // Only show colors that are actually placed in the pattern
-    const usedPalette = palette.filter(c => c.stitchCount > 0);
+    // Count actual usage from the grid (don't trust stitchCount — may be stale after load)
+    const usageCounts = new Array(palette.length).fill(0);
+    for (const row of grid) for (const ci of row) if (ci >= 0 && ci < palette.length) usageCounts[ci]++;
+    const usedPalette = palette
+      .map((c, i) => ({ ...c, stitchCount: usageCounts[i] }))
+      .filter(c => c.stitchCount > 0);
 
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
