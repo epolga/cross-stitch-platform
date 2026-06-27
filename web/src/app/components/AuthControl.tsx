@@ -151,7 +151,7 @@ export function AuthControl() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentEmail, setCurrentEmail] = useState('');
   const [currentFirstName, setCurrentFirstName] = useState('');
-  const [currentUserVotesCount, setCurrentUserVotesCount] = useState(0);
+  const [_currentUserVotesCount, setCurrentUserVotesCount] = useState(0);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false); // RegisterForm (PayPal)
   const [isRegisterOnlyOpen, setIsRegisterOnlyOpen] = useState(false); // RegisterOnlyDialog

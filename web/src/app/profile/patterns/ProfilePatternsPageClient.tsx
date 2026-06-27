@@ -12,6 +12,7 @@ interface PatternSummary {
   width: number;
   height: number;
   createdAt: string;
+  thumbnail?: string;
 }
 
 function readCurrentFirstName(): string {

@@ -6,6 +6,7 @@ import {
   CreateTableCommand,
   DescribeTableCommand,
   UpdateTimeToLiveCommand,
+  type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
 import { randomUUID } from 'crypto';
 import type { PatternPalette } from './pattern-converter';
@@ -117,7 +118,7 @@ export async function savePattern(
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
-  const item: Record<string, { S?: string; N?: string }> = {
+  const item: Record<string, AttributeValue> = {
     patternId: { S: id },
     name:      { S: name.trim() || 'Untitled' },
     width:     { N: String(width) },
@@ -148,7 +149,7 @@ export async function updatePattern(
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
-  const item: Record<string, { S?: string; N?: string }> = {
+  const item: Record<string, AttributeValue> = {
     patternId: { S: id },
     name:      { S: name.trim() || 'Untitled' },
     width:     { N: String(width) },
