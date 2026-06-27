@@ -769,6 +769,20 @@ export default function ConvertPage() {
     updateGrid(blank);
   }
 
+  function newPattern() {
+    if (hasDesign && !window.confirm('Start a new pattern? The current design will be cleared.')) return;
+    setUndoStack([]);
+    setRedoStack([]);
+    updateGrid(blankGrid());
+    updatePalette(DEFAULT_PALETTE);
+    setSelection(null);
+    setSelectedColor(0);
+    setHiddenColors(new Set());
+    setPatternName('');
+    setNameInput('');
+    setEditingName(true);
+  }
+
   function handleResize(newW: number, newH: number, mode: ResizeMode, anchor: ResizeAnchor) {
     const g = gridRef.current;
     if (!g.length) return;
@@ -861,13 +875,22 @@ export default function ConvertPage() {
                 <span>· {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}</span>
               </div>
             </div>
-            <button
-              type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
-              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
-              title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
-            >
-              {downloading ? 'Generating…' : '↓ Download PDF'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button" onClick={newPattern}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                title="Clear the canvas and start a new pattern"
+              >
+                New Pattern
+              </button>
+              <button
+                type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
+                className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
+                title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
+              >
+                {downloading ? 'Generating…' : '↓ Download PDF'}
+              </button>
+            </div>
           </div>
           {downloadError && <p className="mt-1 text-xs text-red-600">{downloadError}</p>}
 
@@ -880,7 +903,7 @@ export default function ConvertPage() {
                 items: [
                   { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
                   { type: 'separator' },
-                  { type: 'item', label: 'New', onClick: () => { setUndoStack(s => [...s.slice(-49), snap()]); setRedoStack([]); updateGrid(blankGrid()); updatePalette(DEFAULT_PALETTE); setSelection(null); setSelectedColor(0); setHiddenColors(new Set()); } },
+                  { type: 'item', label: 'New Pattern', onClick: newPattern },
                   { type: 'item', label: 'Open from link…', onClick: () => {
                     const raw = prompt('Paste a pattern link or ID:');
                     if (!raw) return;
