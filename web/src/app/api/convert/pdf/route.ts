@@ -120,17 +120,32 @@ export async function POST(request: NextRequest) {
       const ox = (PAGE_W - thumbW) / 2;
       const oy = MARGIN;
 
+      // Fabric background
+      p.drawRectangle({
+        x: ox, y: oy, width: thumbW, height: thumbH,
+        color: rgb(0.96, 0.94, 0.89),
+      });
+
+      // Each stitch drawn as an X (cross-stitch simulation)
+      const stitchThick = Math.max(0.3, scale * 0.18);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const ci = grid[r][c];
           const pal = palette[ci];
           if (!pal) continue;
-          p.drawRectangle({
-            x: ox + c * scale,
-            y: oy + (rows - r - 1) * scale,
-            width: scale + 0.5,   // +0.5 prevents hairline gaps
-            height: scale + 0.5,
-            color: col(pal.r, pal.g, pal.b),
+          const cx = ox + c * scale;
+          const cy = oy + (rows - r - 1) * scale;
+          const pad = scale * 0.08;
+          const strokeColor = col(pal.r, pal.g, pal.b);
+          p.drawLine({
+            start: { x: cx + pad,          y: cy + pad },
+            end:   { x: cx + scale - pad,  y: cy + scale - pad },
+            thickness: stitchThick, color: strokeColor,
+          });
+          p.drawLine({
+            start: { x: cx + scale - pad,  y: cy + pad },
+            end:   { x: cx + pad,          y: cy + scale - pad },
+            thickness: stitchThick, color: strokeColor,
           });
         }
       }
