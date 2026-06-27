@@ -137,11 +137,11 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
         <div className="flex items-end gap-2 mb-1">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Width (stitches)</label>
-            <input type="number" min={10} max={500} value={patWidth}
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={patWidth || ''}
               onChange={e => {
-                const w = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
+                const w = parseInt(e.target.value.replace(/\D/g, '')) || 0;
                 setPatWidth(w);
-                if (lockAspect && aspectRatio) setPatHeight(Math.max(10, Math.min(500, Math.round(w / aspectRatio))));
+                if (lockAspect && aspectRatio && w > 0) setPatHeight(Math.round(w / aspectRatio));
               }}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
@@ -152,11 +152,11 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
           >{lockAspect ? '🔗' : '🔓'}</button>
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Height (stitches)</label>
-            <input type="number" min={10} max={500} value={patHeight}
+            <input type="text" inputMode="numeric" pattern="[0-9]*" value={patHeight || ''}
               onChange={e => {
-                const h = Math.max(10, Math.min(500, parseInt(e.target.value) || 10));
+                const h = parseInt(e.target.value.replace(/\D/g, '')) || 0;
                 setPatHeight(h);
-                if (lockAspect && aspectRatio) setPatWidth(Math.max(10, Math.min(500, Math.round(h * aspectRatio))));
+                if (lockAspect && aspectRatio && h > 0) setPatWidth(Math.round(h * aspectRatio));
               }}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
