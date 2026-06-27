@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import ConvertClient from './ConvertClient';
 
-const TITLE = 'Free Photo to Cross-Stitch Pattern Converter';
+const TITLE = 'Photo to Cross-Stitch Pattern Converter';
 const DESCRIPTION =
   'Turn any photo into a printable cross-stitch pattern in seconds. ' +
-  'Choose your stitch count and number of DMC thread colors, then download a ready-to-stitch PDF chart — free, no account needed.';
+  'Choose your stitch count and number of DMC thread colors, then download a ready-to-stitch PDF chart — no account needed to start.';
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -63,10 +63,20 @@ const FAQ = [
     a: 'Three pages: a colored grid showing each stitch in its DMC color, a symbol grid for black-and-white printing, and a color key table listing the symbol, DMC number, color name and stitch count for every thread.',
   },
   {
-    q: 'Is this tool free?',
-    a: 'Yes — the converter is completely free with no account required.',
+    q: 'Do I need an account?',
+    a: 'No account is needed to convert a photo and download the PDF. Creating a free account lets you save your patterns and come back to edit them later.',
   },
 ];
+
+const faqStructuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+};
 
 export default function PhotoToCrossStitchPage() {
   return (
@@ -75,15 +85,19 @@ export default function PhotoToCrossStitchPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
+      />
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-6 py-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Free Photo to Cross-Stitch Pattern Converter
+            Photo to Cross-Stitch Pattern Converter
           </h1>
           <p className="text-gray-600 mb-8 max-w-2xl">
             Upload any photo and convert it instantly to a stitchable cross-stitch pattern
             with DMC thread colors. Set your own stitch dimensions, limit the palette, preview
-            the result in your browser, and download a print-ready PDF chart — free, no account needed.
+            the result in your browser, and download a print-ready PDF chart — no account needed to start.
           </p>
 
           <ConvertClient />
