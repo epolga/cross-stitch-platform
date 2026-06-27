@@ -141,9 +141,7 @@ export default function ConvertPage() {
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const [fillMode, setFillMode] = useState<FillMode>('flood');
   const [showPencilMenu, setShowPencilMenu] = useState(false);
-  const [showFillMenu, setShowFillMenu] = useState(false);
   const pencilBtnRef = useRef<HTMLDivElement>(null);
-  const fillBtnRef = useRef<HTMLDivElement>(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const strokeSnapshot = useRef<number[][] | null>(null);
   const [selection, setSelection] = useState<SelectionRect | null>(null);
@@ -188,14 +186,6 @@ export default function ConvertPage() {
     return () => document.removeEventListener('keydown', onKey);
   }, [undoStack, redoStack, selection, clipboard]);
 
-  useEffect(() => {
-    if (!showFillMenu) return;
-    function onClickOutside(e: MouseEvent) {
-      if (!fillBtnRef.current?.contains(e.target as Node)) setShowFillMenu(false);
-    }
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, [showFillMenu]);
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -967,243 +957,190 @@ export default function ConvertPage() {
           {/* Editor: sidebar + canvas */}
           <div className="flex gap-3">
 
-            {/* Left toolbar */}
-            <div className="flex flex-col gap-1 flex-none w-16">
-              {/* Undo / Redo */}
-              <button type="button" onClick={undo} disabled={!undoStack.length}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-                title={`Undo (${undoStack.length})`}
-              >
-                <span className="text-base leading-none">↩</span>
-                <span>Undo</span>
-                {undoStack.length > 0 && <span className="text-gray-400">{undoStack.length}</span>}
-              </button>
-              <button type="button" onClick={redo} disabled={!redoStack.length}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
-                title={`Redo (${redoStack.length})`}
-              >
-                <span className="text-base leading-none">↪</span>
-                <span>Redo</span>
-                {redoStack.length > 0 && <span className="text-gray-400">{redoStack.length}</span>}
-              </button>
-
-              <div className="h-px bg-gray-200 my-1" />
-              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Draw</p>
-
-              {/* Tools */}
-              {/* Pen — draw-mode + eraser submenu */}
-              {(() => {
-                const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
-                  { id: 'point',        icon: '✕', label: 'Stitch'              },
-                  { id: 'line',         icon: '╱', label: 'Line'                },
-                  { id: 'rect',         icon: '▭', label: 'Rectangle (⇧=□)'    },
-                  { id: 'rect-fill',    icon: '▬', label: 'Rect Fill (⇧=□)'    },
-                  { id: 'ellipse',      icon: '◯', label: 'Ellipse (⇧=○)'      },
-                  { id: 'ellipse-fill', icon: '⬤', label: 'Ellipse Fill (⇧=○)' },
-                ];
-                const penActive = activeTool === 'pencil' || activeTool === 'eraser';
-                const cur = activeTool === 'eraser'
-                  ? { icon: '⌫', label: 'Erase' }
-                  : DRAW_MODES.find(m => m.id === drawMode)!;
-                return (
-                  <div ref={pencilBtnRef} className="relative">
-                    <button
-                      type="button"
-                      onClick={() => { if (!penActive) setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
-                      title="Draw stitches on the canvas — click ▾ to switch between point, line, rectangle, and ellipse shapes"
-                      className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
-                        penActive
-                          ? 'bg-gray-900 text-white border-gray-900'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                      }`}
-                    >
-                      <span className="text-base leading-none">{cur.icon}</span>
-                      <span>{cur.label}</span>
-                      <span className={`leading-none ${penActive ? 'opacity-60' : 'opacity-40'}`}>Pen ▾</span>
-                    </button>
-                    {showPencilMenu && (
-                      <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-36">
-                        {DRAW_MODES.map(({ id, icon, label }) => (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => { setDrawMode(id); setActiveTool('pencil'); setShowPencilMenu(false); }}
-                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <span className="w-3 text-center">{activeTool === 'pencil' && drawMode === id ? '✓' : ''}</span>
-                            <span className="w-4 text-center font-mono">{icon}</span>
-                            <span>{label}</span>
-                          </button>
-                        ))}
-                        <div className="h-px bg-gray-100 my-1 mx-2" />
-                        <button
-                          type="button"
-                          onClick={() => { setActiveTool('eraser'); setShowPencilMenu(false); }}
-                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <span className="w-3 text-center">{activeTool === 'eraser' ? '✓' : ''}</span>
-                          <span className="w-4 text-center font-mono">⌫</span>
-                          <span>Erase</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Fill — single button, dropdown submenu on click */}
-              <div ref={fillBtnRef} className="relative">
-                <button
-                  type="button"
-                  onClick={() => { setActiveTool('fill'); setShowFillMenu(s => !s); }}
-                  title="Flood fill — click a cell to fill the whole connected area with the active color — click ▾ to switch to Erase Fill"
-                  className={`flex flex-col items-center gap-0.5 px-1 py-2 w-full rounded-lg border text-xs font-medium transition-colors ${
-                    activeTool === 'fill'
-                      ? 'bg-gray-900 text-white border-gray-900'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                  }`}
-                >
-                  <span className="text-base leading-none">{fillMode === 'erase' ? '⬜' : '🪣'}</span>
-                  <span>{fillMode === 'erase' ? 'Erase' : 'Flood'}</span>
-                  <span className={`leading-none ${activeTool === 'fill' ? 'opacity-60' : 'opacity-40'}`}>Fill ▾</span>
-                </button>
-
-                {showFillMenu && (
-                  <div className="absolute left-full top-0 ml-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-28">
-                    {([
-                      { mode: 'flood' as FillMode, icon: '🪣', label: 'Flood Fill' },
-                      { mode: 'erase' as FillMode, icon: '⬜', label: 'Erase Fill' },
-                    ]).map(({ mode, icon, label }) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => { setFillMode(mode); setShowFillMenu(false); }}
-                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <span className="w-3 text-center">{fillMode === mode ? '✓' : ''}</span>
-                        <span>{icon}</span>
-                        <span>{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="h-px bg-gray-200 my-1" />
-
-              {/* Pen size control */}
-              <div className="flex flex-col items-center gap-1 px-1 py-1" title={`Pen size: paints a ${penWidth}×${penWidth} block of stitches at once`}>
-                <span className="text-xs text-gray-500">Pen size</span>
-                <span className="text-sm font-mono font-bold text-gray-800">{penWidth}</span>
-                <input
-                  type="range" min={1} max={9} value={penWidth}
-                  onChange={e => setPenWidth(parseInt(e.target.value))}
-                  className="w-full accent-rose-500"
-                  title={`Size ${penWidth} — paints a ${penWidth}×${penWidth} block of stitches at once`}
-                />
-              </div>
-
-              <div className="h-px bg-gray-200 my-1" />
-              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">View</p>
-
-              {/* View mode */}
-              {VIEW_MODES.map(({ id, label, title }) => (
-                <button key={id} type="button" onClick={() => setViewMode(id)} title={title}
-                  className={`px-1 py-2 rounded-lg border text-xs transition-colors ${
-                    viewMode === id
-                      ? 'bg-rose-500 text-white border-rose-500'
-                      : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-
-              <div className="h-px bg-gray-200 my-1" />
-              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Select</p>
-
-              {/* Select tool */}
-              <button type="button" onClick={() => setActiveTool('select')}
-                className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                  activeTool === 'select'
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                }`}
-                title="Select — drag on the canvas to select a rectangular area, then copy, cut, or crop it"
-              >
-                <span className="text-base leading-none">▦</span>
-                <span>Select</span>
-              </button>
-
-              {/* Cut selected region */}
-              <button type="button" onClick={handleCut} disabled={!selection}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Cut — copies the selected area and erases it (select a region first)"
-              >
-                <span className="text-base leading-none">✂</span>
-                <span>Cut</span>
-              </button>
-
-              {/* Crop to selection */}
-              <button type="button" onClick={handleCrop} disabled={!selection}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Crop — trims the canvas to the selected area and discards the rest (select a region first)"
-              >
-                <span className="text-base leading-none">⊡</span>
-                <span>Crop</span>
-              </button>
-
-              <div className="h-px bg-gray-200 my-1" />
-              <p className="text-[9px] uppercase tracking-wider text-gray-400 text-center leading-none select-none">Transform</p>
-
-              {/* Flip horizontal */}
-              <button type="button" onClick={handleFlipH}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Flip H — mirrors the design left-to-right (applies to selection if one exists, otherwise whole design)"
-              >
-                <span className="text-base leading-none">↔</span>
-                <span>Flip H</span>
-              </button>
-
-              {/* Flip vertical */}
-              <button type="button" onClick={handleFlipV}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Flip V — mirrors the design top-to-bottom (applies to selection if one exists, otherwise whole design)"
-              >
-                <span className="text-base leading-none">↕</span>
-                <span>Flip V</span>
-              </button>
-
-              {/* Rotate 90° clockwise */}
-              <button type="button" onClick={() => applyRotation(rot90CW)}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 90° clockwise — turns the design to the right (applies to selection if one exists, otherwise whole design)"
-              >
-                <span className="text-base leading-none">↻</span>
-                <span>Rot R</span>
-              </button>
-
-              {/* Rotate 90° counter-clockwise */}
-              <button type="button" onClick={() => applyRotation(rot90CCW)}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 90° counter-clockwise — turns the design to the left (applies to selection if one exists, otherwise whole design)"
-              >
-                <span className="text-base leading-none">↺</span>
-                <span>Rot L</span>
-              </button>
-
-              {/* Rotate 180° */}
-              <button type="button" onClick={() => applyRotation(rot180)}
-                className="flex flex-col items-center gap-0.5 px-1 py-2 rounded-lg border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
-                title="Rotate 180° — flips the design upside down (applies to selection if one exists, otherwise whole design)"
-              >
-                <span className="text-base leading-none">⟳</span>
-                <span>180°</span>
-              </button>
-            </div>
-
             {/* Canvas column */}
             <div className="flex-1 flex flex-col gap-2 min-w-0">
+
+              {/* Draw toolbar — single row; pen/eraser cell is internally split */}
+              <div className="flex items-start gap-1 px-1 pb-1 border-b border-gray-100">
+
+                {/* Undo / Redo */}
+                <button type="button" onClick={undo} disabled={!undoStack.length}
+                  title={`Undo (${undoStack.length})`}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>↩</span><span>Undo</span>
+                  {undoStack.length > 0 && <span className="text-gray-400 ml-0.5">{undoStack.length}</span>}
+                </button>
+                <button type="button" onClick={redo} disabled={!redoStack.length}
+                  title={`Redo (${redoStack.length})`}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>↪</span><span>Redo</span>
+                  {redoStack.length > 0 && <span className="text-gray-400 ml-0.5">{redoStack.length}</span>}
+                </button>
+
+                <div className="self-stretch w-px bg-gray-200 mx-0.5" />
+
+                {/* Pen + Eraser cell — buttons on top, size slider below */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    {/* Pen with draw-mode dropdown */}
+                    {(() => {
+                      const DRAW_MODES: { id: DrawMode; icon: string; label: string }[] = [
+                        { id: 'point',        icon: '✕', label: 'Stitch'              },
+                        { id: 'line',         icon: '╱', label: 'Line'                },
+                        { id: 'rect',         icon: '▭', label: 'Rectangle (⇧=□)'    },
+                        { id: 'rect-fill',    icon: '▬', label: 'Rect Fill (⇧=□)'    },
+                        { id: 'ellipse',      icon: '◯', label: 'Ellipse (⇧=○)'      },
+                        { id: 'ellipse-fill', icon: '⬤', label: 'Ellipse Fill (⇧=○)' },
+                      ];
+                      const cur = DRAW_MODES.find(m => m.id === drawMode) ?? DRAW_MODES[0];
+                      const isPenActive = activeTool === 'pencil';
+                      return (
+                        <div ref={pencilBtnRef} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => { if (!isPenActive) setActiveTool('pencil'); setShowPencilMenu(s => !s); }}
+                            title="Draw stitches — click ▾ to switch draw mode"
+                            className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                              isPenActive
+                                ? 'bg-gray-900 text-white border-gray-900'
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                            }`}
+                          >
+                            <span>{cur.icon}</span><span>Pen</span><span className="opacity-60">▾</span>
+                          </button>
+                          {showPencilMenu && (
+                            <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40">
+                              {DRAW_MODES.map(({ id, icon, label }) => (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  onClick={() => { setDrawMode(id); setActiveTool('pencil'); setShowPencilMenu(false); }}
+                                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <span className="w-3 text-center">{activeTool === 'pencil' && drawMode === id ? '✓' : ''}</span>
+                                  <span className="w-4 text-center font-mono">{icon}</span>
+                                  <span>{label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Eraser */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTool('eraser')}
+                      title="Eraser — click or drag to clear cells"
+                      className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                        activeTool === 'eraser'
+                          ? 'bg-gray-900 text-white border-gray-900'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      <span>⌫</span><span>Eraser</span>
+                    </button>
+                  </div>
+
+                  {/* Size slider — spans full width of the pen/eraser cell */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-500 flex-none">Size</span>
+                    <span className="text-xs font-mono text-gray-800 w-3 text-center flex-none">{penWidth}</span>
+                    <input
+                      type="range" min={1} max={9} value={penWidth}
+                      onChange={e => setPenWidth(parseInt(e.target.value))}
+                      className="w-24 accent-rose-500"
+                      title={`Size ${penWidth} — paints a ${penWidth}×${penWidth} block of stitches at once`}
+                    />
+                  </div>
+                </div>
+
+                <div className="self-stretch w-px bg-gray-200 mx-0.5" />
+
+                {/* Fill / Fill Erase */}
+                <button
+                  type="button"
+                  onClick={() => { setActiveTool('fill'); setFillMode('flood'); }}
+                  title="Flood fill — click a cell to fill the connected area with the active color"
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                    activeTool === 'fill' && fillMode === 'flood'
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <span>🪣</span><span>Fill</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTool('fill'); setFillMode('erase'); }}
+                  title="Fill Erase — click a cell to clear the whole connected area"
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                    activeTool === 'fill' && fillMode === 'erase'
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <span>⬜</span><span>Fill Erase</span>
+                </button>
+
+                <div className="self-stretch w-px bg-gray-200 mx-0.5" />
+
+                {/* Select */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTool('select')}
+                  title="Select — drag on the canvas to select a rectangular area, then copy, cut, or crop it"
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                    activeTool === 'select'
+                      ? 'bg-gray-900 text-white border-gray-900'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <span>▦</span><span>Select</span>
+                </button>
+
+                {/* Selection-dependent actions — only shown when relevant */}
+                {selection && <>
+                  <button type="button" onClick={handleCopy}
+                    title="Copy selection"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  ><span>⎘</span><span>Copy</span></button>
+                  <button type="button" onClick={handleCut}
+                    title="Cut selection"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  ><span>✂</span><span>Cut</span></button>
+                  <button type="button" onClick={handleCrop}
+                    title="Crop canvas to selection"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  ><span>⊡</span><span>Crop</span></button>
+                </>}
+                {clipboard && (
+                  <button type="button" onClick={handlePaste}
+                    title="Paste"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400"
+                  ><span>⎙</span><span>Paste</span></button>
+                )}
+
+                <div className="self-stretch w-px bg-gray-200 mx-0.5" />
+
+                {/* View mode segmented control */}
+                <div className="flex items-center self-start rounded border border-gray-200 overflow-hidden">
+                  {VIEW_MODES.map(({ id, label, title }) => (
+                    <button key={id} type="button" onClick={() => setViewMode(id)} title={title}
+                      className={`px-2 py-1.5 text-xs font-medium transition-colors border-r last:border-r-0 border-gray-200 ${
+                        viewMode === id
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Zoom bar */}
               <div className="flex items-center gap-3 px-1">
@@ -1232,12 +1169,20 @@ export default function ConvertPage() {
             {/* Canvas */}
             <div ref={canvasWrapperRef} className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
               {!hasDesign && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-10 select-none">
-                  <span className="text-5xl mb-4">📷</span>
-                  <p className="text-sm font-semibold text-gray-500">No pattern loaded</p>
-                  <p className="text-xs text-gray-400 mt-2 max-w-[200px] leading-relaxed">
-                    Click <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above to convert a photo into a cross-stitch pattern
-                  </p>
+                <div
+                  className="absolute top-0 left-0 flex flex-col items-center justify-center z-10 pointer-events-none select-none"
+                  style={{
+                    width:  (grid[0]?.length ?? 80) * cellSize + 30,
+                    height: (grid.length || 80) * cellSize + 18,
+                  }}
+                >
+                  <div className="flex flex-col items-center text-center bg-white/70 backdrop-blur-sm rounded-xl px-8 py-6">
+                    <span className="text-5xl mb-4">📷</span>
+                    <p className="text-sm font-semibold text-gray-500">No pattern loaded</p>
+                    <p className="text-xs text-gray-400 mt-2 max-w-[200px] leading-relaxed">
+                      Click <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above to convert a photo into a cross-stitch pattern
+                    </p>
+                  </div>
                 </div>
               )}
               <PatternCanvas
