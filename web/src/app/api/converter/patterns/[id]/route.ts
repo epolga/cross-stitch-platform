@@ -40,7 +40,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid pattern ID' }, { status: 400 });
 
     const body = await request.json();
-    const { name, width, height, palette, grid } = body;
+    const { name, width, height, palette, grid, thumbnail } = body;
 
     if (!Array.isArray(grid) || !Array.isArray(palette))
       return NextResponse.json({ error: 'Invalid pattern data' }, { status: 400 });
@@ -57,7 +57,10 @@ export async function PUT(
     if (existing.ownerID && existing.ownerID !== session.userId)
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
 
-    await updatePattern(id, String(name ?? 'Untitled'), width, height, palette, grid, session.userId);
+    await updatePattern(
+      id, String(name ?? 'Untitled'), width, height, palette, grid, session.userId,
+      typeof thumbnail === 'string' ? thumbnail : undefined,
+    );
     return NextResponse.json({ id });
   } catch (e) {
     console.error('[converter/patterns] PUT error:', e);

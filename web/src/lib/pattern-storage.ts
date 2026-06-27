@@ -2,6 +2,7 @@ import {
   DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
+  QueryCommand,
   CreateTableCommand,
   DescribeTableCommand,
   UpdateTimeToLiveCommand,
@@ -63,7 +64,15 @@ function ensureTable(): Promise<void> {
       await client.send(new CreateTableCommand({
         TableName: TABLE,
         KeySchema: [{ AttributeName: 'patternId', KeyType: 'HASH' }],
-        AttributeDefinitions: [{ AttributeName: 'patternId', AttributeType: 'S' }],
+        AttributeDefinitions: [
+          { AttributeName: 'patternId', AttributeType: 'S' },
+          { AttributeName: 'ownerID',   AttributeType: 'S' },
+        ],
+        GlobalSecondaryIndexes: [{
+          IndexName: 'ownerID-index',
+          KeySchema: [{ AttributeName: 'ownerID', KeyType: 'HASH' }],
+          Projection: { ProjectionType: 'ALL' },
+        }],
         BillingMode: 'PAY_PER_REQUEST',
       }));
       // Poll until ACTIVE before enabling TTL
@@ -100,6 +109,7 @@ export async function savePattern(
   palette: PatternPalette[],
   grid: number[][],
   ownerID: string,
+  thumbnail?: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -107,20 +117,19 @@ export async function savePattern(
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
-  await client.send(new PutItemCommand({
-    TableName: TABLE,
-    Item: {
-      patternId: { S: id },
-      name:      { S: name.trim() || 'Untitled' },
-      width:     { N: String(width) },
-      height:    { N: String(height) },
-      palette:   { S: JSON.stringify(palette) },
-      grid:      { S: rle },
-      createdAt: { S: new Date().toISOString() },
-      ownerID:   { S: ownerID },
-    },
-  }));
+  const item: Record<string, { S?: string; N?: string }> = {
+    patternId: { S: id },
+    name:      { S: name.trim() || 'Untitled' },
+    width:     { N: String(width) },
+    height:    { N: String(height) },
+    palette:   { S: JSON.stringify(palette) },
+    grid:      { S: rle },
+    createdAt: { S: new Date().toISOString() },
+    ownerID:   { S: ownerID },
+  };
+  if (thumbnail) item.thumbnail = { S: thumbnail };
 
+  await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
 }
 
@@ -132,25 +141,55 @@ export async function updatePattern(
   palette: PatternPalette[],
   grid: number[][],
   ownerID: string,
+  thumbnail?: string,
 ): Promise<void> {
   await ensureTable();
   const rle = rleEncode(grid);
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
-  await client.send(new PutItemCommand({
+  const item: Record<string, { S?: string; N?: string }> = {
+    patternId: { S: id },
+    name:      { S: name.trim() || 'Untitled' },
+    width:     { N: String(width) },
+    height:    { N: String(height) },
+    palette:   { S: JSON.stringify(palette) },
+    grid:      { S: rle },
+    createdAt: { S: new Date().toISOString() },
+    ownerID:   { S: ownerID },
+  };
+  if (thumbnail) item.thumbnail = { S: thumbnail };
+
+  await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
+}
+
+export interface PatternSummary {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  createdAt: string;
+  thumbnail?: string;
+}
+
+export async function listPatternsByOwner(ownerID: string): Promise<PatternSummary[]> {
+  await ensureTable();
+  const { Items = [] } = await client.send(new QueryCommand({
     TableName: TABLE,
-    Item: {
-      patternId: { S: id },
-      name:      { S: name.trim() || 'Untitled' },
-      width:     { N: String(width) },
-      height:    { N: String(height) },
-      palette:   { S: JSON.stringify(palette) },
-      grid:      { S: rle },
-      createdAt: { S: new Date().toISOString() },
-      ownerID:   { S: ownerID },
-    },
+    IndexName: 'ownerID-index',
+    KeyConditionExpression: 'ownerID = :oid',
+    ExpressionAttributeValues: { ':oid': { S: ownerID } },
+    ProjectionExpression: 'patternId, #n, width, height, createdAt, thumbnail',
+    ExpressionAttributeNames: { '#n': 'name' },
   }));
+  return Items.map(item => ({
+    id:        item.patternId.S!,
+    name:      item.name?.S ?? 'Untitled',
+    width:     parseInt(item.width?.N ?? '0'),
+    height:    parseInt(item.height?.N ?? '0'),
+    createdAt: item.createdAt?.S ?? '',
+    thumbnail: item.thumbnail?.S,
+  })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function loadPattern(id: string): Promise<SavedPattern | null> {

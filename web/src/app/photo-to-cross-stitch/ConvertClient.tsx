@@ -12,6 +12,7 @@ import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
+import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
@@ -418,7 +419,8 @@ export default function ConvertPage() {
 
     const g = gridRef.current;
     const pal = paletteRef.current;
-    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g });
+    const thumbnail = generatePatternThumbnail(g, pal);
+    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail });
     const resp = await fetch(
       existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',
       { method: existingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body },
