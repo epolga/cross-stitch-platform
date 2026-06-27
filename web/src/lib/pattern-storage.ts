@@ -11,7 +11,6 @@ import type { PatternPalette } from './pattern-converter';
 
 const TABLE  = process.env.DDB_PATTERNS_TABLE || 'ConverterPatterns';
 const REGION = process.env.AWS_REGION || 'us-east-1';
-const TTL_DAYS = 90;
 
 const client = new DynamoDBClient({ region: REGION });
 
@@ -91,6 +90,7 @@ export interface SavedPattern {
   palette: PatternPalette[];
   grid: number[][];
   createdAt: string;
+  ownerID?: string;
 }
 
 export async function savePattern(
@@ -99,6 +99,7 @@ export async function savePattern(
   height: number,
   palette: PatternPalette[],
   grid: number[][],
+  ownerID: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -116,11 +117,40 @@ export async function savePattern(
       palette:   { S: JSON.stringify(palette) },
       grid:      { S: rle },
       createdAt: { S: new Date().toISOString() },
-      expiresAt: { N: String(Math.floor(Date.now() / 1000) + TTL_DAYS * 86400) },
+      ownerID:   { S: ownerID },
     },
   }));
 
   return id;
+}
+
+export async function updatePattern(
+  id: string,
+  name: string,
+  width: number,
+  height: number,
+  palette: PatternPalette[],
+  grid: number[][],
+  ownerID: string,
+): Promise<void> {
+  await ensureTable();
+  const rle = rleEncode(grid);
+  if (rle.length > 350_000)
+    throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
+
+  await client.send(new PutItemCommand({
+    TableName: TABLE,
+    Item: {
+      patternId: { S: id },
+      name:      { S: name.trim() || 'Untitled' },
+      width:     { N: String(width) },
+      height:    { N: String(height) },
+      palette:   { S: JSON.stringify(palette) },
+      grid:      { S: rle },
+      createdAt: { S: new Date().toISOString() },
+      ownerID:   { S: ownerID },
+    },
+  }));
 }
 
 export async function loadPattern(id: string): Promise<SavedPattern | null> {
@@ -142,5 +172,6 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     palette:   JSON.parse(Item.palette.S!) as PatternPalette[],
     grid:      rleDecode(Item.grid.S!, width, height),
     createdAt: Item.createdAt.S!,
+    ownerID:   Item.ownerID?.S,
   };
 }

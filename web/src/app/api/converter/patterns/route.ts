@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { savePattern } from '@/lib/pattern-storage';
+import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession(request);
+    if (!session) return NextResponse.json({ error: 'Login required' }, { status: 401 });
+
     const body = await request.json();
     const { name, width, height, palette, grid } = body;
 
@@ -17,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     const id = await savePattern(
       String(name ?? 'Untitled'),
-      width, height, palette, grid,
+      width, height, palette, grid, session.userId,
     );
 
     return NextResponse.json({ id });

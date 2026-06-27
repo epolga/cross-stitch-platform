@@ -31,6 +31,7 @@ export default function SavePatternDialog({ open, defaultName = '', onSave, onCl
       const url = await onSave(name.trim() || 'Untitled');
       setSavedUrl(url);
     } catch (e) {
+      if ((e as { silent?: boolean })?.silent) return;
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setSaving(false);
@@ -83,8 +84,7 @@ export default function SavePatternDialog({ open, defaultName = '', onSave, onCl
         ) : (
           <>
             <p className="text-xs text-gray-500 mb-2">
-              Anyone with this link can open your pattern in the converter.
-              The link is valid for 90 days.
+              This link opens your pattern in the converter. Only you can access it.
             </p>
             <div className="flex gap-2 mb-4">
               <input

@@ -11,6 +11,7 @@ import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
+import { isUserLoggedIn } from '@/app/components/AuthControl';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
@@ -199,6 +200,10 @@ export default function ConvertPage() {
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => isUserLoggedIn());
+  // PDF locked when pattern belongs to an owner and current user is not logged in
+  const pdfLocked = !!savedPatternId && !isLoggedIn;
   const [patternName, setPatternName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -341,11 +346,20 @@ export default function ConvertPage() {
     updateGrid(next);
   }
 
-  // Auto-load pattern from ?pattern=<id> URL param on mount
+  // Keep isLoggedIn in sync with auth state changes (login/logout from header)
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('pattern');
-    if (!id) return;
+    const handler = () => setIsLoggedIn(isUserLoggedIn());
+    window.addEventListener('authStateChange', handler);
+    window.addEventListener('storage', handler);
+    return () => {
+      window.removeEventListener('authStateChange', handler);
+      window.removeEventListener('storage', handler);
+    };
+  }, []);
+
+  function loadPatternById(id: string) {
     setPatternLoading(true);
+    setPatternLoadError('');
     fetch(`/api/converter/patterns/${id}`)
       .then(async r => {
         const data = await r.json();
@@ -368,29 +382,54 @@ export default function ConvertPage() {
         updateGrid(data.grid);
         updatePalette(data.palette);
         setPatternName(data.name ?? '');
+        setSavedPatternId(id);
       })
       .catch(e => {
         console.error('[load pattern]', e);
         setPatternLoadError(e instanceof Error ? e.message : 'Failed to load pattern');
       })
       .finally(() => setPatternLoading(false));
+  }
+
+  // Auto-load pattern from ?pattern=<id> URL param on mount
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('pattern');
+    if (id) loadPatternById(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save current pattern, return shareable URL
+  // Retry loading when user logs in and pattern URL is present but not yet loaded
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const id = new URLSearchParams(window.location.search).get('pattern');
+    if (id && !savedPatternId) loadPatternById(id);
+  }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save current pattern, return shareable URL (PUT to update in-place if already saved)
   async function handleSavePattern(name: string): Promise<string> {
+    const existingId = savedPatternId;
+
+    if (!existingId && !isUserLoggedIn()) {
+      setSaveDialogOpen(false);
+      window.dispatchEvent(new CustomEvent('openRegisterModal', {
+        detail: { source: 'converter-save', label: 'Save pattern' },
+      }));
+      throw Object.assign(new Error('login required'), { silent: true });
+    }
+
     const g = gridRef.current;
     const pal = paletteRef.current;
-    const resp = await fetch('/api/converter/patterns', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g }),
-    });
+    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g });
+    const resp = await fetch(
+      existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',
+      { method: existingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body },
+    );
     if (!resp.ok) {
       const { error } = await resp.json().catch(() => ({ error: 'Save failed' }));
       throw new Error(error);
     }
     const { id } = await resp.json();
     setPatternName(name);
+    setSavedPatternId(id);
     const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${id}`;
     window.history.replaceState(null, '', `?pattern=${id}`);
     return url;
@@ -781,6 +820,8 @@ export default function ConvertPage() {
     setPatternName('');
     setNameInput('');
     setEditingName(true);
+    setSavedPatternId(null);
+    window.history.replaceState(null, '', window.location.pathname);
   }
 
   function handleResize(newW: number, newH: number, mode: ResizeMode, anchor: ResizeAnchor) {
@@ -884,9 +925,9 @@ export default function ConvertPage() {
                 New Pattern
               </button>
               <button
-                type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
+                type="button" onClick={downloadPdf} disabled={downloading || !hasDesign || pdfLocked}
                 className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
-                title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
+                title={pdfLocked ? 'Log in to download this pattern' : !hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
               >
                 {downloading ? 'Generating…' : '↓ Download PDF'}
               </button>
@@ -901,7 +942,7 @@ export default function ConvertPage() {
               {
                 label: 'File',
                 items: [
-                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
+                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign || pdfLocked },
                   { type: 'separator' },
                   { type: 'item', label: 'New Pattern', onClick: newPattern },
                   { type: 'item', label: 'Open from link…', onClick: () => {
@@ -912,7 +953,7 @@ export default function ConvertPage() {
                     if (!id) { alert('Could not find a pattern ID in that link.'); return; }
                     fetch(`/api/converter/patterns/${id}`)
                       .then(r => r.ok ? r.json() : Promise.reject())
-                      .then(data => { updateGrid(data.grid); updatePalette(data.palette); setPatternName(data.name ?? ''); window.history.replaceState(null, '', `?pattern=${id}`); })
+                      .then(data => { updateGrid(data.grid); updatePalette(data.palette); setPatternName(data.name ?? ''); setSavedPatternId(id); window.history.replaceState(null, '', `?pattern=${id}`); })
                       .catch(() => alert('Pattern not found or link has expired.'));
                   }},
                   { type: 'item', label: 'Save & share…', shortcut: 'Ctrl+S', onClick: () => setSaveDialogOpen(true) },

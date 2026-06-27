@@ -482,6 +482,7 @@ export function AuthControl() {
 
   const handleLogout = (): void => {
     console.log('Logging out...');
+    void fetch('/api/auth/logout', { method: 'POST' });
     if (typeof window !== 'undefined') {
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('userEmail');
