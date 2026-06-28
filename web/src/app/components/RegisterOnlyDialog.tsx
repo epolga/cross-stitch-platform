@@ -137,7 +137,7 @@ export function RegisterOnlyDialog({
               Hello there! I&apos;m Ann, and I&apos;m truly thrilled that you&apos;ve decided to join me today. It means so much to me personally.<br />
               To download the pattern, <b>just register</b>.<br />
               I&apos;ll also be able to inform you when a new pattern is added to the site. Just that—no spam, no promotions! I promise.<br />
-              Could you please share your first name and email so we can create a special space just for you?
+              Could you please share your first name and email so I can create a special space just for you?
             </p>
 
             {error && (

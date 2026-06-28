@@ -35,7 +35,7 @@ export default function GlobalError({ error, reset }: ErrorProps) {
         <div className="max-w-lg w-full p-4 border border-gray-200 rounded shadow-sm">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
           <p className="text-gray-700 mb-4">
-            We hit an unexpected error. Please try again. The team has been notified.
+            Something went wrong. Please try again — I&apos;ve been notified.
           </p>
           <div className="flex gap-2">
             <button

@@ -6,7 +6,11 @@ S7 converter — stitchable PDF chart from photo.
 
 ## Active work
 
-S7 converter starting now.
+Nothing in flight.
+
+## Next session
+
+Integrate the converter into the main site flow — wire up the `/photo-to-cross-stitch` page so it connects end-to-end with the rest of the site (nav link, login-wall, saved patterns, etc.).
 
 ## Return to S8 analytics
 

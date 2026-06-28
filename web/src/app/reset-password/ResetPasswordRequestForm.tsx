@@ -42,7 +42,7 @@ export default function ResetPasswordRequestForm() {
     <div className="max-w-md mx-auto px-4 py-8">
       <h1 className="text-2xl font-semibold mb-4">Reset your password</h1>
       <p className="mb-4 text-sm text-gray-700">
-        Enter the email you used when registering on {siteHostname}. We will send you a
+        Enter the email you used when registering on {siteHostname}. I will send you a
         link to choose a new password.
       </p>
 

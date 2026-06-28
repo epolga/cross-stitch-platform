@@ -104,7 +104,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
           <h3 className="text-base font-semibold text-gray-900">Import from Photo</h3>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
-        <p className="text-xs text-gray-500 mb-4">Upload any photo and we&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
+        <p className="text-xs text-gray-500 mb-4">Upload any photo and I&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
 
         {/* Drop zone */}
         <div

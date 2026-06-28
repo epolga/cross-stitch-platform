@@ -217,7 +217,7 @@ export default function HeroSearch() {
       ) : (
         <>
           <p className="text-lg font-semibold text-gray-900 mb-3">
-            Upload any image and we&apos;ll find visually similar patterns in the catalog.
+            Upload any image and I&apos;ll find visually similar patterns in the catalog.
           </p>
 
           {/* Drop zone */}

@@ -37,13 +37,13 @@ export default async function UnsubscribePage({
 
   let title = 'Processing unsubscribe request';
   let message =
-    'Please wait while we update your preferences.';
+    'Just a moment, updating your preferences…';
   let adminNotified = false;
 
   if (!token) {
     title = 'Invalid unsubscribe link';
     message =
-      'We could not read the unsubscribe token. Please use the link from your email or contact support.';
+      'Could not read the unsubscribe link. Please use the link directly from your email, or contact me if you need help.';
   } else {
     try {
       const result = await unsubscribeUserByToken(token);
@@ -51,8 +51,8 @@ export default async function UnsubscribePage({
       if (result.status === 'updated') {
         title = 'You are unsubscribed';
         message = result.email
-          ? `We have stopped sending emails to ${result.email}.`
-          : 'We have removed you from future emails.';
+          ? `Done — I've stopped sending emails to ${result.email}.`
+          : 'Done — you have been removed from future emails.';
         try {
           await sendEmailToAdmin(
             'User unsubscribed',
@@ -69,11 +69,11 @@ export default async function UnsubscribePage({
       } else if (result.status === 'already-unsubscribed') {
         title = 'Already unsubscribed';
         message =
-          'This link was already used, but you remain off our mailing list.';
+          'This link was already used, but you remain unsubscribed.';
       } else {
         title = 'Link not recognized';
         message =
-          'We could not find a subscription matching this link. It may have expired or been used already.';
+          'Could not find a subscription matching this link. It may have expired or already been used.';
       }
     } catch (error) {
       console.error('[unsubscribe] Failed to process request:', error);
@@ -92,7 +92,7 @@ export default async function UnsubscribePage({
         <p className="text-gray-700">{message}</p>
         {adminNotified ? (
           <p className="text-sm text-green-700">
-            Our team has been notified.
+            I&apos;ve been notified.
           </p>
         ) : null}
         <div className="pt-2">
