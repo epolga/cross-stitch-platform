@@ -19,7 +19,7 @@ import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-c
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
 
-import { trackEvent } from '@/lib/track-event';
+import { trackEvent, postEditorEvent } from '@/lib/track-event';
 
 const DEFAULT_PALETTE_NUMBERS = [
   'blanc', '310', '3371', '321', '666', '3716', '208',
@@ -283,6 +283,11 @@ export default function ConvertPage() {
       patternHeight: paddedGrid.length,
       colorCount: data.palette.length,
     });
+    postEditorEvent('pattern_generated', {
+      patternWidth: paddedGrid[0]?.length,
+      patternHeight: paddedGrid.length,
+      colorCount: data.palette.length,
+    });
   }
 
   // Download PDF from current (edited) grid
@@ -308,9 +313,15 @@ export default function ConvertPage() {
         patternHeight: gridRef.current.length,
         colorCount: palette.length,
       });
+      postEditorEvent('pdf_exported', {
+        patternWidth: gridRef.current[0]?.length,
+        patternHeight: gridRef.current.length,
+        colorCount: palette.length,
+      });
     } catch (e) {
       setDownloadError(e instanceof Error ? e.message : 'Download failed');
       trackEvent('editor_error', { errorCode: 'pdf_failed', step: 'pdf_export' });
+      postEditorEvent('editor_error', { errorCode: 'pdf_failed', step: 'pdf_export' });
     } finally {
       setDownloading(false);
     }
@@ -484,6 +495,7 @@ export default function ConvertPage() {
         console.error('[load pattern]', e);
         setPatternLoadError(e instanceof Error ? e.message : 'Failed to load pattern');
         trackEvent('editor_error', { errorCode: 'load_failed', step: 'pattern_load' });
+        postEditorEvent('editor_error', { errorCode: 'load_failed', step: 'pattern_load' });
       })
       .finally(() => setPatternLoading(false));
   }
@@ -493,6 +505,7 @@ export default function ConvertPage() {
     const source = params.get('source') ?? (document.referrer ? 'referrer' : 'direct');
     const patternId = params.get('pattern') ?? undefined;
     trackEvent('editor_opened', { source, referrer: document.referrer || undefined, patternId });
+    postEditorEvent('editor_opened', { source, patternId });
   }, []);
 
   // Auto-load pattern from ?pattern=<id> URL param on mount
@@ -532,6 +545,7 @@ export default function ConvertPage() {
     if (!resp.ok) {
       const { error } = await resp.json().catch(() => ({ error: 'Save failed' }));
       trackEvent('editor_error', { errorCode: 'save_failed', step: 'pattern_save' });
+      postEditorEvent('editor_error', { errorCode: 'save_failed', step: 'pattern_save' });
       throw new Error(error);
     }
     const { id } = await resp.json();
@@ -1707,7 +1721,10 @@ export default function ConvertPage() {
 
       <FeatureRequestDialog
         open={showFeatureRequest}
-        onSubmit={(importance) => trackEvent('feedback_submitted', { importance })}
+        onSubmit={(importance) => {
+          trackEvent('feedback_submitted', { importance });
+          postEditorEvent('feedback_submitted', { importance });
+        }}
         context={{
           patternWidth:             grid[0]?.length,
           patternHeight:            grid.length,
