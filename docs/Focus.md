@@ -2,11 +2,17 @@
 
 ## Current goal
 
-S8 — Search analytics (in progress). After S8: S7 converter (stitchable PDF chart).
+S7 converter — stitchable PDF chart from photo.
 
 ## Active work
 
-S8 implementation starting now.
+S7 converter starting now.
+
+## Return to S8 analytics
+
+Come back to S8 after ~2–4 weeks of traffic data has accumulated. Run
+`npm run search-analytics` in `automation/pinterest-agent/` to see top queries
+and zero-result queries worth acting on.
 
 ## What was built (sessions through 2026-06-05)
 
@@ -38,53 +44,99 @@ S8 implementation starting now.
 - 102 album pins across 29 albums still exist in Pinterest but will not be promoted
 - Removed A/B section from daily email; deleted `scripts/ab-test-report.ts`
 
-## Planned work
+### S7 converter — Photo to cross-stitch pattern
 
-### S8 — Search analytics
+#### Phase 1 — Browser preview + PDF export (building now, worktree: s7-converter)
 
-**Goal:** understand what users search for, catch zero-result queries, surface trending terms.
+**New page: `/convert`**
 
-**What to log** (server-side, from API routes):
-- Query text, timestamp, source (`text` / `image`), result count, filters applied
+Upload → options → pattern preview → download PDF.
 
-**Storage:** new DDB entity type `SEARCH_LOG` in `CrossStitchItems` table
-- PK: `SEARCH_LOG`, SK: `{ISO-timestamp}#{nanoid}`
-- Fields: `query`, `source`, `resultCount`, `filters` (JSON), `ttl` (90 days, Unix epoch)
+**Step 1 — Upload**
+- Drag-drop or click to upload (JPEG/PNG/WebP, max 5 MB)
+- Reuse same drag-drop UI pattern as image search
 
-**Reporting:** `scripts/search-analytics.ts` (`npm run search-analytics`)
-- Top 20 queries by frequency (last 30 days)
-- Zero-result queries (resultCount = 0)
-- Daily search volume
+**Step 2 — Options** (user picks before converting)
+- Width: number input (stitches, e.g. 50–200)
+- Height: number input (stitches, e.g. 50–200) — independent from width
+- Color count: fixed options — 10 / 15 / 20 / 25 DMC colors
 
-**Instrumentation points:**
-- `/api/ai-search` — log after resolving filters; resultCount comes from a `fetchFilteredDesigns` call
-- `/api/image-search` — log after semantic search returns designIds
+**Step 3 — Pattern preview** (rendered in browser, scrollable)
+- Canvas-based rendering (handles large grids better than CSS grid)
+- Toggle: **Colored view** (cells filled with DMC color) vs **Symbol view** (B&W symbols for printing)
+- Scrollable — no compression, no page splitting yet
+
+**Step 4 — Download**
+- "Download PDF" button → `POST /api/convert/pdf` → returns PDF
+- PDF contains: colored grid page + symbol grid page + color key table
+
+**Server pipeline (`/api/convert`):**
+1. Decode image → resize to (width × height) using `sharp`
+2. Extract pixel color array
+3. Map each pixel to nearest DMC color (Euclidean RGB distance)
+4. Merge smallest palette clusters until ≤ N colors
+5. Assign each color a symbol (A–Z, then ①–⑳ etc.)
+6. Return `{ grid: number[][], palette: DmcColor[] }` as JSON
+
+**PDF generation (`/api/convert/pdf`):**
+- Accepts `{ grid, palette }` JSON (client sends its current state)
+- Builds PDF with `pdf-lib`: colored page + symbol page + key page
+- Returns PDF bytes
+
+**New files:**
+- `web/src/data/dmc-colors.json` — ~500 DMC colors (RGB + name + number)
+- `web/src/lib/pattern-converter.ts` — image processing + DMC mapping logic
+- `web/src/app/api/convert/route.ts` — image → pattern JSON
+- `web/src/app/api/convert/pdf/route.ts` — pattern JSON → PDF bytes
+- `web/src/app/convert/page.tsx` — the UI
+- `web/src/app/components/PatternCanvas.tsx` — canvas renderer (colored + symbol modes)
+
+**New dependencies:** `sharp`, `pdf-lib`
 
 ---
 
-### S7 converter — Stitchable PDF chart
+#### Phase 2 — Visual editor (discuss later)
 
-**Goal:** user uploads a photo → downloads a ready-to-stitch cross-stitch PDF pattern.
+- Click a cell → open DMC color picker → repaint cell
+- Fill bucket tool (flood fill)
+- Undo / redo (useReducer history stack)
+- Pencil / eraser tools
+- Zoom in/out on the canvas
 
-**Pipeline:**
-1. Upload photo (new tab "Convert to pattern" in HeroSearch, reuse drag-drop UI)
-2. Resize to target stitch grid (user picks: 50×50 / 80×80 / 100×100)
-3. Quantize pixel colors → nearest DMC thread color (Euclidean RGB distance)
-4. Limit palette to N colors (10 / 15 / 20) — merge least-used into nearest neighbor
-5. Generate PDF:
-   - Page 1: color preview grid (cells filled with DMC color)
-   - Page 2+: symbol grid (unique symbol per DMC color, for B&W printing)
-   - Final page: color key — symbol | DMC number | color name | stitch count
-6. Return PDF for immediate download
+**To discuss:**
+- Which tools are most important to start with?
+- Should the color picker show all ~500 DMC colors or only the current palette?
 
-**Key assets:**
-- `web/src/data/dmc-colors.json` — ~500 DMC colors with RGB + name (public dataset)
+---
 
-**Libraries:**
-- `sharp` — resize + per-pixel color extraction
-- `pdf-lib` — pure-JS PDF generation (no native deps)
+#### Phase 3 — Advanced (discuss later)
 
-**Complexity:** ~3 days. Main risks: PDF layout quality, color accuracy on complex photos.
+- PDF export from the *edited* state (not just the auto-converted one)
+- Save pattern to account (DDB) — come back and continue editing
+- Share a pattern URL with others
+- Import an existing pattern image (not a photo) and extract its palette
+
+---
+
+#### Deferred decisions (discuss before Phase 2)
+
+1. **Color count control:** fixed options (10/15/20/25) vs free slider (5–30). Fixed for now — revisit when we see what users actually need.
+2. **Cell size / zoom:** currently fixed + scrollable. Will add zoom controls in Phase 2.
+3. **PDF layout:** currently one colored page + one symbol page + key. After seeing real output, may split large grids across multiple pages.
+4. **Page size:** A4 or Letter? Cell size per page? Decide after seeing first PDF output.
+5. **Max grid size:** no hard limit yet. May need to cap at e.g. 300×300 for performance (3 MB canvas). Evaluate after testing.
+6. **Symbol set:** A–Z then ①–⑳. May need to revisit for large palettes (>46 colors).
+
+---
+
+### S8 — Search analytics (return after data accumulates)
+
+**Already built:** `logSearch()` in web app logs every text/image search to `SearchQueries` DDB table with 90-day TTL. Report: `npm run search-analytics` in `automation/pinterest-agent/`.
+
+**Return to this after ~2–4 weeks of traffic.** Actionable output:
+- Zero-result queries → add missing designs or fix search
+- Top queries → inform Pinterest pinning strategy
+- Volume trends → measure impact of search improvements
 
 ---
 
