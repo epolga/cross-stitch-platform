@@ -99,6 +99,7 @@ export interface SavedPattern {
   height: number;
   palette: PatternPalette[];
   grid: number[][];
+  hiddenColors?: number[];
   createdAt: string;
   ownerID?: string;
 }
@@ -111,6 +112,7 @@ export async function savePattern(
   grid: number[][],
   ownerID: string,
   thumbnail?: string,
+  hiddenColors?: number[],
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -129,6 +131,7 @@ export async function savePattern(
     ownerID:   { S: ownerID },
   };
   if (thumbnail) item.thumbnail = { S: thumbnail };
+  if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
@@ -143,6 +146,7 @@ export async function updatePattern(
   grid: number[][],
   ownerID: string,
   thumbnail?: string,
+  hiddenColors?: number[],
 ): Promise<void> {
   await ensureTable();
   const rle = rleEncode(grid);
@@ -160,6 +164,7 @@ export async function updatePattern(
     ownerID:   { S: ownerID },
   };
   if (thumbnail) item.thumbnail = { S: thumbnail };
+  if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
 }
@@ -206,12 +211,13 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
 
   return {
     id,
-    name:      Item.name.S!,
+    name:         Item.name.S!,
     width,
     height,
-    palette:   JSON.parse(Item.palette.S!) as PatternPalette[],
-    grid:      rleDecode(Item.grid.S!, width, height),
-    createdAt: Item.createdAt.S!,
-    ownerID:   Item.ownerID?.S,
+    palette:      JSON.parse(Item.palette.S!) as PatternPalette[],
+    grid:         rleDecode(Item.grid.S!, width, height),
+    hiddenColors: Item.hiddenColors?.S ? JSON.parse(Item.hiddenColors.S) as number[] : undefined,
+    createdAt:    Item.createdAt.S!,
+    ownerID:      Item.ownerID?.S,
   };
 }

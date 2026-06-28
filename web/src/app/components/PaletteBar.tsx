@@ -85,18 +85,27 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
 
       {/* Toggle-all row */}
       {palette.length > 0 && (
-        <label
+        <button
+          type="button"
           title={allVisible ? 'All colors visible — click to hide all' : 'Some colors hidden — click to show all'}
-          className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer flex-none self-end pr-0.5"
+          onClick={() => onToggleAll(!allVisible)}
+          className="flex items-center gap-1 text-[9px] text-gray-500 cursor-pointer flex-none self-end pr-0.5 hover:text-gray-800"
         >
           <span>All</span>
-          <input
-            type="checkbox"
-            checked={allVisible}
-            onChange={e => onToggleAll(e.target.checked)}
-            style={{ width: 13, height: 13, cursor: 'pointer' }}
-          />
-        </label>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: allVisible ? '#9ca3af' : '#d1d5db' }}>
+            {allVisible ? (
+              <>
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </>
+            ) : (
+              <>
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </>
+            )}
+          </svg>
+        </button>
       )}
 
       {/* Add color button */}
@@ -193,22 +202,38 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                 </svg>
               </button>
 
-              {/* Visibility checkbox */}
-              <span
-                title={isHidden ? 'Hidden — click to show' : 'Visible — click to hide'}
-                style={{ ...squareBase, backgroundColor: isHidden ? '#f3f4f6' : '#fff' }}
+              {/* Visibility eye */}
+              <button
+                type="button"
+                title={isHidden ? 'Hidden — click to show' : 'Visible — click to hide while stitching'}
+                onClick={() => onToggleColor(i)}
+                style={{ ...squareBase, backgroundColor: isHidden ? '#f3f4f6' : '#fff', color: isHidden ? '#9ca3af' : '#374151', cursor: 'pointer' }}
+                className="hover:bg-gray-200"
               >
-                <input
-                  type="checkbox"
-                  checked={!isHidden}
-                  onChange={() => onToggleColor(i)}
-                  style={{ width: 13, height: 13, cursor: 'pointer' }}
-                />
-              </span>
+                {isHidden ? (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                ) : (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </button>
             </div>
           );
         })}
       </div>
+
+      {/* Tips */}
+      {palette.length > 0 && (
+        <div className="flex-none w-full mt-1 pt-1.5 border-t border-gray-300 text-[9px] text-gray-400 leading-relaxed space-y-0.5 px-0.5">
+          <div title="Click any color swatch to make all its stitches flash on the canvas">Click swatch → flash in chart</div>
+          <div title="Click the eye icon next to any color to hide it — stitch one color at a time">👁 Eye → hide while stitching</div>
+        </div>
+      )}
 
       {/* Edit dropdown menu */}
       {editMenu !== null && (

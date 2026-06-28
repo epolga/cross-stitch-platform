@@ -10,7 +10,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  keywords: 'photo to cross stitch, cross stitch pattern maker, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch',
+  keywords: 'photo to cross stitch, cross stitch pattern maker, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, cross stitch chart on phone, cross stitch chart on screen, stitch one color at a time, cross stitch color highlight',
   alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
   robots: 'index, follow',
   openGraph: {
@@ -42,6 +42,9 @@ const structuredData = {
     'Reduce palette to 10, 15, 20 or 25 colors',
     'Color preview and symbol grid views',
     'Download printable PDF with color grid, symbol grid and color key',
+    'Click any palette color to flash all its stitches on the chart',
+    'Hide individual colors to stitch one thread at a time',
+    'Use the chart on laptop, tablet, or phone — no printing required',
   ],
 };
 
@@ -87,6 +90,10 @@ const FAQ = [
     a: 'Start with 10 or 15 colors. Fewer colors makes a cleaner, more graphic pattern that is quick to stitch and easy to buy thread for. You can re-import the same photo with a higher number any time to compare. For a detailed portrait, 20–30 colors gives a more realistic result.',
   },
   {
+    q: 'Can I use the chart on my phone or laptop while stitching — without printing?',
+    a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen. Click any color in the palette to make all its stitches flash on the chart so you can find your place instantly. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
+  },
+  {
     q: 'Do I need an account?',
     a: 'Yes. You need a free account to save your pattern or download the PDF. Your patterns belong to you — once saved, only you can access, edit, or re-download them.',
   },
@@ -122,6 +129,31 @@ export default function PhotoToCrossStitchPage() {
             Turn any photo into a counted cross-stitch pattern with DMC thread colors.
             Choose your stitch size, adjust the palette, and download a print-ready PDF chart — your pet, your garden, your favourite photo, ready to stitch.
           </p>
+
+          {/* Editor feature highlights */}
+          <div className="mb-8 grid gap-3 sm:grid-cols-3">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
+              <span className="text-2xl flex-none leading-none mt-0.5">✨</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Find any color instantly</p>
+                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Click a color in the palette and all its stitches flash on the chart — no more hunting stitch by stitch.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
+              <span className="text-2xl flex-none leading-none mt-0.5">👁</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">Stitch one color at a time</p>
+                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Hide every other color with one click. Work through your threads one by one without losing your place.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
+              <span className="text-2xl flex-none leading-none mt-0.5">📱</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">No printing needed</p>
+                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Use the chart on your laptop, tablet, or phone propped beside your hoop — the chart updates as you work.</p>
+              </div>
+            </div>
+          </div>
 
           <ConvertClient />
 
@@ -193,7 +225,7 @@ export default function PhotoToCrossStitchPage() {
               <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">3</span><span><span className="font-medium text-gray-800">Find the center.</span> Fold the fabric in half both ways and mark the center with a pin or a few running stitches. Find the center of your chart — it is usually indicated on the printed PDF.</span></li>
               <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">4</span><span><span className="font-medium text-gray-800">Start from the center outward.</span> Beginning in the middle keeps the whole design centered on your fabric. Work in sections — complete one area before moving to the next.</span></li>
               <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">5</span><span><span className="font-medium text-gray-800">Use 2 strands of DMC floss</span> for 14-count Aida (the most common choice). Thread your size 24 tapestry needle with a length of about 40 cm — longer threads tangle and fray.</span></li>
-              <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">6</span><span><span className="font-medium text-gray-800">Stitch one color at a time.</span> Work through all the stitches of one color before moving to the next. It is faster, uses less thread, and keeps the back of your work tidy.</span></li>
+              <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">6</span><span><span className="font-medium text-gray-800">Stitch one color at a time.</span> Work through all the stitches of one color before moving to the next — it is faster, uses less thread, and keeps the back tidy. In the editor, click any color to see its stitches flash on the chart, or hide all other colors so only the active one is visible.</span></li>
             </ol>
           </section>
         </div>

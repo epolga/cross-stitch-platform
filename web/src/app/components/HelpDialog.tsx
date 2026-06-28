@@ -90,7 +90,7 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                   <Li icon="🎨">A <b>color swatch</b> — click it to set that color as your active drawing color.</Li>
                   <Li icon="◆">A <b>symbol</b> — the symbol used for that color in the printed PDF. Click to change it.</Li>
                   <Li icon="✏️">A <b>pencil icon</b> — opens options to change the color, change the symbol, move its position, or merge it into another color.</Li>
-                  <Li icon="👁">An <b>eye checkbox</b> — hide or show that color on the canvas (useful when editing a specific area).</Li>
+                  <Li icon="👁">An <b>eye icon</b> — hide or show that color on the canvas. Great for stitching one color at a time.</Li>
                 </ul>
                 <p className="mt-1">Use <b>Palette → Add Color…</b> to add extra DMC colors manually. Use <b>Palette → Remove Unused</b> to clean up colors with zero stitches.</p>
               </Section>
@@ -99,7 +99,7 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                 <ul className="space-y-1 list-none">
                   <Li icon="🖱">Click a <b>color swatch</b> in the palette to make it the active drawing color.</Li>
                   <Li icon="🖱"><b>Right-click a cell</b> on the canvas to instantly pick that cell&apos;s color and highlight its swatch.</Li>
-                  <Li icon="🖱"><b>Right-click a swatch</b> in the palette to blink all cells of that color on the canvas — useful for checking where a color is used.</Li>
+                  <Li icon="🖱"><b>Click a swatch</b> in the palette to flash all cells of that color on the canvas — useful for seeing where a color is used.</Li>
                 </ul>
               </Section>
 

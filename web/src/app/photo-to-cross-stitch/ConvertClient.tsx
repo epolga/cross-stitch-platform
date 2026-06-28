@@ -409,6 +409,9 @@ export default function ConvertPage() {
         });
         updateGrid(data.grid);
         updatePalette(data.palette);
+        setHiddenColors(Array.isArray(data.hiddenColors) && data.hiddenColors.length > 0
+          ? new Set<number>(data.hiddenColors)
+          : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
       })
@@ -447,7 +450,8 @@ export default function ConvertPage() {
     const g = gridRef.current;
     const pal = paletteRef.current;
     const thumbnail = generatePatternThumbnail(g, pal);
-    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail });
+    const hiddenColorsArr = hiddenColors.size > 0 ? Array.from(hiddenColors) : undefined;
+    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail, hiddenColors: hiddenColorsArr });
     const resp = await fetch(
       existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',
       { method: existingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body },
