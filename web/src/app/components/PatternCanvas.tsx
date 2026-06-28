@@ -38,18 +38,25 @@ const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '</svg>'
 )}") 3 23, cell`;
 
-// Flood fill cursor — watering can with blue drops, hotspot at rose head
-const FLOOD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 28 28">' +
-  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#334155" stroke-width="2" stroke-linecap="round"/>' +
-  '<rect x="2" y="3" width="12" height="11" rx="3" fill="#475569" stroke="#cbd5e1" stroke-width="1.2"/>' +
-  '<path d="M14 10 Q20 10 22 15" stroke="#334155" stroke-width="2.5" stroke-linecap="round" fill="none"/>' +
-  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="#94a3b8" stroke="#cbd5e1" stroke-width="1"/>' +
-  '<line x1="20" y1="19" x2="19" y2="23" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
-  '<line x1="22" y1="19" x2="22" y2="24" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
-  '<line x1="24" y1="19" x2="25" y2="23" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>' +
-  '</svg>'
-)}") 25 18, cell`;
+// Flood fill cursor — syringe: liquid color matches active fill color
+function floodCursor(fillColor: string) {
+  return `url("data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 28 28">' +
+    '<g transform="rotate(-45 14 14)">' +
+    '<line x1="3" y1="14" x2="7" y2="14" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="butt"/>' +
+    '<polygon points="0,14 4,13 4,15" fill="#cbd5e1"/>' +
+    '<rect x="7" y="12" width="2" height="4" rx="0.5" fill="#64748b"/>' +
+    '<rect x="9" y="11.5" width="11" height="5" rx="1" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.8"/>' +
+    `<rect x="10" y="12.5" width="6.5" height="3" rx="0.3" fill="${fillColor}"/>` +
+    '<rect x="16.5" y="12" width="2" height="4" rx="0.5" fill="#9ca3af" stroke="#6b7280" stroke-width="0.5"/>' +
+    '<rect x="19" y="9" width="2" height="2.5" rx="0.4" fill="#475569"/>' +
+    '<rect x="19" y="16.5" width="2" height="2.5" rx="0.4" fill="#475569"/>' +
+    '<line x1="18.5" y1="14" x2="23" y2="14" stroke="#475569" stroke-width="1.2" stroke-linecap="butt"/>' +
+    '<rect x="23" y="10" width="2" height="8" rx="1" fill="#334155"/>' +
+    '</g>' +
+    '</svg>'
+  )}") 7 41, cell`;
+}
 
 // Erase-fill cursor — outlined watering can (no fill) with grey drops
 const ERASE_FILL_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
@@ -843,7 +850,7 @@ export default function PatternCanvas({
     : '#DC2626';
   const cursor = !editable ? 'default'
     : activeTool === 'erase-fill' ? ERASE_FILL_CURSOR
-    : activeTool === 'fill' ? FLOOD_CURSOR
+    : activeTool === 'fill' ? floodCursor(threadHex)
     : activeTool === 'select' ? 'crosshair'
     : isEraser ? ERASER_CURSOR
     : penCursor(threadHex);
