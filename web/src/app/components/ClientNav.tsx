@@ -52,6 +52,10 @@ export default function ClientNav() {
             My thoughts
           </Link>
           <span className="text-gray-400 text-xl">&middot;</span>
+          <Link href="/photo-to-cross-stitch" className={desktopLinkBase}>
+            Photo to pattern
+          </Link>
+          <span className="text-gray-400 text-xl">&middot;</span>
 
           {/* Desktop Articles dropdown */}
           <div className="relative">
@@ -186,6 +190,13 @@ export default function ClientNav() {
                 onClick={closeMobileMenu}
               >
                 My thoughts
+              </Link>
+              <Link
+                href="/photo-to-cross-stitch"
+                className={mobileLinkBase}
+                onClick={closeMobileMenu}
+              >
+                Photo to pattern
               </Link>
               {/* Articles as submenu on mobile */}
               <div className="mt-2">

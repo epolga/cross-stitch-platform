@@ -45,8 +45,7 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                   <p className="text-xs text-gray-400">Part of the Cross-Stitch Platform</p>
                 </div>
               </div>
-              <p>Converts any photo into a counted cross-stitch pattern using real DMC thread colors. The result can be edited directly in the browser and downloaded as a print-ready PDF.</p>
-              <p className="text-xs text-gray-400">Built with Next.js · Canvas API · Sharp · k-means color quantization</p>
+              <p>Upload any photo and get a ready-to-stitch cross-stitch pattern with real DMC thread colors. Edit it in your browser, then download a print-ready PDF chart.</p>
             </>
           )}
 
@@ -72,7 +71,7 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                 <ul className="space-y-1.5 list-none">
                   <Li icon="✏️"><b>Pen</b> — click cells to paint them with the active color. Click the <b>▾</b> arrow to switch between Point, Line, Rectangle, and Ellipse shapes. Drag the <b>Pen size</b> slider to paint multiple stitches at once.</Li>
                   <Li icon="◻"><b>Pen Eraser</b> (inside the Pen ▾ menu) — erases individual stitches. Same shapes available.</Li>
-                  <Li icon="🪣"><b>Fill</b> — click any cell to flood-fill its entire connected area with the active color. Great for recoloring large regions. Use <b>Erase Fill</b> (Pen ▾ menu) to clear a region instead.</Li>
+                  <Li icon="🪣"><b>Fill</b> — click any cell to fill its whole connected area with the active color. Great for recoloring large regions. Use <b>Erase Fill</b> (Pen ▾ menu) to clear a region instead.</Li>
                   <Li icon="↩"><b>Undo / Redo</b> — undo up to 50 steps with Ctrl+Z, redo with Ctrl+Y.</Li>
                 </ul>
               </Section>

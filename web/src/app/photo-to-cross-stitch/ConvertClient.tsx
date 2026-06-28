@@ -127,6 +127,8 @@ export default function ConvertPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importInitialFile, setImportInitialFile] = useState<File | null>(null);
+  const [dragOverCanvas, setDragOverCanvas] = useState(false);
 
   // Pattern + editor state
   const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
@@ -203,8 +205,6 @@ export default function ConvertPage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(() => isUserLoggedIn());
-  // PDF locked when pattern belongs to an owner and current user is not logged in
-  const pdfLocked = !!savedPatternId && !isLoggedIn;
   const [patternName, setPatternName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -276,6 +276,12 @@ export default function ConvertPage() {
   }
 
   function downloadPdf() {
+    if (!isUserLoggedIn()) {
+      window.dispatchEvent(new CustomEvent('openRegisterModal', {
+        detail: { source: 'converter-download', label: 'Download PDF' },
+      }));
+      return;
+    }
     if (!patternName) {
       setNameInput('');
       setShowNamePrompt(true);
@@ -927,9 +933,9 @@ export default function ConvertPage() {
                 New Pattern
               </button>
               <button
-                type="button" onClick={downloadPdf} disabled={downloading || !hasDesign || pdfLocked}
+                type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
                 className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
-                title={pdfLocked ? 'Log in to download this pattern' : !hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
+                title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
               >
                 {downloading ? 'Generating…' : '↓ Download PDF'}
               </button>
@@ -944,7 +950,7 @@ export default function ConvertPage() {
               {
                 label: 'File',
                 items: [
-                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign || pdfLocked },
+                  { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
                   { type: 'separator' },
                   { type: 'item', label: 'New Pattern', onClick: newPattern },
                   { type: 'item', label: 'Open from link…', onClick: () => {
@@ -1187,7 +1193,7 @@ export default function ConvertPage() {
                 <button
                   type="button"
                   onClick={() => { setActiveTool('fill'); setFillMode('flood'); }}
-                  title="Flood fill — click a cell to fill the connected area with the active color"
+                  title="Fill — click any cell to fill its whole connected area with the active color"
                   className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
                     activeTool === 'fill' && fillMode === 'flood'
                       ? 'bg-gray-900 text-white border-gray-900'
@@ -1290,7 +1296,21 @@ export default function ConvertPage() {
             )}
 
             {/* Canvas */}
-            <div ref={canvasWrapperRef} className="flex-1 overflow-auto border border-gray-200 rounded-lg bg-gray-50 min-w-0 relative">
+            <div
+              ref={canvasWrapperRef}
+              className={`flex-1 overflow-auto border rounded-lg bg-gray-50 min-w-0 relative transition-colors ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
+              onDragOver={e => { e.preventDefault(); if (!hasDesign) setDragOverCanvas(true); }}
+              onDragLeave={() => setDragOverCanvas(false)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOverCanvas(false);
+                const file = e.dataTransfer.files[0];
+                if (file?.type.startsWith('image/')) {
+                  setImportInitialFile(file);
+                  setShowImportDialog(true);
+                }
+              }}
+            >
               {!hasDesign && (
                 <div
                   className="absolute top-0 left-0 flex flex-col items-center justify-center z-10 pointer-events-none select-none"
@@ -1299,11 +1319,14 @@ export default function ConvertPage() {
                     height: (grid.length || 80) * cellSize + 18,
                   }}
                 >
-                  <div className="flex flex-col items-center text-center bg-white/70 backdrop-blur-sm rounded-xl px-8 py-6">
-                    <span className="text-5xl mb-4">📷</span>
-                    <p className="text-sm font-semibold text-gray-500">No pattern loaded</p>
-                    <p className="text-xs text-gray-400 mt-2 max-w-[200px] leading-relaxed">
-                      Click <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above to convert a photo into a cross-stitch pattern
+                  <div className={`flex flex-col items-center text-center rounded-xl px-8 py-6 transition-colors ${dragOverCanvas ? 'bg-rose-50/80' : 'bg-white/70 backdrop-blur-sm'}`}>
+                    <span className="text-5xl mb-4">{dragOverCanvas ? '🖼️' : '📷'}</span>
+                    <p className="text-sm font-semibold text-gray-500">{dragOverCanvas ? 'Drop your photo here' : 'Drop a photo to start'}</p>
+                    <p className="text-xs text-gray-400 mt-2 max-w-[220px] leading-relaxed">
+                      {dragOverCanvas
+                        ? 'Release to open the converter'
+                        : <>Drag any photo onto this area, or use <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above</>
+                      }
                     </p>
                   </div>
                 </div>
@@ -1368,7 +1391,8 @@ export default function ConvertPage() {
 
       <ImportFromPhotoDialog
         open={showImportDialog}
-        onClose={() => setShowImportDialog(false)}
+        initialFile={importInitialFile}
+        onClose={() => { setShowImportDialog(false); setImportInitialFile(null); }}
         onImport={handleImport}
       />
 

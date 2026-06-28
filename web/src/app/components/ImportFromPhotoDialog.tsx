@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
@@ -7,11 +7,12 @@ const COLOR_OPTIONS = [5, 10, 20, 30, 40, 50, 100] as const;
 
 interface Props {
   open: boolean;
+  initialFile?: File | null;
   onClose: () => void;
   onImport: (data: ConvertedPattern, paddedGrid: number[][]) => void;
 }
 
-export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props) {
+export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [patWidth, setPatWidth] = useState(80);
   const [patHeight, setPatHeight] = useState(80);
@@ -23,6 +24,11 @@ export default function ImportFromPhotoDialog({ open, onClose, onImport }: Props
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
+
+  useEffect(() => {
+    if (open && initialFile) handleFile(initialFile);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFile]);
 
   function handleFile(file: File) {
     if (!file.type.startsWith('image/')) { setError('Please upload an image file.'); return; }
