@@ -186,17 +186,12 @@ export default function ConvertPage() {
   }, [showWishHint]);
 
   useEffect(() => {
-    const el = canvasWrapperRef.current;
-    if (!el) return;
-    const applyMaxHeight = () => {
-      const top = el.getBoundingClientRect().top;
-      const maxH = Math.max(200, window.innerHeight - top - 24);
-      el.style.maxHeight = `${maxH}px`;
-      setPaletteMaxHeight(maxH);
+    const applyPaletteHeight = () => {
+      setPaletteMaxHeight(Math.max(400, window.innerHeight - 150));
     };
-    applyMaxHeight();
-    window.addEventListener('resize', applyMaxHeight);
-    return () => window.removeEventListener('resize', applyMaxHeight);
+    applyPaletteHeight();
+    window.addEventListener('resize', applyPaletteHeight);
+    return () => window.removeEventListener('resize', applyPaletteHeight);
   }, []);
 
   useEffect(() => {
@@ -1485,7 +1480,7 @@ export default function ConvertPage() {
             {/* Canvas */}
             <div
               ref={canvasWrapperRef}
-              className={`flex-1 overflow-auto border rounded-lg bg-gray-50 min-w-0 relative transition-colors ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
+              className={`flex-1 overflow-auto border rounded-lg bg-gray-50 min-w-0 relative transition-colors max-h-[calc(100vh-150px)] ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
               onDragOver={e => { e.preventDefault(); if (!hasDesign) setDragOverCanvas(true); }}
               onDragLeave={() => setDragOverCanvas(false)}
               onDrop={e => {
@@ -1499,7 +1494,10 @@ export default function ConvertPage() {
               }}
             >
               {!hasDesign && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none select-none">
+                <div
+                  className="absolute top-0 bottom-0 left-0 flex items-center justify-center z-10 pointer-events-none select-none"
+                  style={{ width: (grid[0]?.length ?? 80) * cellSize + 30 }}
+                >
                   <div className={`flex flex-col items-center text-center rounded-xl px-8 py-6 transition-colors ${dragOverCanvas ? 'bg-rose-50/80' : 'bg-white/70 backdrop-blur-sm'}`}>
                     <span className="text-5xl mb-4">{dragOverCanvas ? '🖼️' : '📷'}</span>
                     <p className="text-sm font-semibold text-gray-500">{dragOverCanvas ? 'Drop your photo here' : 'Drop a photo to start'}</p>
