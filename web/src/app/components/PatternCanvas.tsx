@@ -58,18 +58,18 @@ function floodCursor(fillColor: string) {
   )}") 7 41, cell`;
 }
 
-// Erase-fill cursor — outlined watering can (no fill) with grey drops
+// Erase-fill cursor — seam ripper, larger than single-eraser version (48px vs 28px)
 const ERASE_FILL_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 28 28">' +
-  '<path d="M5 3 Q8 0 11 3" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round"/>' +
-  '<rect x="2" y="3" width="12" height="11" rx="3" fill="none" stroke="#64748b" stroke-width="1.5"/>' +
-  '<path d="M14 10 Q20 10 22 15" stroke="#64748b" stroke-width="2" stroke-linecap="round" fill="none"/>' +
-  '<ellipse cx="22" cy="16" rx="3" ry="2" fill="none" stroke="#64748b" stroke-width="1.5"/>' +
-  '<line x1="20" y1="19" x2="19" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
-  '<line x1="22" y1="19" x2="22" y2="24" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
-  '<line x1="24" y1="19" x2="25" y2="23" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round"/>' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 28 28">' +
+  '<ellipse cx="22" cy="5" rx="5" ry="3" transform="rotate(-45 22 5)" fill="#7c3aed" stroke="#4c1d95" stroke-width="1"/>' +
+  '<ellipse cx="17" cy="9" rx="2.2" ry="1.2" transform="rotate(-45 17 9)" fill="#64748b" stroke="#475569" stroke-width="0.8"/>' +
+  '<line x1="15.5" y1="10.5" x2="10" y2="16" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>' +
+  '<path d="M10 16 Q7.5 20 7 25" stroke="#334155" stroke-width="1.5" fill="none" stroke-linecap="round"/>' +
+  '<circle cx="7" cy="25" r="2" fill="#7c3aed" stroke="#4c1d95" stroke-width="0.8"/>' +
+  '<path d="M10 16 Q6 18.5 3 23" stroke="#cbd5e1" stroke-width="1.5" fill="none" stroke-linecap="round"/>' +
+  '<circle cx="3" cy="23" r="0.9" fill="#f1f5f9"/>' +
   '</svg>'
-)}") 25 18, cell`;
+)}") 5 39, cell`;
 const MT = 18; // top margin for column numbers
 
 export type DrawMode = 'point' | 'line' | 'rect' | 'rect-fill' | 'ellipse' | 'ellipse-fill';
