@@ -1363,7 +1363,11 @@ export default function ConvertPage() {
               maxHeight={paletteMaxHeight}
               blinkIndex={blinkSwatch}
               hiddenColors={hiddenColors}
-              onSelect={setSelectedColor}
+              onSelect={i => {
+                setSelectedColor(i);
+                if (activeTool === 'eraser') setActiveTool('pencil');
+                if (activeTool === 'fill' && fillMode === 'erase') setFillMode('flood');
+              }}
               onBlink={handleRightClickSwatch}
               onToggleColor={i => setHiddenColors(prev => {
                 const next = new Set(prev);
