@@ -19,6 +19,8 @@ import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-c
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
 
+import { trackEvent } from '@/lib/track-event';
+
 const DEFAULT_PALETTE_NUMBERS = [
   'blanc', '310', '3371', '321', '666', '3716', '208',
   '701', '996', '825', '725', '743', '433', '938', '945', 'ecru',
@@ -136,6 +138,8 @@ export default function ConvertPage() {
   const editorStartRef = useRef(Date.now());
   const editCountRef = useRef(0);
   const hasExportedPdfRef = useRef(false);
+  const hasTrackedEditingStartRef = useRef(false);
+  const lastEditingActionRef = useRef(0);
 
   // Pattern + editor state
   const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
@@ -272,6 +276,13 @@ export default function ConvertPage() {
     setHiddenColors(new Set());
     setCellSize(12);
     setShowImportDialog(false);
+    hasTrackedEditingStartRef.current = false;
+    trackEvent('image_uploaded', {});
+    trackEvent('pattern_generated', {
+      patternWidth: paddedGrid[0]?.length,
+      patternHeight: paddedGrid.length,
+      colorCount: data.palette.length,
+    });
   }
 
   // Download PDF from current (edited) grid
@@ -292,8 +303,14 @@ export default function ConvertPage() {
       a.click();
       URL.revokeObjectURL(url);
       hasExportedPdfRef.current = true;
+      trackEvent('pdf_exported', {
+        patternWidth: gridRef.current[0]?.length,
+        patternHeight: gridRef.current.length,
+        colorCount: palette.length,
+      });
     } catch (e) {
       setDownloadError(e instanceof Error ? e.message : 'Download failed');
+      trackEvent('editor_error', { errorCode: 'pdf_failed', step: 'pdf_export' });
     } finally {
       setDownloading(false);
     }
@@ -330,6 +347,16 @@ export default function ConvertPage() {
     newGrid[row] = newRow;
     updateGrid(newGrid);
     editCountRef.current++;
+    const tool = activeTool === 'eraser' ? 'eraser' : 'pencil';
+    if (!hasTrackedEditingStartRef.current) {
+      hasTrackedEditingStartRef.current = true;
+      trackEvent('manual_editing_started', { tool });
+    }
+    const now = Date.now();
+    if (now - lastEditingActionRef.current >= 10000) {
+      lastEditingActionRef.current = now;
+      trackEvent('manual_editing_action', { tool });
+    }
   }
 
   function handleStrokeEnd() {
@@ -354,6 +381,15 @@ export default function ConvertPage() {
     setUndoStack(s => [...s.slice(-49), { grid: snapshot, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
+    if (!hasTrackedEditingStartRef.current) {
+      hasTrackedEditingStartRef.current = true;
+      trackEvent('manual_editing_started', { tool: drawMode });
+    }
+    const now = Date.now();
+    if (now - lastEditingActionRef.current >= 10000) {
+      lastEditingActionRef.current = now;
+      trackEvent('manual_editing_action', { tool: drawMode });
+    }
   }
 
   // Editor: fill bucket
@@ -365,6 +401,15 @@ export default function ConvertPage() {
     setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
+    if (!hasTrackedEditingStartRef.current) {
+      hasTrackedEditingStartRef.current = true;
+      trackEvent('manual_editing_started', { tool: 'fill' });
+    }
+    const now = Date.now();
+    if (now - lastEditingActionRef.current >= 10000) {
+      lastEditingActionRef.current = now;
+      trackEvent('manual_editing_action', { tool: 'fill' });
+    }
   }
 
   // Editor: erase fill (flood fill with blank / -1)
@@ -376,6 +421,15 @@ export default function ConvertPage() {
     setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
+    if (!hasTrackedEditingStartRef.current) {
+      hasTrackedEditingStartRef.current = true;
+      trackEvent('manual_editing_started', { tool: 'fill_erase' });
+    }
+    const now = Date.now();
+    if (now - lastEditingActionRef.current >= 10000) {
+      lastEditingActionRef.current = now;
+      trackEvent('manual_editing_action', { tool: 'fill_erase' });
+    }
   }
 
   // Keep isLoggedIn in sync with auth state changes (login/logout from header)
@@ -419,13 +473,27 @@ export default function ConvertPage() {
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
         setCellSize(12);
+        trackEvent('project_reopened', {
+          patternId: id,
+          patternWidth: data.width,
+          patternHeight: data.height,
+          colorCount: data.palette.length,
+        });
       })
       .catch(e => {
         console.error('[load pattern]', e);
         setPatternLoadError(e instanceof Error ? e.message : 'Failed to load pattern');
+        trackEvent('editor_error', { errorCode: 'load_failed', step: 'pattern_load' });
       })
       .finally(() => setPatternLoading(false));
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get('source') ?? (document.referrer ? 'referrer' : 'direct');
+    const patternId = params.get('pattern') ?? undefined;
+    trackEvent('editor_opened', { source, referrer: document.referrer || undefined, patternId });
+  }, []);
 
   // Auto-load pattern from ?pattern=<id> URL param on mount
   useEffect(() => {
@@ -463,6 +531,7 @@ export default function ConvertPage() {
     );
     if (!resp.ok) {
       const { error } = await resp.json().catch(() => ({ error: 'Save failed' }));
+      trackEvent('editor_error', { errorCode: 'save_failed', step: 'pattern_save' });
       throw new Error(error);
     }
     const { id } = await resp.json();
@@ -470,6 +539,7 @@ export default function ConvertPage() {
     setSavedPatternId(id);
     const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${id}`;
     window.history.replaceState(null, '', `?pattern=${id}`);
+    trackEvent('project_saved', { patternId: id });
     return url;
   }
 
@@ -854,6 +924,7 @@ export default function ConvertPage() {
       i === idx ? { ...p, ...dmcColor } : p
     ));
     setColorPickerIndex(null);
+    trackEvent('palette_changed', { changeType: 'replace' });
   }
 
   function handleAddColor(dmcColor: DmcColor) {
@@ -866,6 +937,7 @@ export default function ConvertPage() {
     updatePalette([...pal, newEntry]);
     setSelectedColor(pal.length);
     setAddColorPickerOpen(false);
+    trackEvent('palette_changed', { changeType: 'add' });
   }
 
   function handleMoveTo(targetOriginalIdx: number) {
@@ -1013,6 +1085,7 @@ export default function ConvertPage() {
     updateGrid(newGrid);
     setSelection(null);
     setShowResizeDialog(false);
+    trackEvent('pattern_size_changed', { newWidth: newW, newHeight: newH });
   }
 
   // Undo / Redo
@@ -1634,6 +1707,7 @@ export default function ConvertPage() {
 
       <FeatureRequestDialog
         open={showFeatureRequest}
+        onSubmit={(importance) => trackEvent('feedback_submitted', { importance })}
         context={{
           patternWidth:             grid[0]?.length,
           patternHeight:            grid.length,

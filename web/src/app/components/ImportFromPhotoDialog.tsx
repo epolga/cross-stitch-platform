@@ -3,6 +3,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import Image from 'next/image';
 import type { ConvertedPattern } from '@/lib/pattern-converter';
 
+import { trackEvent } from '@/lib/track-event';
+
 const COLOR_OPTIONS = [5, 10, 20, 30, 40, 50, 100] as const;
 
 interface Props {
@@ -65,6 +67,12 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       form.append('width', String(innerW));
       form.append('height', String(innerH));
       form.append('colors', String(numColors));
+      trackEvent('pattern_generation_started', {
+        width: innerW,
+        height: innerH,
+        colorCount: numColors,
+        fileType: selectedFile.current.type,
+      });
       const resp = await fetch('/api/convert', { method: 'POST', body: form });
       if (!resp.ok) {
         const { error: msg } = await resp.json().catch(() => ({ error: 'Conversion failed' }));
@@ -89,6 +97,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       if (fileRef.current) fileRef.current.value = '';
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Conversion failed');
+      trackEvent('editor_error', { errorCode: 'conversion_failed', step: 'pattern_generation' });
     } finally {
       setLoading(false);
     }

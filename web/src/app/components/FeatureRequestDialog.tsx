@@ -16,6 +16,7 @@ interface Props {
   open: boolean;
   context: Context;
   onClose: () => void;
+  onSubmit?: (importance: string) => void;
 }
 
 const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
@@ -24,7 +25,7 @@ const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
   { value: 'need-this',    label: 'I really need this' },
 ];
 
-export default function FeatureRequestDialog({ open, context, onClose }: Props) {
+export default function FeatureRequestDialog({ open, context, onClose, onSubmit }: Props) {
   const [text, setText] = useState('');
   const [importance, setImportance] = useState<Importance>('nice-to-have');
   const [email, setEmail] = useState('');
@@ -64,6 +65,7 @@ export default function FeatureRequestDialog({ open, context, onClose }: Props) 
       const data = await resp.json() as { ok?: boolean; error?: string };
       if (!resp.ok) throw new Error(data.error ?? 'Something went wrong');
       setDone(true);
+      onSubmit?.(importance);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
