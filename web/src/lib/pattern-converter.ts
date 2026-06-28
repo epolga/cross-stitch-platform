@@ -91,7 +91,8 @@ function buildSample(pixels: Lab[]): Lab[] {
 // ── k-means++ in LAB space ───────────────────────────────────────────────────
 
 const KMEANS_MAX_ITER = 30;
-const KMEANS_RUNS    = 3;   // run multiple times; pick best result
+const KMEANS_RUNS    = 5;   // run multiple times; pick best result
+const KMEANS_OVERSHOOT = 1.5; // run with more clusters than requested so rare colors get slots
 
 interface KMeansResult {
   centroids: Lab[];
@@ -194,17 +195,44 @@ export async function convertImage(
   for (let i = 0; i < n; i++)
     pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
 
-  // Build a color-sensitive sample and run k-means
+  // Run k-means with overshoot so rare-color regions get dedicated cluster slots.
+  // After snapping to DMC we trim back to maxColors by pixel count.
   const sample = buildSample(pixelsLab);
-  const { centroids, assignments } = kmeansLab(pixelsLab, sample, maxColors);
+  const kOver = Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
+  const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver);
 
-  // Snap each cluster centroid to nearest DMC color in LAB
+  // Snap each centroid to nearest DMC color
   const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c));
 
-  // Map each pixel to its cluster's DMC index
-  const pixelDmc: number[] = Array.from(assignments, j => centroidDmc[j]);
+  // Tally pixel count per centroid, then per DMC color
+  const centroidPx = new Int32Array(centroids.length);
+  for (const ci of assignments) centroidPx[ci]++;
 
-  // Build compact palette (dedup in case two centroids snapped to same DMC)
+  const dmcPx = new Map<number, number>();
+  for (let ci = 0; ci < centroids.length; ci++)
+    dmcPx.set(centroidDmc[ci], (dmcPx.get(centroidDmc[ci]) ?? 0) + centroidPx[ci]);
+
+  // Keep top maxColors DMC entries by pixel count
+  const keepDmc = new Set(
+    [...dmcPx.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxColors).map(([d]) => d)
+  );
+
+  // Remap dropped centroids to nearest kept centroid (in LAB space)
+  const centroidFinal = centroidDmc.map((d, ci) => {
+    if (keepDmc.has(d)) return d;
+    let best = d, bestDist = Infinity;
+    for (let cj = 0; cj < centroids.length; cj++) {
+      if (!keepDmc.has(centroidDmc[cj])) continue;
+      const dist = labDist2(centroids[ci], centroids[cj]);
+      if (dist < bestDist) { bestDist = dist; best = centroidDmc[cj]; }
+    }
+    return best;
+  });
+
+  // Map each pixel to its final DMC color (guaranteed ≤ maxColors distinct values)
+  const pixelDmc: number[] = Array.from(assignments, j => centroidFinal[j]);
+
+  // Build compact palette
   const uniqueDmc = Array.from(new Set(pixelDmc));
   const dmcToIdx = new Map(uniqueDmc.map((dmc, i) => [dmc, i]));
   const flatGrid  = pixelDmc.map(dmc => dmcToIdx.get(dmc)!);
