@@ -66,8 +66,6 @@ const KMEANS_MAX_SAMPLE = 6000;
 // Build a sample that gives equal weight to each unique color region, so
 // colors present in only a small part of the image still get representation.
 function buildSample(pixels: Lab[]): Lab[] {
-  const n = pixels.length;
-
   // Coarsely quantize each pixel to a bucket key (24 levels per LAB channel).
   // Two pixels sharing a bucket are "the same color" for sampling purposes.
   const Q = 24;
