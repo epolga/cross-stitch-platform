@@ -188,9 +188,15 @@ export default function ConvertPage() {
   useEffect(() => {
     const el = canvasWrapperRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setPaletteMaxHeight(el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
+    const applyMaxHeight = () => {
+      const top = el.getBoundingClientRect().top;
+      const maxH = Math.max(200, window.innerHeight - top - 24);
+      el.style.maxHeight = `${maxH}px`;
+      setPaletteMaxHeight(maxH);
+    };
+    applyMaxHeight();
+    window.addEventListener('resize', applyMaxHeight);
+    return () => window.removeEventListener('resize', applyMaxHeight);
   }, []);
 
   useEffect(() => {
