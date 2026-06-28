@@ -20,14 +20,23 @@ function penCursor(threadColor: string) {
   )}") 1 31, crosshair`;
 }
 
-// Custom eraser cursor — pink rectangle (classic eraser shape), hotspot centre-bottom
+// Custom eraser cursor — seam ripper: handle top-right, blade tip bottom-left (hotspot)
 const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="14">' +
-  '<rect x="1" y="1" width="18" height="12" rx="2" fill="#f9a8d4" stroke="#9f1239" stroke-width="1.2"/>' +
-  '<rect x="1" y="7" width="18" height="6" rx="0 0 2 2" fill="#fbcfe8" stroke="#9f1239" stroke-width="0"/>' +
-  '<line x1="1" y1="7" x2="19" y2="7" stroke="#9f1239" stroke-width="1"/>' +
+  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28">' +
+  // Handle: teardrop in crimson, rotated -45°
+  '<ellipse cx="22" cy="5" rx="5" ry="3" transform="rotate(-45 22 5)" fill="#be123c" stroke="#7f1d1d" stroke-width="1"/>' +
+  // Collar / guard ring
+  '<ellipse cx="17" cy="9" rx="2.2" ry="1.2" transform="rotate(-45 17 9)" fill="#64748b" stroke="#475569" stroke-width="0.8"/>' +
+  // Shaft
+  '<line x1="15.5" y1="10.5" x2="10" y2="16" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>' +
+  // Ball prong (outer) — ends with safety ball
+  '<path d="M10 16 Q7.5 20 7 25" stroke="#334155" stroke-width="1.5" fill="none" stroke-linecap="round"/>' +
+  '<circle cx="7" cy="25" r="2" fill="#be123c" stroke="#7f1d1d" stroke-width="0.8"/>' +
+  // Blade prong (inner) — sharp tip is the hotspot at (3,23)
+  '<path d="M10 16 Q6 18.5 3 23" stroke="#cbd5e1" stroke-width="1.5" fill="none" stroke-linecap="round"/>' +
+  '<circle cx="3" cy="23" r="0.9" fill="#f1f5f9"/>' +
   '</svg>'
-)}") 10 13, cell`;
+)}") 3 23, cell`;
 
 // Flood fill cursor — watering can with blue drops, hotspot at rose head
 const FLOOD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
@@ -277,18 +286,21 @@ export default function PatternCanvas({
   const modeRef        = useRef(mode);
   const cellSizeRef    = useRef(cellSize);
   const drawModeRef    = useRef(drawMode);
+  const activeToolRef  = useRef(activeTool);
   const activeColRef   = useRef(activeColorIndex);
   const penWidthRef    = useRef(penWidth);
   const blinkColorRef  = useRef(blinkColorIndex);
   const blinkOnRef     = useRef(false);
   const selRef         = useRef<SelectionRect | null>(null);
   const lastCellRef    = useRef<[number, number] | null>(null); // last mouse cell during shape drag
+  const hoverCellRef   = useRef<[number, number] | null>(null); // for eraser width > 1 preview
   const shiftRef       = useRef(false);
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
   cellSizeRef.current  = cellSize;
   drawModeRef.current  = drawMode;
+  activeToolRef.current = activeTool;
   activeColRef.current = activeColorIndex;
   penWidthRef.current  = penWidth;
   blinkColorRef.current = blinkColorIndex;
@@ -523,6 +535,23 @@ export default function PatternCanvas({
       ctx.setLineDash([]);
     }
 
+    // Eraser width > 1: dashed border showing the affected area on hover
+    const hc = hoverCellRef.current;
+    if (hc && activeToolRef.current === 'pencil' && activeColRef.current === -1 && penWidthRef.current > 1) {
+      const pw = penWidthRef.current;
+      const halfLow  = Math.floor((pw - 1) / 2);
+      const halfHigh = pw - 1 - halfLow;
+      const cs = cellSizeRef.current;
+      const x = (hc[1] - halfLow) * cs + ML;
+      const y = (hc[0] - halfLow) * cs + MT;
+      const sz = pw * cs;
+      ctx.strokeStyle = '#be123c';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.strokeRect(x + 0.75, y + 0.75, sz - 1.5, sz - 1.5);
+      ctx.setLineDash([]);
+    }
+
     // Preview cells (ghost overlay for shape drawing)
     const preview = previewRef.current;
     if (preview.length > 0) {
@@ -673,6 +702,18 @@ export default function PatternCanvas({
   }
 
   function onMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    // Track hover cell for eraser width-preview even when not drawing
+    if (editable && activeTool === 'pencil' && activeColorIndex === -1 && penWidth > 1) {
+      const cell = cellAt(e);
+      const prev = hoverCellRef.current;
+      if (cell && (prev?.[0] !== cell[0] || prev?.[1] !== cell[1])) {
+        hoverCellRef.current = cell;
+        draw();
+      }
+    } else if (hoverCellRef.current) {
+      hoverCellRef.current = null;
+      draw();
+    }
     if (!editable || !drawing.current) return;
     const cell = cellAt(e);
     if (!cell) return;
@@ -752,6 +793,7 @@ export default function PatternCanvas({
   }
 
   function onLeave() {
+    if (hoverCellRef.current) { hoverCellRef.current = null; draw(); }
     if (!drawing.current) return;
     if (activeTool === 'select') {
       drawing.current = false;
