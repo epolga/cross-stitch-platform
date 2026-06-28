@@ -11,6 +11,7 @@ import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
+import FeatureRequestDialog from '@/app/components/FeatureRequestDialog';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
@@ -129,6 +130,11 @@ export default function ConvertPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null);
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
+  const [showFeatureRequest, setShowFeatureRequest] = useState(false);
+  const [showWishHint, setShowWishHint] = useState(false);
+  const editorStartRef = useRef(Date.now());
+  const editCountRef = useRef(0);
+  const hasExportedPdfRef = useRef(false);
 
   // Pattern + editor state
   const blankGrid = (): number[][] => Array.from({ length: 80 }, () => Array(80).fill(-1));
@@ -164,6 +170,19 @@ export default function ConvertPage() {
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (localStorage.getItem('wishHintSeen')) return;
+    const t = setTimeout(() => setShowWishHint(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!showWishHint) return;
+    const t = setTimeout(() => setShowWishHint(false), 14000);
+    return () => clearTimeout(t);
+  }, [showWishHint]);
 
   useEffect(() => {
     const el = canvasWrapperRef.current;
@@ -268,6 +287,7 @@ export default function ConvertPage() {
       a.download = 'cross-stitch-pattern.pdf';
       a.click();
       URL.revokeObjectURL(url);
+      hasExportedPdfRef.current = true;
     } catch (e) {
       setDownloadError(e instanceof Error ? e.message : 'Download failed');
     } finally {
@@ -305,6 +325,7 @@ export default function ConvertPage() {
     const newGrid = [...g];
     newGrid[row] = newRow;
     updateGrid(newGrid);
+    editCountRef.current++;
   }
 
   function handleStrokeEnd() {
@@ -925,6 +946,33 @@ export default function ConvertPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFeatureRequest(true);
+                    setShowWishHint(false);
+                    if (typeof window !== 'undefined') localStorage.setItem('wishHintSeen', '1');
+                  }}
+                  className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-500 transition-colors shadow-sm"
+                  title="Suggest a feature"
+                >
+                  💡 I wish I could…
+                </button>
+                {showWishHint && (
+                  <div className="absolute top-full right-0 mt-2.5 z-30 w-60 rounded-xl bg-white border border-amber-300 shadow-xl p-3.5">
+                    <div className="absolute -top-2 right-5 w-4 h-4 bg-white border-t border-l border-amber-300 rotate-45" />
+                    <button
+                      type="button"
+                      onClick={() => { setShowWishHint(false); if (typeof window !== 'undefined') localStorage.setItem('wishHintSeen', '1'); }}
+                      className="absolute top-2 right-2 text-gray-300 hover:text-gray-500 leading-none"
+                      aria-label="Dismiss"
+                    >✕</button>
+                    <p className="text-sm font-semibold text-amber-700 mb-1">Missing something?</p>
+                    <p className="text-xs text-gray-600 leading-relaxed pr-3">Tell me what you wish this editor could do — I read every idea!</p>
+                  </div>
+                )}
+              </div>
               <button
                 type="button" onClick={newPattern}
                 className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
@@ -1443,6 +1491,19 @@ export default function ConvertPage() {
         defaultName={patternName}
         onSave={handleSavePattern}
         onClose={() => setSaveDialogOpen(false)}
+      />
+
+      <FeatureRequestDialog
+        open={showFeatureRequest}
+        context={{
+          patternWidth:             grid[0]?.length,
+          patternHeight:            grid.length,
+          colorsCount:              palette.length,
+          editorTimeSeconds:        Math.floor((Date.now() - editorStartRef.current) / 1000),
+          userChangedStitchesCount: editCountRef.current,
+          exportedPdf:              hasExportedPdfRef.current,
+        }}
+        onClose={() => setShowFeatureRequest(false)}
       />
 
       {showNamePrompt && (

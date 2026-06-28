@@ -149,6 +149,7 @@ export const fetchRuntimeDownloadMode = async (): Promise<DownloadMode> => {
 
 export function AuthControl() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [currentEmail, setCurrentEmail] = useState('');
   const [currentFirstName, setCurrentFirstName] = useState('');
   const [_currentUserVotesCount, setCurrentUserVotesCount] = useState(0);
@@ -285,6 +286,17 @@ export function AuthControl() {
     };
 
     void updateLastSeen();
+  }, [isLoggedIn]);
+
+  // Check admin status whenever login state changes
+  useEffect(() => {
+    if (!isLoggedIn) { setIsAdmin(false); return; }
+    let cancelled = false;
+    fetch('/api/admin/me', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((d: { isAdmin?: boolean }) => { if (!cancelled) setIsAdmin(!!d.isAdmin); })
+      .catch(() => { if (!cancelled) setIsAdmin(false); });
+    return () => { cancelled = true; };
   }, [isLoggedIn]);
 
   // Global error logger
@@ -491,6 +503,7 @@ export function AuthControl() {
     setCurrentEmail('');
     setCurrentFirstName('');
     setCurrentUserVotesCount(0);
+    setIsAdmin(false);
     setIsLoggedIn(false);
     dispatchAuthStateChange();
   };
@@ -600,7 +613,7 @@ export function AuthControl() {
           >
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Check your email</h2>
             <p className="text-sm text-gray-700 mb-3">
-              We&apos;ve sent a verification link. Please check your inbox (and spam) to complete
+              I&apos;ve sent a verification link. Please check your inbox (and spam) to complete
               registration. You&apos;ll be logged in automatically after verification.
             </p>
             <button
@@ -623,6 +636,15 @@ export function AuthControl() {
               aria-label={`Open profile for ${currentFirstName}`}
             >
               {`Hi ${currentFirstName}!`}
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/feature-requests"
+              className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-bold text-white shadow hover:bg-indigo-700 transition-colors"
+              aria-label="Admin panel"
+            >
+              Admin
             </Link>
           )}
           {currentFirstName && <span className="text-gray-400 text-lg">|</span>}
@@ -745,7 +767,7 @@ export function AuthControl() {
             ) : (
               <form onSubmit={handleForgotSubmit} className="space-y-4">
                 <p className="text-sm text-gray-600">
-                  Enter your email and we will send you a password reset link.
+                  Enter your email and I will send you a password reset link.
                 </p>
                 <div>
                   <label
