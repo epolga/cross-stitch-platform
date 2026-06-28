@@ -57,7 +57,7 @@ export async function getGA4LandingPageStats(date: string): Promise<Omit<Landing
         },
       },
       orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
-      limit: 50,
+      limit: "50",
     },
   });
 

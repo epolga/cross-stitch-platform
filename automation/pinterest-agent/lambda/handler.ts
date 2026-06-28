@@ -21,6 +21,7 @@ import { runAnomalyDetection } from "../src/services/anomalyDetector";
 import { notifyAnomalies } from "../src/services/anomalyNotifier";
 import { notifyRecommendationChange } from "../src/services/recommendationChangeNotifier";
 import { sendDailySummary } from "../src/services/dailySummary";
+import { sendEditorDailySummary } from "../src/services/editorDailySummary";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
 import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
@@ -98,15 +99,22 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log("  no holiday in 14 or 28 days");
   }
 
-  // Steps 12-14 (design pin map, design performance, AI design analysis) are
+  console.log("[12/14] editor daily summary email");
+  const editorResult = await sendEditorDailySummary(dateStr);
+  if (editorResult.skipped) {
+    console.log(`  skipped: ${editorResult.reason}`);
+  } else {
+    const c = editorResult.counts!;
+    console.log(`  sent → SES MessageId=${editorResult.messageId} (sessions=${c.editor_opened}, pdfs=${c.pdf_exported})`);
+  }
+
+  // Steps 13-14 (design pin map, design performance, AI design analysis) are
   // disabled — output is not surfaced anywhere yet. Re-enable when the email
   // or a separate report includes the design analysis. See Milestones doc.
-  // console.log("[12/14] design pin map export");
+  // console.log("[13/14] design pin map export");
   // await runPinMap();
-  // console.log("[13/14] design performance build");
+  // console.log("[14/14] design performance build");
   // await runPerf();
-  // console.log("[14/14] AI design analysis");
-  // await runAiDesign();
 
   console.log(`[pipeline] complete for date=${dateStr}`);
 };

@@ -9,6 +9,7 @@ import { getRelatedLinks } from '@/lib/related-links';
 import { getSimilarDesigns } from '@/lib/similar-designs';
 import { DesignDownloadControls } from './DesignDownloadControls';
 import DesignViewTracker from '@/app/components/DesignViewTracker';
+import EditorCTAButton from '@/app/components/EditorCTAButton';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
@@ -333,6 +334,16 @@ export default async function DesignPage({ params }: Props) {
               <span className="text-gray-500 text-sm">No Image</span>
             </div>
           )}
+
+          <div className="my-5 flex justify-center">
+            <EditorCTAButton
+              href={`/photo-to-cross-stitch?source=design_page&designId=${design.DesignID}`}
+              label="Turn your own photo into a pattern"
+              eventName="design_editor_cta_clicked"
+              eventParams={{ designId: design.DesignID, source: 'design_page' }}
+              className="inline-block px-5 py-2.5 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 transition-colors"
+            />
+          </div>
 
           <p className="text-gray-700 mb-4">{design.Description || 'No description available'}</p>
 

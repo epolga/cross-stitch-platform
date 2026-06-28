@@ -6,6 +6,7 @@ import { isPaidDownloadMode } from '@/lib/download-mode';
 import { getAdjacentAlbums, getDesignsByAlbumId } from '@/lib/data-access';
 import Link from 'next/link';
 import AdSlot from '@/app/components/AdSlot';
+import EditorCTAButton from '@/app/components/EditorCTAButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -189,6 +190,17 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
           </Link>
         </div>
       )}
+      <div className="flex items-center justify-between gap-4 bg-rose-50 border border-rose-100 rounded-xl px-5 py-4 mb-6">
+        <p className="text-sm text-gray-700 font-medium">Have your own photo? Turn it into a cross-stitch pattern.</p>
+        <EditorCTAButton
+          href={`/photo-to-cross-stitch?source=album_page&albumId=${albumId}`}
+          label="Try the editor →"
+          eventName="album_editor_cta_clicked"
+          eventParams={{ albumId, source: 'album_page' }}
+          className="shrink-0 px-4 py-2 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 transition-colors whitespace-nowrap"
+        />
+      </div>
+
       <DesignList
         designs={designs}
         page={currentPage}

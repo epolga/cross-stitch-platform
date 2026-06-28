@@ -2,16 +2,23 @@ import {
   DynamoDBClient,
   PutItemCommand,
   QueryCommand,
+  ScanCommand,
+  GetItemCommand,
+  UpdateItemCommand,
   CreateTableCommand,
   DescribeTableCommand,
   type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { randomUUID } from 'crypto';
 
 const TABLE  = process.env.DDB_EDITOR_EVENTS_TABLE || 'EditorEvents';
 const REGION = process.env.AWS_REGION || 'us-east-1';
 
-const client = new DynamoDBClient({ region: REGION });
+const client    = new DynamoDBClient({ region: REGION });
+const sesClient = new SESClient({ region: REGION });
+
+const MILESTONES_ID = 'MILESTONES';
 
 let _tableReady: Promise<void> | null = null;
 
@@ -76,6 +83,111 @@ export interface EditorEventRecord extends EditorEvent {
   ttl: number;
 }
 
+interface Milestones {
+  firstEditorUsage: boolean;
+  firstPdfExport: boolean;
+  firstFeedback: boolean;
+  errorAlertSentDate: string;
+  errorCountToday: number;
+  errorCountDate: string;
+}
+
+async function getMilestones(): Promise<Milestones> {
+  const { Item } = await client.send(new GetItemCommand({
+    TableName: TABLE,
+    Key: { id: { S: MILESTONES_ID } },
+  }));
+  return {
+    firstEditorUsage:   Item?.firstEditorUsage?.BOOL  ?? false,
+    firstPdfExport:     Item?.firstPdfExport?.BOOL    ?? false,
+    firstFeedback:      Item?.firstFeedback?.BOOL     ?? false,
+    errorAlertSentDate: Item?.errorAlertSentDate?.S   ?? '',
+    errorCountToday:    Item?.errorCountToday?.N ? parseInt(Item.errorCountToday.N) : 0,
+    errorCountDate:     Item?.errorCountDate?.S        ?? '',
+  };
+}
+
+async function updateMilestones(updates: Record<string, AttributeValue>): Promise<void> {
+  const expParts: string[] = [];
+  const names: Record<string, string> = {};
+  const values: Record<string, AttributeValue> = {};
+  let i = 0;
+  for (const [k, v] of Object.entries(updates)) {
+    expParts.push(`#f${i} = :v${i}`);
+    names[`#f${i}`] = k;
+    values[`:v${i}`] = v;
+    i++;
+  }
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { id: { S: MILESTONES_ID } },
+    UpdateExpression: `SET ${expParts.join(', ')}`,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
+  }));
+}
+
+async function sendAlertEmail(subject: string, text: string): Promise<void> {
+  const sender    = process.env.SES_SENDER    || 'ann@cross-stitch.com';
+  const recipient = process.env.SES_RECIPIENT || 'olga.epstein@gmail.com';
+  await sesClient.send(new SendEmailCommand({
+    Source: sender,
+    Destination: { ToAddresses: [recipient] },
+    Message: {
+      Subject: { Data: subject, Charset: 'UTF-8' },
+      Body:    { Text: { Data: text, Charset: 'UTF-8' } },
+    },
+  }));
+}
+
+async function checkAndNotify(event: EditorEvent): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const m = await getMilestones();
+
+  if (event.eventType === 'editor_opened' && !m.firstEditorUsage) {
+    await sendAlertEmail(
+      '[cross-stitch] First editor visitor!',
+      `Someone opened the cross-stitch editor for the first time.\n\nsource: ${event.source ?? 'direct'}\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
+    );
+    await updateMilestones({ firstEditorUsage: { BOOL: true } });
+    return;
+  }
+
+  if (event.eventType === 'pdf_exported' && !m.firstPdfExport) {
+    await sendAlertEmail(
+      '[cross-stitch] First PDF exported from the editor!',
+      `Someone exported a PDF from the editor for the first time.\n\nsessionId: ${event.sessionId}\nwidth: ${event.patternWidth ?? '?'}  height: ${event.patternHeight ?? '?'}  colors: ${event.colorCount ?? '?'}\ntime: ${new Date().toISOString()}`,
+    );
+    await updateMilestones({ firstPdfExport: { BOOL: true } });
+    return;
+  }
+
+  if (event.eventType === 'feedback_submitted' && !m.firstFeedback) {
+    await sendAlertEmail(
+      '[cross-stitch] First editor feedback submitted!',
+      `Someone submitted feedback from the editor for the first time.\n\nsessionId: ${event.sessionId}\nimportance: ${event.importance ?? '?'}\ntime: ${new Date().toISOString()}`,
+    );
+    await updateMilestones({ firstFeedback: { BOOL: true } });
+    return;
+  }
+
+  if (event.eventType === 'editor_error') {
+    const isNewDay  = m.errorCountDate !== today;
+    const newCount  = isNewDay ? 1 : m.errorCountToday + 1;
+    await updateMilestones({
+      errorCountToday: { N: String(newCount) },
+      errorCountDate:  { S: today },
+    });
+    if (newCount > 5 && m.errorAlertSentDate !== today) {
+      await sendAlertEmail(
+        `[cross-stitch] Editor error alert — ${newCount} errors today`,
+        `The editor has logged ${newCount} errors on ${today}.\n\nLast error: step=${event.step ?? '?'}, code=${event.errorCode ?? '?'}\nsessionId: ${event.sessionId}\n\nCheck the EditorEvents DDB table for details.`,
+      );
+      await updateMilestones({ errorAlertSentDate: { S: today } });
+    }
+  }
+}
+
 export async function logEditorEvent(event: EditorEvent): Promise<void> {
   await ensureTable();
   const now = new Date();
@@ -101,6 +213,8 @@ export async function logEditorEvent(event: EditorEvent): Promise<void> {
   if (event.importance)          item.importance   = { S: event.importance };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
+
+  checkAndNotify(event).catch(err => console.error('[editor-events] notify error', err));
 }
 
 function itemToRecord(item: Record<string, AttributeValue>): EditorEventRecord {
@@ -149,4 +263,22 @@ export async function getEditorEventCounts(date: string): Promise<Record<string,
     counts[e.eventType] = (counts[e.eventType] ?? 0) + 1;
   }
   return counts;
+}
+
+export async function getRecentEventsByType(eventType: string, limit: number): Promise<EditorEventRecord[]> {
+  await ensureTable();
+  const results: EditorEventRecord[] = [];
+  let lastKey: Record<string, AttributeValue> | undefined;
+  do {
+    const { Items = [], LastEvaluatedKey } = await client.send(new ScanCommand({
+      TableName: TABLE,
+      FilterExpression: 'eventType = :et',
+      ExpressionAttributeValues: { ':et': { S: eventType } },
+      ExclusiveStartKey: lastKey,
+    }));
+    results.push(...Items.map(i => itemToRecord(i as Record<string, AttributeValue>)));
+    lastKey = LastEvaluatedKey as Record<string, AttributeValue> | undefined;
+  } while (lastKey);
+  results.sort((a, b) => b.ts.localeCompare(a.ts));
+  return results.slice(0, limit);
 }

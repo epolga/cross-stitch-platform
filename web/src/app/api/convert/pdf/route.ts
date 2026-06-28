@@ -50,11 +50,12 @@ function centerText(page: PDFPage, text: string, y: number, size: number, font: 
 
 export async function POST(request: NextRequest) {
   try {
-    const { grid, palette, title = 'Cross-Stitch Pattern', chartMode = 'symbol' } = await request.json() as {
+    const { grid, palette, title = 'Cross-Stitch Pattern', chartMode = 'symbol', previewImage = null } = await request.json() as {
       grid: number[][];
       palette: PatternPalette[];
       title?: string;
       chartMode?: 'symbol' | 'color-symbol' | 'color';
+      previewImage?: string | null;
     };
 
     if (!grid?.length || !palette?.length) {
@@ -120,50 +121,49 @@ export async function POST(request: NextRequest) {
       const stitchLine = `${cols} × ${rows} stitches · ${usedPalette.length} colors`;
       centerText(p, stitchLine, PAGE_H - MARGIN - 80, 9, font, rgb(0.55, 0.55, 0.55));
 
-      // Color preview — draw scaled grid
       const maxW = PAGE_W - MARGIN * 2;
-      const maxH = PAGE_H - MARGIN - 100;  // leave space for header text
-      const scale = Math.min(maxW / cols, maxH / rows);
-      const thumbW = cols * scale;
-      const thumbH = rows * scale;
-      const ox = (PAGE_W - thumbW) / 2;
+      const maxH = PAGE_H - MARGIN - 100;
+      const ox = MARGIN;
       const oy = MARGIN;
 
-      // Fabric background
-      p.drawRectangle({
-        x: ox, y: oy, width: thumbW, height: thumbH,
-        color: rgb(0.96, 0.94, 0.89),
-      });
-
-      // Each stitch drawn as an X (cross-stitch simulation)
-      const stitchThick = Math.max(0.3, scale * 0.18);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const ci = grid[r][c];
-          const pal = palette[ci];
-          if (!pal) continue;
-          const cx = ox + c * scale;
-          const cy = oy + (rows - r - 1) * scale;
-          const pad = scale * 0.08;
-          const strokeColor = col(pal.r, pal.g, pal.b);
-          p.drawLine({
-            start: { x: cx + pad,          y: cy + pad },
-            end:   { x: cx + scale - pad,  y: cy + scale - pad },
-            thickness: stitchThick, color: strokeColor,
-          });
-          p.drawLine({
-            start: { x: cx + scale - pad,  y: cy + pad },
-            end:   { x: cx + pad,          y: cy + scale - pad },
-            thickness: stitchThick, color: strokeColor,
-          });
+      if (previewImage) {
+        // Embed the canvas capture (aida + crosses + shadows) as the cover image
+        const b64 = previewImage.replace(/^data:image\/(jpeg|png|webp);base64,/, '');
+        const imgBytes = Buffer.from(b64, 'base64');
+        const embedded = previewImage.startsWith('data:image/png')
+          ? await pdf.embedPng(imgBytes)
+          : await pdf.embedJpg(imgBytes);
+        const { width: iw, height: ih } = embedded.scale(1);
+        const scale = Math.min(maxW / iw, maxH / ih);
+        const imgW = iw * scale, imgH = ih * scale;
+        p.drawImage(embedded, {
+          x: (PAGE_W - imgW) / 2,
+          y: oy,
+          width: imgW,
+          height: imgH,
+        });
+      } else {
+        // Fallback: programmatic X-stitch thumbnail
+        const scale = Math.min(maxW / cols, maxH / rows);
+        const thumbW = cols * scale, thumbH = rows * scale;
+        const tx = (PAGE_W - thumbW) / 2;
+        p.drawRectangle({ x: tx, y: oy, width: thumbW, height: thumbH, color: rgb(0.96, 0.94, 0.89) });
+        const stitchThick = Math.max(0.3, scale * 0.18);
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const ci = grid[r][c];
+            const pal = palette[ci];
+            if (!pal) continue;
+            const cx = tx + c * scale;
+            const cy = oy + (rows - r - 1) * scale;
+            const pad = scale * 0.08;
+            const strokeColor = col(pal.r, pal.g, pal.b);
+            p.drawLine({ start: { x: cx + pad, y: cy + pad }, end: { x: cx + scale - pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
+            p.drawLine({ start: { x: cx + scale - pad, y: cy + pad }, end: { x: cx + pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
+          }
         }
+        p.drawRectangle({ x: tx, y: oy, width: thumbW, height: thumbH, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
       }
-
-      // Thin border around the thumbnail
-      p.drawRectangle({
-        x: ox, y: oy, width: thumbW, height: thumbH,
-        borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5,
-      });
     }
 
     // ── Pages 2-N: Color key ────────────────────────────────────────────────

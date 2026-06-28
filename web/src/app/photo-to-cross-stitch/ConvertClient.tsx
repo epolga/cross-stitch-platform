@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import PatternCanvas, { type DrawMode, type SelectionRect } from '@/app/components/PatternCanvas';
+import PatternCanvas, { type DrawMode, type SelectionRect, type PatternCanvasHandle } from '@/app/components/PatternCanvas';
 import PaletteBar, { type PaletteBarHandle } from '@/app/components/PaletteBar';
 import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
@@ -154,6 +154,7 @@ export default function ConvertPage() {
   const [penWidth, setPenWidth] = useState(1);
   const [cellSize, setCellSize] = useState(12);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const canvasHandle    = useRef<PatternCanvasHandle>(null);
   const paletteBarRef = useRef<PaletteBarHandle>(null);
   const [paletteMaxHeight, setPaletteMaxHeight] = useState<number | undefined>(undefined);
   const [fillMode, setFillMode] = useState<FillMode>('flood');
@@ -294,10 +295,11 @@ export default function ConvertPage() {
   async function doDownloadPdf(title: string, chartMode: 'symbol' | 'color-symbol' | 'color' = 'symbol') {
     setDownloading(true);
     try {
+      const previewImage = canvasHandle.current?.capturePreview() ?? null;
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grid: gridRef.current, palette, title, chartMode }),
+        body: JSON.stringify({ grid: gridRef.current, palette, title, chartMode, previewImage }),
       });
       if (!resp.ok) throw new Error('PDF generation failed');
       const blob = await resp.blob();
@@ -1598,6 +1600,7 @@ export default function ConvertPage() {
                 </div>
               )}
               <PatternCanvas
+                ref={canvasHandle}
                 grid={grid}
                 palette={palette}
                 mode={viewMode}

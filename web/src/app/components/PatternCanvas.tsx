@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { drawSymbol } from '@/lib/symbol-renderer';
 
@@ -262,12 +262,16 @@ function buildAidaCell(cs: number): HTMLCanvasElement {
 
 // ── Component ────────────────────────────────────────────────────
 
-export default function PatternCanvas({
+export type PatternCanvasHandle = {
+  capturePreview: () => string | null;
+};
+
+const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCanvas({
   grid, palette, mode, cellSize = 12,
   editable, activeTool, drawMode = 'point',
   activeColorIndex = 0, penWidth = 1, blinkColorIndex = null, hiddenColors, selection = null,
   onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint, onRightClick, onSelectionChange,
-}: Props) {
+}: Props, ref: React.Ref<PatternCanvasHandle>) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const drawing     = useRef(false);
   const startCell   = useRef<[number, number] | null>(null);
@@ -843,6 +847,75 @@ export default function PatternCanvas({
     if (cell) onRightClick?.(cell[0], cell[1]);
   }
 
+  useImperativeHandle(ref, () => ({
+    capturePreview(): string | null {
+      const g   = gridRef.current;
+      const pal = paletteRef.current;
+      if (!g.length || !pal.length) return null;
+
+      const rows = g.length, cols = g[0].length;
+      const cs = Math.max(6, Math.min(20, Math.floor(1200 / Math.max(rows, cols))));
+      const w = cols * cs, h = rows * cs;
+
+      const offscreen = document.createElement('canvas');
+      offscreen.width = w; offscreen.height = h;
+      const ctx = offscreen.getContext('2d');
+      if (!ctx) return null;
+
+      // Aida background
+      const aidaCell = buildAidaCell(cs);
+      const pat = ctx.createPattern(aidaCell, 'repeat');
+      if (pat) { ctx.fillStyle = pat; ctx.fillRect(0, 0, w, h); }
+
+      // Per-color cross cache with shadow baked in
+      const shadowBlur = Math.max(1, cs * 0.15);
+      const shadowOff  = Math.max(0.5, cs * 0.08);
+      const crossMask  = buildCrossMask(cs);
+      const colorCache = pal.map(c => {
+        const tmp = document.createElement('canvas');
+        tmp.width = cs; tmp.height = cs;
+        const tc = tmp.getContext('2d')!;
+        tc.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+        tc.fillRect(0, 0, cs, cs);
+        tc.globalCompositeOperation = 'destination-in';
+        tc.drawImage(crossMask, 0, 0);
+        const out = document.createElement('canvas');
+        out.width = cs; out.height = cs;
+        const oc = out.getContext('2d')!;
+        oc.save();
+        oc.beginPath(); oc.rect(0, 0, cs, cs); oc.clip();
+        oc.shadowColor = 'rgba(0,0,0,0.45)';
+        oc.shadowBlur = shadowBlur;
+        oc.shadowOffsetX = shadowOff;
+        oc.shadowOffsetY = shadowOff;
+        oc.drawImage(tmp, 0, 0);
+        oc.restore();
+        return out;
+      });
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const ci = g[r][c];
+          if (ci >= 0 && colorCache[ci]) ctx.drawImage(colorCache[ci], c * cs, r * cs);
+        }
+      }
+
+      // Holes overlay
+      const hr = Math.max(0.5, cs * 0.11);
+      ctx.fillStyle = 'rgba(40,25,8,0.70)';
+      ctx.beginPath();
+      for (let r = 0; r <= rows; r++) {
+        for (let c = 0; c <= cols; c++) {
+          ctx.moveTo(c * cs + hr, r * cs);
+          ctx.arc(c * cs, r * cs, hr, 0, Math.PI * 2);
+        }
+      }
+      ctx.fill();
+
+      return offscreen.toDataURL('image/jpeg', 0.88);
+    },
+  }));
+
   const isEraser = activeTool === 'pencil' && activeColorIndex === -1;
   const activeColor = palette[activeColorIndex ?? 0];
   const threadHex = activeColor
@@ -866,4 +939,6 @@ export default function PatternCanvas({
       onContextMenu={onContext}
     />
   );
-}
+});
+
+export default PatternCanvas;
