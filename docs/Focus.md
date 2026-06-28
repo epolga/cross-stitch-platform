@@ -2,15 +2,22 @@
 
 ## Current goal
 
-S7 converter — stitchable PDF chart from photo.
+Editor analytics and owner notifications.
+
+**Plan document:** `docs/plan/web/Editor_Analytics_Implementation_Plan.md` — read this before starting each session.
 
 ## Active work
 
-Nothing in flight.
+Nothing in flight. Starting from Part 1 next session.
 
-## Next session
+## Next session — Part 1: GA4 events in ConvertClient
 
-Integrate the converter into the main site flow — wire up the `/photo-to-cross-stitch` page so it connects end-to-end with the rest of the site (nav link, login-wall, saved patterns, etc.).
+File: `web/src/app/photo-to-cross-stitch/ConvertClient.tsx`
+
+1. Add `trackEvent()` helper at top of file.
+2. Fire all events listed in the plan: `editor_opened`, `image_uploaded`, `pattern_generated`, `pdf_exported`, `manual_editing_started`, `manual_editing_action` (throttled), `palette_changed`, `pattern_size_changed`, `project_saved`, `project_reopened`, `feedback_submitted`, `editor_error`.
+3. Read `source` URL param on `editor_opened` for CTA attribution.
+4. Commit, push, deploy.
 
 ## Return to S8 analytics
 
