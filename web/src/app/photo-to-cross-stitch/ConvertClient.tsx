@@ -12,6 +12,7 @@ import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
 import FeatureRequestDialog from '@/app/components/FeatureRequestDialog';
+import MirrorDialog, { type MirrorDirection, type MirrorAxis, type MirrorResize } from '@/app/components/MirrorDialog';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
@@ -220,6 +221,7 @@ export default function ConvertPage() {
   }, [undoStack, redoStack, selection, clipboard]);
 
   const [showResizeDialog, setShowResizeDialog] = useState(false);
+  const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
@@ -599,34 +601,159 @@ export default function ConvertPage() {
     updateGrid(newGrid);
   }
 
-  // ── Mirror (always whole grid — doubles one dimension) ──────────
-  function handleMirrorRight() {
+  // ── Mirror ───────────────────────────────────────────────────────
+  function applyMirror(dir: MirrorDirection, axis: MirrorAxis, resize: MirrorResize) {
     const g = gridRef.current;
     if (!g.length) return;
-    const newGrid = g.map(r => [...r, ...[...r].reverse()]);
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
+    const rows = g.length, cols = g[0].length;
+    const b = selectionBounds();
+
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setRedoStack([]);
+
+    if (!b) {
+      // ── Whole grid ────────────────────────────────────────────────
+      let newGrid: number[][];
+
+      if (resize === 'expand') {
+        if (dir === 'right') {
+          const ext = axis === 'edge'
+            ? g.map(r => [...r].reverse())
+            : g.map(r => [...r].reverse().slice(1));
+          newGrid = g.map((r, i) => [...r, ...ext[i]]);
+        } else if (dir === 'left') {
+          const ext = axis === 'edge'
+            ? g.map(r => [...r].reverse())
+            : g.map(r => [...r].reverse().slice(0, -1));
+          newGrid = g.map((r, i) => [...ext[i], ...r]);
+        } else if (dir === 'bottom') {
+          const rev = [...g].reverse().map(r => [...r]);
+          newGrid = [...g.map(r => [...r]), ...(axis === 'edge' ? rev : rev.slice(1))];
+        } else {
+          const rev = [...g].reverse().map(r => [...r]);
+          newGrid = [...(axis === 'edge' ? rev : rev.slice(0, -1)), ...g.map(r => [...r])];
+        }
+      } else {
+        // Symmetrize within existing bounds: fill the opposite half from this half
+        newGrid = g.map(r => [...r]);
+        if (dir === 'right') {
+          const half = Math.floor(cols / 2);
+          const startC = axis === 'edge' ? half : half + 1;
+          for (let ri = 0; ri < rows; ri++)
+            for (let c = startC; c < cols; c++) {
+              const src = (axis === 'edge' ? 2 * half - 1 : 2 * half) - c;
+              newGrid[ri][c] = src >= 0 ? g[ri][src] : -1;
+            }
+        } else if (dir === 'left') {
+          const rightStart = cols - Math.floor(cols / 2);
+          const endC = axis === 'edge' ? rightStart : rightStart - 1;
+          for (let ri = 0; ri < rows; ri++)
+            for (let c = 0; c < endC; c++) {
+              const src = axis === 'edge' ? cols - 1 - c : 2 * rightStart - c;
+              newGrid[ri][c] = src < cols ? g[ri][src] : -1;
+            }
+        } else if (dir === 'bottom') {
+          const half = Math.floor(rows / 2);
+          const startR = axis === 'edge' ? half : half + 1;
+          for (let r = startR; r < rows; r++) {
+            const src = (axis === 'edge' ? 2 * half - 1 : 2 * half) - r;
+            newGrid[r] = src >= 0 ? [...g[src]] : Array(cols).fill(-1);
+          }
+        } else {
+          const botStart = rows - Math.floor(rows / 2);
+          const endR = axis === 'edge' ? botStart : botStart - 1;
+          for (let r = 0; r < endR; r++) {
+            const src = axis === 'edge' ? rows - 1 - r : 2 * botStart - r;
+            newGrid[r] = src < rows ? [...g[src]] : Array(cols).fill(-1);
+          }
+        }
+      }
+      updateGrid(newGrid);
+      return;
+    }
+
+    // ── Selection ────────────────────────────────────────────────────
+    const sub: number[][] = [];
+    for (let r = b.rMin; r <= b.rMax; r++)
+      sub.push(g[r].slice(b.cMin, b.cMax + 1));
+    const subRows = sub.length, subCols = sub[0]?.length ?? 0;
+
+    // Build mirror content and compute its dimensions
+    let mirrorSub: number[][];
+    let mirrorRows = subRows, mirrorCols = subCols;
+
+    if (dir === 'right' || dir === 'left') {
+      if (axis === 'edge') {
+        mirrorSub = sub.map(r => [...r].reverse());
+      } else {
+        // center: pivot col is not duplicated
+        mirrorSub = dir === 'right'
+          ? sub.map(r => [...r].reverse().slice(1))   // drop pivot (last col of original)
+          : sub.map(r => [...r].reverse().slice(0, -1)); // drop pivot (first col of original)
+        mirrorCols = subCols - 1;
+      }
+    } else {
+      const revRows = [...sub].reverse().map(r => [...r]);
+      if (axis === 'edge') {
+        mirrorSub = revRows;
+      } else {
+        mirrorSub = dir === 'bottom'
+          ? revRows.slice(1)     // drop pivot (last row of original)
+          : revRows.slice(0, -1); // drop pivot (first row of original)
+        mirrorRows = subRows - 1;
+      }
+    }
+
+    if (mirrorCols <= 0 || mirrorRows <= 0) { updateGrid(g); return; }
+
+    // Determine placement origin and whether grid needs expanding
+    let newGrid = g.map(r => [...r]);
+    let newRows = rows, newCols = cols;
+    let placeR = b.rMin, placeC = b.cMin;
+
+    if (dir === 'right') {
+      placeC = b.cMax + 1;
+      if (resize === 'expand' && placeC + mirrorCols > cols) {
+        newCols = placeC + mirrorCols;
+        newGrid = newGrid.map(r => [...r, ...Array(newCols - cols).fill(-1)]);
+      }
+    } else if (dir === 'left') {
+      placeC = b.cMin - mirrorCols;
+      if (resize === 'expand' && placeC < 0) {
+        const shift = -placeC;
+        newCols = cols + shift;
+        newGrid = newGrid.map(r => [...Array(shift).fill(-1), ...r]);
+        placeC = 0;
+        // adjust selection bounds for update below
+        b.cMin += shift; b.cMax += shift;
+      }
+    } else if (dir === 'bottom') {
+      placeR = b.rMax + 1;
+      if (resize === 'expand' && placeR + mirrorRows > rows) {
+        newRows = placeR + mirrorRows;
+        const emptyRow = Array(newCols).fill(-1);
+        while (newGrid.length < newRows) newGrid.push([...emptyRow]);
+      }
+    } else {
+      placeR = b.rMin - mirrorRows;
+      if (resize === 'expand' && placeR < 0) {
+        const shift = -placeR;
+        newRows = rows + shift;
+        const emptyRow = Array(newCols).fill(-1);
+        newGrid = [...Array(shift).fill(null).map(() => [...emptyRow]), ...newGrid];
+        placeR = 0;
+      }
+    }
+
+    // Place mirror content (clip to new grid bounds)
+    for (let dr = 0; dr < mirrorSub.length; dr++)
+      for (let dc = 0; dc < mirrorSub[dr].length; dc++) {
+        const r = placeR + dr, c = placeC + dc;
+        if (r >= 0 && r < newRows && c >= 0 && c < newCols)
+          newGrid[r][c] = mirrorSub[dr][dc];
+      }
+
     updateGrid(newGrid);
-  }
-  function handleMirrorLeft() {
-    const g = gridRef.current;
-    if (!g.length) return;
-    const newGrid = g.map(r => [[...r].reverse(), ...r].flat() as number[]);
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
-    updateGrid(newGrid);
-  }
-  function handleMirrorBottom() {
-    const g = gridRef.current;
-    if (!g.length) return;
-    const flipped = [...g].reverse().map(r => [...r]);
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
-    updateGrid([...g.map(r => [...r]), ...flipped]);
-  }
-  function handleMirrorTop() {
-    const g = gridRef.current;
-    if (!g.length) return;
-    const flipped = [...g].reverse().map(r => [...r]);
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
-    updateGrid([...flipped, ...g.map(r => [...r])]);
   }
 
   // ── Rotate helpers ───────────────────────────────────────────────
@@ -1038,10 +1165,10 @@ export default function ConvertPage() {
                     { type: 'item', label: 'Vertical', onClick: handleFlipV },
                   ]},
                   { type: 'submenu', label: 'Mirror', items: [
-                    { type: 'item', label: 'Right',  onClick: handleMirrorRight  },
-                    { type: 'item', label: 'Left',   onClick: handleMirrorLeft   },
-                    { type: 'item', label: 'Top',    onClick: handleMirrorTop    },
-                    { type: 'item', label: 'Bottom', onClick: handleMirrorBottom },
+                    { type: 'item', label: 'Right',  onClick: () => setMirrorDialog('right')  },
+                    { type: 'item', label: 'Left',   onClick: () => setMirrorDialog('left')   },
+                    { type: 'item', label: 'Top',    onClick: () => setMirrorDialog('top')    },
+                    { type: 'item', label: 'Bottom', onClick: () => setMirrorDialog('bottom') },
                   ]},
                   { type: 'submenu', label: 'Rotate', items: [
                     { type: 'item', label: '90° Right', onClick: () => applyRotation(rot90CW)  },
@@ -1444,6 +1571,14 @@ export default function ConvertPage() {
         onConfirm={handleResize}
         onClose={() => setShowResizeDialog(false)}
       />
+
+      {mirrorDialog && (
+        <MirrorDialog
+          direction={mirrorDialog}
+          onConfirm={(axis, resize) => { applyMirror(mirrorDialog, axis, resize); setMirrorDialog(null); }}
+          onCancel={() => setMirrorDialog(null)}
+        />
+      )}
 
       <ImportFromPhotoDialog
         open={showImportDialog}
