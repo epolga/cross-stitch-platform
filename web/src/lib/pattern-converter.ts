@@ -59,29 +59,54 @@ function nearestDmcLab(lab: Lab): number {
   return best;
 }
 
+// ── Sampling ─────────────────────────────────────────────────────────────────
+
+const KMEANS_MAX_SAMPLE = 6000;
+
+// Build a sample that gives equal weight to each unique color region, so
+// colors present in only a small part of the image still get representation.
+function buildSample(pixels: Lab[]): Lab[] {
+  const n = pixels.length;
+
+  // Coarsely quantize each pixel to a bucket key (24 levels per LAB channel).
+  // Two pixels sharing a bucket are "the same color" for sampling purposes.
+  const Q = 24;
+  const buckets = new Map<number, Lab>();
+  for (const p of pixels) {
+    const key = (Math.round(p[0] / 100 * Q) * (Q + 1) + Math.round((p[1] + 128) / 256 * Q)) * (Q + 1)
+              + Math.round((p[2] + 128) / 256 * Q);
+    if (!buckets.has(key)) buckets.set(key, p);
+  }
+
+  const unique = Array.from(buckets.values());
+
+  if (unique.length <= KMEANS_MAX_SAMPLE) return unique;
+
+  // Random subsample when there are too many unique colors (Fisher-Yates partial shuffle)
+  for (let i = unique.length - 1; i > unique.length - 1 - KMEANS_MAX_SAMPLE; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = unique[i]; unique[i] = unique[j]; unique[j] = tmp;
+  }
+  return unique.slice(unique.length - KMEANS_MAX_SAMPLE);
+}
+
 // ── k-means++ in LAB space ───────────────────────────────────────────────────
 
-const KMEANS_MAX_SAMPLE = 5000; // sample for large images so k-means stays fast
-const KMEANS_MAX_ITER   = 25;
+const KMEANS_MAX_ITER = 30;
+const KMEANS_RUNS    = 3;   // run multiple times; pick best result
 
-function kmeansLab(
-  pixels: Lab[],
-  k: number,
-): { centroids: Lab[]; assignments: Int32Array } {
-  const n = pixels.length;
-  k = Math.min(k, n);
+interface KMeansResult {
+  centroids: Lab[];
+  assignments: Int32Array;
+  inertia: number;
+}
 
-  // For large grids, sample a subset for centroid computation
-  let sample: Lab[] = pixels;
-  if (n > KMEANS_MAX_SAMPLE) {
-    sample = [];
-    const step = n / KMEANS_MAX_SAMPLE;
-    for (let i = 0; i < KMEANS_MAX_SAMPLE; i++)
-      sample.push(pixels[Math.floor(i * step)]);
-  }
+function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
+  const n = allPixels.length;
   const ns = sample.length;
+  k = Math.min(k, ns);
 
-  // k-means++ initialisation — spread initial centroids
+  // k-means++ initialisation on sample
   const centroids: Lab[] = [[...sample[Math.floor(Math.random() * ns)]]];
   for (let ci = 1; ci < k; ci++) {
     const dists = sample.map(p => {
@@ -99,7 +124,6 @@ function kmeansLab(
   // Iterate k-means on sample
   const sAssign = new Int32Array(ns);
   for (let iter = 0; iter < KMEANS_MAX_ITER; iter++) {
-    // Assign
     let changed = false;
     for (let i = 0; i < ns; i++) {
       let best = 0, bestD = Infinity;
@@ -110,7 +134,7 @@ function kmeansLab(
       if (sAssign[i] !== best) { sAssign[i] = best; changed = true; }
     }
     if (!changed) break;
-    // Update centroids
+
     const sums: Lab[] = Array.from({ length: k }, () => [0, 0, 0] as Lab);
     const counts = new Int32Array(k);
     for (let i = 0; i < ns; i++) {
@@ -124,18 +148,29 @@ function kmeansLab(
     }
   }
 
-  // Final assignment of ALL pixels to converged centroids
+  // Assign all pixels to converged centroids; compute inertia
   const assignments = new Int32Array(n);
+  let inertia = 0;
   for (let i = 0; i < n; i++) {
     let best = 0, bestD = Infinity;
     for (let j = 0; j < k; j++) {
-      const d = labDist2(pixels[i], centroids[j]);
+      const d = labDist2(allPixels[i], centroids[j]);
       if (d < bestD) { bestD = d; best = j; }
     }
     assignments[i] = best;
+    inertia += bestD;
   }
 
-  return { centroids, assignments };
+  return { centroids, assignments, inertia };
+}
+
+function kmeansLab(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
+  let best: KMeansResult | null = null;
+  for (let run = 0; run < KMEANS_RUNS; run++) {
+    const result = kmeansOnce(allPixels, sample, k);
+    if (!best || result.inertia < best.inertia) best = result;
+  }
+  return best!;
 }
 
 // ── Main converter ───────────────────────────────────────────────────────────
@@ -161,8 +196,9 @@ export async function convertImage(
   for (let i = 0; i < n; i++)
     pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
 
-  // Run k-means in LAB space
-  const { centroids, assignments } = kmeansLab(pixelsLab, maxColors);
+  // Build a color-sensitive sample and run k-means
+  const sample = buildSample(pixelsLab);
+  const { centroids, assignments } = kmeansLab(pixelsLab, sample, maxColors);
 
   // Snap each cluster centroid to nearest DMC color in LAB
   const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c));
