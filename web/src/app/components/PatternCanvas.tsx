@@ -535,17 +535,23 @@ export default function PatternCanvas({
       ctx.setLineDash([]);
     }
 
-    // Eraser width > 1: dashed border showing the affected area on hover
+    // Pen / eraser width > 1: dashed border showing the affected area on hover
     const hc = hoverCellRef.current;
-    if (hc && activeToolRef.current === 'pencil' && activeColRef.current === -1 && penWidthRef.current > 1) {
+    if (hc && activeToolRef.current === 'pencil' && penWidthRef.current > 1) {
+      const aci = activeColRef.current;
       const pw = penWidthRef.current;
-      const halfLow  = Math.floor((pw - 1) / 2);
-      const halfHigh = pw - 1 - halfLow;
+      const halfLow = Math.floor((pw - 1) / 2);
       const cs = cellSizeRef.current;
       const x = (hc[1] - halfLow) * cs + ML;
       const y = (hc[0] - halfLow) * cs + MT;
       const sz = pw * cs;
-      ctx.strokeStyle = '#be123c';
+      // Eraser: crimson border; pen: thread color border
+      if (aci === -1) {
+        ctx.strokeStyle = '#be123c';
+      } else {
+        const ac = pal[aci];
+        ctx.strokeStyle = ac ? `rgb(${ac.r},${ac.g},${ac.b})` : '#334155';
+      }
       ctx.lineWidth = 1.5;
       ctx.setLineDash([3, 3]);
       ctx.strokeRect(x + 0.75, y + 0.75, sz - 1.5, sz - 1.5);
@@ -702,8 +708,8 @@ export default function PatternCanvas({
   }
 
   function onMove(e: React.MouseEvent<HTMLCanvasElement>) {
-    // Track hover cell for eraser width-preview even when not drawing
-    if (editable && activeTool === 'pencil' && activeColorIndex === -1 && penWidth > 1) {
+    // Track hover cell for pen/eraser width-preview even when not drawing
+    if (editable && activeTool === 'pencil' && penWidth > 1) {
       const cell = cellAt(e);
       const prev = hoverCellRef.current;
       if (cell && (prev?.[0] !== cell[0] || prev?.[1] !== cell[1])) {
