@@ -275,6 +275,7 @@ export default function ConvertPage() {
     setSelectedColor(0);
     setSelection(null);
     setHiddenColors(new Set());
+    setCellSize(12);
     setShowImportDialog(false);
   }
 
@@ -422,6 +423,7 @@ export default function ConvertPage() {
           : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
+        setCellSize(12);
       })
       .catch(e => {
         console.error('[load pattern]', e);
@@ -1497,13 +1499,7 @@ export default function ConvertPage() {
               }}
             >
               {!hasDesign && (
-                <div
-                  className="absolute top-0 left-0 flex flex-col items-center justify-center z-10 pointer-events-none select-none"
-                  style={{
-                    width:  (grid[0]?.length ?? 80) * cellSize + 30,
-                    height: (grid.length || 80) * cellSize + 18,
-                  }}
-                >
+                <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none select-none">
                   <div className={`flex flex-col items-center text-center rounded-xl px-8 py-6 transition-colors ${dragOverCanvas ? 'bg-rose-50/80' : 'bg-white/70 backdrop-blur-sm'}`}>
                     <span className="text-5xl mb-4">{dragOverCanvas ? '🖼️' : '📷'}</span>
                     <p className="text-sm font-semibold text-gray-500">{dragOverCanvas ? 'Drop your photo here' : 'Drop a photo to start'}</p>
