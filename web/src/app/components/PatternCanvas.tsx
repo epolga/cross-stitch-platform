@@ -303,6 +303,7 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const blinkColorRef  = useRef(blinkColorIndex);
   const blinkOnRef     = useRef(false);
   const selRef         = useRef<SelectionRect | null>(null);
+  const marchingAntsRef = useRef(0);
   const lastCellRef    = useRef<[number, number] | null>(null); // last mouse cell during shape drag
   const hoverCellRef   = useRef<[number, number] | null>(null); // for eraser width > 1 preview
   const shiftRef       = useRef(false);
@@ -542,8 +543,10 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 3]);
+      ctx.lineDashOffset = -marchingAntsRef.current;
       ctx.strokeRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5);
       ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
     }
 
     // Pen / eraser width > 1: dashed border showing the affected area on hover
@@ -591,6 +594,12 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   }
 
   useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors]);
+
+  useEffect(() => {
+    if (!selection) { marchingAntsRef.current = 0; return; }
+    const id = setInterval(() => { marchingAntsRef.current = (marchingAntsRef.current + 1) % 7; draw(); }, 80);
+    return () => clearInterval(id);
+  }, [selection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (blinkColorIndex == null) {

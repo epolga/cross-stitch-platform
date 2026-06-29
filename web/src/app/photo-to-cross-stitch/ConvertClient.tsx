@@ -976,6 +976,8 @@ export default function ConvertPage() {
     }
     setSelectedColor(ci);
     paletteBarRef.current?.scrollTo(ci);
+    if (activeTool === 'eraser') setActiveTool('pencil');
+    else if (activeTool === 'fill' && fillMode === 'erase') setFillMode('flood');
     if (blinkSwatchTimer.current) clearTimeout(blinkSwatchTimer.current);
     setBlinkSwatch(ci);
     blinkSwatchTimer.current = setTimeout(() => setBlinkSwatch(null), 1680);
