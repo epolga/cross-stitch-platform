@@ -72,32 +72,8 @@ const FAQ = [
     a: 'Yes. The built-in editor lets you repaint individual stitches, change colors, fill whole areas, rotate, flip, and resize the pattern before you download the PDF. You can also re-import the same photo with different settings at any time.',
   },
   {
-    q: 'Can I stitch this on linen or evenweave?',
-    a: 'Absolutely. The pattern is just a grid of stitches — it works on any evenweave fabric. On 28-count linen stitched over two threads you get the same stitch size as 14-count Aida. On 32-count linen over two threads the result is the same as 16-count Aida.',
-  },
-  {
-    q: 'How much DMC thread will I need?',
-    a: 'The thread list in your PDF shows the stitch count for each color. As a rule of thumb, one skein of DMC floss (8 metres) covers roughly 250 cross stitches on 14-count Aida using 2 strands. Colors used in large areas will need more skeins; accent colors often need just one.',
-  },
-  {
-    q: 'What needle size should I use?',
-    a: 'A size 24 tapestry needle is standard for 14-count Aida with 2 strands of DMC floss. Use a size 26 for 16- or 18-count Aida, and a size 22 for 11-count Aida.',
-  },
-  {
-    q: 'How long will this take to stitch?',
-    a: 'It depends on the size and how densely the design fills the canvas. A 50×50 pattern typically takes 15–25 hours; an 80×80 pattern around 40–60 hours. Stitching a little each day, most people finish a medium-sized piece in a few weeks.',
-  },
-  {
-    q: 'My photo has too many colors — which number should I pick?',
-    a: 'Start with 10 or 15 colors. Fewer colors makes a cleaner, more graphic pattern that is quick to stitch and easy to buy thread for. You can re-import the same photo with a higher number any time to compare. For a detailed portrait, 20–30 colors gives a more realistic result.',
-  },
-  {
     q: 'Can I use the chart on my phone or laptop while stitching — without printing?',
     a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen. Click any color in the palette to make all its stitches flash on the chart so you can find your place instantly. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
-  },
-  {
-    q: 'Can I make my own cross-stitch pattern from any photo?',
-    a: 'Yes — that is exactly what this tool does. Upload any JPEG, PNG, or WebP image and the converter maps every pixel to the nearest DMC floss color, then lets you edit the result before downloading your cross-stitch pattern from the photo as a PDF.',
   },
   {
     q: 'Do I need an account?',
@@ -132,35 +108,39 @@ export default function PhotoToCrossStitchPage() {
             Photo to Cross-Stitch Pattern Converter
           </h1>
           <p className="text-gray-600 mb-8">
-            Turn any photo or image into a custom cross-stitch pattern with DMC thread colors.
-            Choose your stitch size, adjust the palette, and download a print-ready PDF chart —
-            your pet portrait, your garden, your favourite photo, ready to stitch.
-            The pattern generator and cross-stitch editor run entirely in your browser — no software to install.
+            Upload a photo of your pet, a flower, a favourite place — anything — and I&apos;ll convert it into a
+            counted cross-stitch pattern with DMC thread colors. Choose how many stitches wide, how many colors,
+            and edit the result before downloading your printable PDF chart.
+            Everything runs in your browser. No software, no account needed to try.
           </p>
 
           <HeroCta />
+
+          <p className="text-xs text-gray-400 mb-8 -mt-4 text-center">
+            Built by a cross-stitch designer who has spent more hours than she&apos;d like to admit counting stitches from a paper chart.
+          </p>
 
           {/* Editor feature highlights */}
           <div className="mb-8 grid gap-2 sm:grid-cols-3">
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
               <span className="text-lg flex-none leading-none mt-0.5">✨</span>
               <div>
-                <p className="font-semibold text-gray-900 text-xs">Find any color instantly</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click a color in the palette and all its stitches flash on the chart.</p>
+                <p className="font-semibold text-gray-900 text-xs">Never lose your place</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click any thread color and all its stitches light up on the chart at once.</p>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
               <span className="text-lg flex-none leading-none mt-0.5">👁</span>
               <div>
-                <p className="font-semibold text-gray-900 text-xs">Stitch one color at a time</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Hide every other color with one click.</p>
+                <p className="font-semibold text-gray-900 text-xs">Work one thread at a time</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Hide all other colors so only the thread you&apos;re stitching is visible.</p>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
               <span className="text-lg flex-none leading-none mt-0.5">📱</span>
               <div>
-                <p className="font-semibold text-gray-900 text-xs">No printing needed</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Use the chart on your laptop, tablet, or phone beside your hoop.</p>
+                <p className="font-semibold text-gray-900 text-xs">Your chart on any device</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Keep the chart open on a tablet or phone propped beside your hoop. No printing, no paper to lose.</p>
               </div>
             </div>
           </div>

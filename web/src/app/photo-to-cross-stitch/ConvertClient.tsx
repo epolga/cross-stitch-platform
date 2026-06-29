@@ -1616,11 +1616,11 @@ export default function ConvertPage() {
                 >
                   <div className={`flex flex-col items-center text-center rounded-xl px-8 py-6 transition-colors ${dragOverCanvas ? 'bg-rose-50/80' : 'bg-white/70 backdrop-blur-sm'}`}>
                     <span className="text-5xl mb-4">{dragOverCanvas ? '🖼️' : '📷'}</span>
-                    <p className="text-sm font-semibold text-gray-500">{dragOverCanvas ? 'Drop your photo here' : 'Drop a photo to start'}</p>
+                    <p className="text-sm font-semibold text-gray-500">{dragOverCanvas ? 'Drop your photo here' : 'Ready when you are'}</p>
                     <p className="text-xs text-gray-400 mt-2 max-w-[220px] leading-relaxed">
                       {dragOverCanvas
                         ? 'Release to open the converter'
-                        : <>Drag any photo onto this area, or click <span className="font-semibold text-gray-600">Upload Your Photo</span> above</>
+                        : <>Drag a photo here, or click <span className="font-semibold text-gray-600">Upload Your Photo</span> above — I&apos;ll do the rest.</>
                       }
                     </p>
                   </div>
