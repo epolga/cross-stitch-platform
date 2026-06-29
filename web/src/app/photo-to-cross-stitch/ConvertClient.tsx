@@ -1028,6 +1028,49 @@ export default function ConvertPage() {
     });
   }
 
+  function handleDeleteColor(index: number) {
+    const pal = paletteRef.current;
+    const g = gridRef.current;
+
+    // Erase all cells of this color
+    const step1 = g.map(row => row.map(ci => (ci === index ? -1 : ci)));
+
+    // Remove from palette; compact grid indices
+    const newPal = pal.filter((_, i) => i !== index);
+    const finalGrid = step1.map(row =>
+      row.map(ci => {
+        if (ci < 0) return ci;
+        if (ci > index) return ci - 1;
+        return ci;
+      })
+    );
+
+    // Recount stitches
+    const counts = new Array(newPal.length).fill(0);
+    for (const row of finalGrid) for (const ci of row) if (ci >= 0) counts[ci]++;
+    const finalPal = newPal.map((p, i) => ({ ...p, stitchCount: counts[i] }));
+
+    // Update selectedColor
+    let newSel = selectedColor;
+    if (newSel === index) newSel = Math.max(0, index - 1);
+    else if (newSel > index) newSel--;
+    newSel = Math.min(newSel, newPal.length - 1);
+
+    // Update hiddenColors
+    const newHidden = new Set<number>();
+    for (const ci of hiddenColors) {
+      if (ci === index) continue;
+      newHidden.add(ci > index ? ci - 1 : ci);
+    }
+
+    setUndoStack(s => [...s.slice(-49), snap()]);
+    setRedoStack([]);
+    updatePalette(finalPal);
+    updateGrid(finalGrid);
+    setSelectedColor(newSel);
+    setHiddenColors(newHidden);
+  }
+
   function handleMergeInto(targetIdx: number) {
     const sourceIdx = mergeIntoIndex;
     if (sourceIdx === null || targetIdx === sourceIdx) return;
@@ -1675,6 +1718,7 @@ export default function ConvertPage() {
               onChangeSymbol={setSymbolPickerIndex}
               onMoveTo={setMoveToIndex}
               onMergeInto={setMergeIntoIndex}
+              onDeleteColor={handleDeleteColor}
               onAddColor={() => setAddColorPickerOpen(true)}
             />
           </div>

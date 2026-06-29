@@ -21,6 +21,7 @@ interface Props {
   onChangeSymbol: (index: number) => void;
   onMoveTo: (index: number) => void;
   onMergeInto: (index: number) => void;
+  onDeleteColor: (index: number) => void;
   onAddColor?: () => void;
 }
 
@@ -29,7 +30,7 @@ type EditMenu = { index: number; top: number; right: number };
 const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
   hiddenColors, maxHeight, onSelect, onBlink, onToggleColor, onToggleAll,
-  onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onAddColor,
+  onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onDeleteColor, onAddColor,
 }: Props, ref) {
   const sel = palette[selectedIndex];
   const [blinkOn, setBlinkOn] = useState(true);
@@ -271,6 +272,14 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                 {label}
               </button>
             ))}
+            <div className="border-t border-gray-100 my-1" />
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+              onClick={() => { onDeleteColor(editMenu.index); setEditMenu(null); }}
+            >
+              Delete
+            </button>
           </div>
         </>
       )}
