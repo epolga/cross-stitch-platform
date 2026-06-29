@@ -1593,7 +1593,11 @@ export default function ConvertPage() {
             <div
               ref={canvasWrapperRef}
               className={`flex-1 overflow-auto border rounded-lg bg-gray-50 min-w-0 relative transition-colors max-h-[calc(100vh-150px)] ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
-              onDragOver={e => { e.preventDefault(); if (!hasDesign) setDragOverCanvas(true); }}
+              onDragOver={e => {
+                e.preventDefault();
+                if (!hasDesign && !dragOverCanvas) trackEvent('image_drop_started', {});
+                if (!hasDesign) setDragOverCanvas(true);
+              }}
               onDragLeave={() => setDragOverCanvas(false)}
               onDrop={e => {
                 e.preventDefault();
@@ -1616,7 +1620,7 @@ export default function ConvertPage() {
                     <p className="text-xs text-gray-400 mt-2 max-w-[220px] leading-relaxed">
                       {dragOverCanvas
                         ? 'Release to open the converter'
-                        : <>Drag any photo onto this area, or use <span className="font-semibold text-gray-600">Import → From Photo…</span> in the menu above</>
+                        : <>Drag any photo onto this area, or click <span className="font-semibold text-gray-600">Upload Your Photo</span> above</>
                       }
                     </p>
                   </div>
