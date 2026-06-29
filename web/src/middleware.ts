@@ -22,7 +22,10 @@ export function middleware(request: NextRequest) {
 
   g.__LAST_REQUEST_URL__ = `${request.method} ${request.nextUrl.pathname}${request.nextUrl.search}`;
 
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   // Apply HSTS only for HTTPS requests to enforce secure transport.
   const isHttps =

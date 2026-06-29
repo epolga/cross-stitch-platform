@@ -84,6 +84,16 @@
                                                 Height="26"
                                                 Margin="10"
                                                 Click="SendAdminUserEmail_Click"/>
+                                        <Button Content="Test Announcement Email"
+                                                Width="190"
+                                                Height="26"
+                                                Margin="10"
+                                                Click="BtnTestAnnouncementEmail_Click"/>
+                                        <Button Content="Send Announcement Emails"
+                                                Width="200"
+                                                Height="26"
+                                                Margin="10"
+                                                Click="BtnSendAnnouncementEmails_Click"/>
                                         <Button Content="Reload Email Template"
                                                 Width="190"
                                                 Height="26"

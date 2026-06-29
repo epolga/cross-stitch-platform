@@ -640,7 +640,7 @@ export function AuthControl() {
           )}
           {isAdmin && (
             <Link
-              href="/admin/feature-requests"
+              href="/admin"
               className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-bold text-white shadow hover:bg-indigo-700 transition-colors"
               aria-label="Admin panel"
             >

@@ -99,6 +99,11 @@ namespace Uploader
         private static readonly string[] TextEmailTemplateRequiredSections =
             { "Subject", "Greeting", "BeforeBody", "AfterBody", "Unsubscribe", "Closing", "Signature" };
 
+        private const string AnnouncementHtmlEmailTemplatePathDefault = "Templates\\AnnouncementEmailHtml.txt";
+        private const string AnnouncementTextEmailTemplatePathDefault = "Templates\\AnnouncementEmailText.txt";
+        private static readonly string[] AnnouncementEmailRequiredSections =
+            { "Subject", "Greeting", "Body1", "EditorLink", "Body2", "Unsubscribe", "Closing", "Signature" };
+
         // Cached email templates. Populated lazily on first use via
         // GetActiveHtmlEmailTemplate / GetActiveTextEmailTemplate, and
         // refreshed by the "Reload Email Template" button. Send loops read
@@ -106,6 +111,8 @@ namespace Uploader
         // subsequent emails in the same loop to pick up the new template.
         private EmailTemplateDefinition? _cachedHtmlEmailTemplate;
         private EmailTemplateDefinition? _cachedTextEmailTemplate;
+        private EmailTemplateDefinition? _cachedAnnouncementHtmlTemplate;
+        private EmailTemplateDefinition? _cachedAnnouncementTextTemplate;
         private int _albumId;
         private PinSuggestions? _suggestions;
 
@@ -2381,6 +2388,131 @@ namespace Uploader
                 configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
         }
 
+        private async Task SendAnnouncementTestEmailAsync()
+        {
+            string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+            string? admin  = ConfigurationManager.AppSettings["AdminEmail"];
+
+            if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
+                return;
+
+            string editorUrl      = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
+            string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
+
+            RenderedEmailContent content = RenderAnnouncementEmailContent(
+                GetActiveAnnouncementHtmlTemplate(),
+                GetActiveAnnouncementTextTemplate(),
+                "Ann",
+                editorUrl,
+                _linkHelper.SiteBaseUrl,
+                unsubscribeUrl);
+
+            await _emailHelper.SendEmailAsync(
+                _sesClient,
+                sender,
+                new[] { admin },
+                content.Subject,
+                content.TextBody,
+                content.HtmlBody,
+                configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"[Announcement] Test email sent to {admin}.\r\n";
+            }));
+        }
+
+        private async Task SendAnnouncementEmailsAsync()
+        {
+            string? sender    = ConfigurationManager.AppSettings["SenderEmail"];
+            string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+            string emailAttr  = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+            string userIdAttr = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+
+            if (string.IsNullOrEmpty(sender))
+                return;
+
+            var recipients = await FetchAllUserEmailsAsync(
+                    onlyVerified: true,
+                    onlySubscribed: true,
+                    minLastEmailEntryOrVerifiedAtUtc: null)
+                .ConfigureAwait(false);
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"[Announcement] Found {recipients.Count} eligible recipients.\r\n";
+            }));
+
+            List<UserRecipient> eligibleRecipients = recipients
+                .Where(r => !string.IsNullOrWhiteSpace(r.UnsubscribeToken))
+                .ToList();
+
+            int skippedMissingToken = recipients.Count - eligibleRecipients.Count;
+            if (skippedMissingToken > 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[Announcement] Skipping {skippedMissingToken} without unsubscribe token.\r\n";
+                }));
+            }
+
+            if (eligibleRecipients.Count == 0)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += "[Announcement] No eligible recipients.\r\n";
+                }));
+                return;
+            }
+
+            string editorUrl = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
+            int sent = 0;
+            int total = eligibleRecipients.Count;
+            var stopwatch = Stopwatch.StartNew();
+
+            foreach (var recipient in eligibleRecipients)
+            {
+                string unsubscribeUrl   = BuildUnsubscribeUrlFromStoredToken(recipient.Email, recipient.UnsubscribeToken);
+                var    unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+
+                RenderedEmailContent content = RenderAnnouncementEmailContent(
+                    GetActiveAnnouncementHtmlTemplate(),
+                    GetActiveAnnouncementTextTemplate(),
+                    recipient.FirstName,
+                    editorUrl,
+                    _linkHelper.SiteBaseUrl,
+                    unsubscribeUrl);
+
+                await _emailHelper.SendEmailAsync(
+                    _sesClient,
+                    sender,
+                    new[] { recipient.Email },
+                    content.Subject,
+                    content.TextBody,
+                    content.HtmlBody,
+                    unsubscribeHeaders,
+                    configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                sent++;
+
+                if (sent % 10 == 0)
+                {
+                    int captured = sent;
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        txtStatus.Text += $"[Announcement] Sent {captured}/{total}...\r\n";
+                    }));
+                }
+            }
+
+            stopwatch.Stop();
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                txtStatus.Text += $"[Announcement] Done. Sent {sent}/{total} in {stopwatch.Elapsed:hh\\:mm\\:ss}.\r\n";
+            }));
+        }
+
         private async Task SendNotificationMailToUsersAsync(
             LatestDesignEmailInfo latestDesign,
             List<UserRecipient> userRecipients)
@@ -2965,6 +3097,18 @@ namespace Uploader
         private EmailTemplateDefinition GetActiveTextEmailTemplate() =>
             _cachedTextEmailTemplate ??= LoadTextEmailTemplate();
 
+        private EmailTemplateDefinition GetActiveAnnouncementHtmlTemplate() =>
+            _cachedAnnouncementHtmlTemplate ??= LoadEmailTemplate(
+                "AnnouncementHtmlEmailTemplatePath",
+                AnnouncementHtmlEmailTemplatePathDefault,
+                AnnouncementEmailRequiredSections);
+
+        private EmailTemplateDefinition GetActiveAnnouncementTextTemplate() =>
+            _cachedAnnouncementTextTemplate ??= LoadEmailTemplate(
+                "AnnouncementTextEmailTemplatePath",
+                AnnouncementTextEmailTemplatePathDefault,
+                AnnouncementEmailRequiredSections);
+
         private static RenderedEmailContent RenderTextEmailContent(
             EmailTemplateDefinition template,
             string? firstName,
@@ -3051,6 +3195,51 @@ namespace Uploader
                     unsubscribe,
                     closing) +
                 signatureHtml;
+
+            return new RenderedEmailContent(subject, textBody, htmlBody);
+        }
+
+        private static RenderedEmailContent RenderAnnouncementEmailContent(
+            EmailTemplateDefinition htmlTemplate,
+            EmailTemplateDefinition textTemplate,
+            string? firstName,
+            string editorUrl,
+            string? siteUrl,
+            string? unsubscribeUrl)
+        {
+            Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
+            replacements["<editor_url>"] = editorUrl;
+            replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+            string subject    = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Subject"),    replacements);
+            string greeting   = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Greeting"),   replacements);
+            string body1      = htmlTemplate.GetRequiredSection("Body1");
+            string editorLink = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("EditorLink"), replacements);
+            string body2      = htmlTemplate.GetRequiredSection("Body2");
+            string unsubscribe = RenderOptionalTemplateSection(htmlTemplate.GetRequiredSection("Unsubscribe"), replacements, unsubscribeUrl);
+            string closing    = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Closing"),    replacements);
+            string signature  = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Signature"),  replacements);
+            string signatureHtml = RenderHtmlSignature(signature, siteUrl);
+
+            string htmlBody =
+                JoinHtmlSections(greeting, body1) +
+                editorLink +
+                JoinHtmlSections(body2, unsubscribe, closing) +
+                signatureHtml;
+
+            Dictionary<string, string> textReplacements = CreateCommonTemplateReplacements(firstName);
+            textReplacements["<editor_url>"] = editorUrl;
+            textReplacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+            string tGreeting    = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Greeting"),   textReplacements);
+            string tBody1       = textTemplate.GetRequiredSection("Body1");
+            string tEditorLink  = ReplaceTemplateTokens(textTemplate.GetRequiredSection("EditorLink"), textReplacements);
+            string tBody2       = textTemplate.GetRequiredSection("Body2");
+            string tUnsubscribe = RenderOptionalTemplateSection(textTemplate.GetRequiredSection("Unsubscribe"), textReplacements, unsubscribeUrl);
+            string tClosing     = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Closing"),    textReplacements);
+            string tSignature   = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Signature"),  textReplacements);
+
+            string textBody = JoinTextSections(tGreeting, tBody1, tEditorLink, tBody2, tUnsubscribe, tClosing, tSignature);
 
             return new RenderedEmailContent(subject, textBody, htmlBody);
         }
@@ -4052,6 +4241,47 @@ namespace Uploader
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     txtStatus.Text += $"Failed to send admin user-style email: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        private async void BtnTestAnnouncementEmail_Click(object sender, RoutedEventArgs e)
+        {
+            txtStatus.Text += "[Announcement] Sending test email to admin...\r\n";
+            try
+            {
+                await SendAnnouncementTestEmailAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[Announcement] Test send failed: {ex.Message}\r\n";
+                }));
+            }
+        }
+
+        private async void BtnSendAnnouncementEmails_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will send the announcement email to ALL verified, non-unsubscribed users.\n\nAre you sure?",
+                "Send Announcement",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            txtStatus.Text += "[Announcement] Starting send to all users...\r\n";
+            try
+            {
+                await SendAnnouncementEmailsAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"[Announcement] Send failed: {ex.Message}\r\n";
                 }));
             }
         }

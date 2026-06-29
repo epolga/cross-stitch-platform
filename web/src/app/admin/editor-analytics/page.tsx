@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import type { EditorEventRecord } from '@/lib/editor-events';
 import type { FeatureRequest } from '@/lib/feature-requests';
@@ -67,6 +68,7 @@ export default function EditorAnalyticsPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 space-y-10">
+      <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600 mb-4 inline-block">← Admin</Link>
       <h1 className="text-2xl font-semibold text-gray-900">Editor Analytics</h1>
 
       {loading && <p className="text-sm text-gray-500">Loading…</p>}

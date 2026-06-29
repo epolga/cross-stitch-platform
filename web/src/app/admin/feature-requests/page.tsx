@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import type { FeatureRequest, RequestStatus } from '@/lib/feature-requests';
 
@@ -100,6 +101,7 @@ export default function AdminFeatureRequestsPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
+      <Link href="/admin" className="text-xs text-gray-400 hover:text-gray-600 mb-4 inline-block">← Admin</Link>
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Feature Requests</h1>
