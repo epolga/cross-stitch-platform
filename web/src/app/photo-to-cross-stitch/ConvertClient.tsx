@@ -218,7 +218,7 @@ export default function ConvertPage() {
       if (key === 'c') { e.preventDefault(); handleCopy(); }
       if (key === 'x') { e.preventDefault(); handleCut(); }
       if (key === 'v') { e.preventDefault(); handlePaste(); }
-      if (key === 's') { e.preventDefault(); setSaveDialogOpen(true); }
+      if (key === 's') { e.preventDefault(); handleSave(); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
     }
@@ -230,9 +230,12 @@ export default function ConvertPage() {
   const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [afterSaveAction, setAfterSaveAction] = useState<'copyLink' | null>(null);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(() => isUserLoggedIn());
   const [patternName, setPatternName] = useState('');
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+  const saveToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [showNamePrompt, setShowNamePrompt] = useState(false);
@@ -545,6 +548,35 @@ export default function ConvertPage() {
     const id = new URLSearchParams(window.location.search).get('pattern');
     if (id && !savedPatternId) loadPatternById(id);
   }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function showToast(msg: string) {
+    if (saveToastTimer.current) clearTimeout(saveToastTimer.current);
+    setSaveToast(msg);
+    saveToastTimer.current = setTimeout(() => setSaveToast(null), 2000);
+  }
+
+  function handleSave() {
+    if (savedPatternId) {
+      // Already saved — silent re-save
+      if (!isUserLoggedIn()) {
+        window.dispatchEvent(new CustomEvent('openRegisterModal', { detail: { source: 'converter-save', label: 'Save pattern' } }));
+        return;
+      }
+      handleSavePattern(patternName || 'Untitled').then(() => showToast('Saved ✓')).catch(() => {});
+    } else {
+      setSaveDialogOpen(true);
+    }
+  }
+
+  function handleCopyLink() {
+    if (savedPatternId) {
+      const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${savedPatternId}`;
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied ✓'));
+    } else {
+      setAfterSaveAction('copyLink');
+      setSaveDialogOpen(true);
+    }
+  }
 
   // Save current pattern, return shareable URL (PUT to update in-place if already saved)
   async function handleSavePattern(name: string): Promise<string> {
@@ -1301,7 +1333,8 @@ export default function ConvertPage() {
                       .then(data => { updateGrid(data.grid); updatePalette(data.palette); setPatternName(data.name ?? ''); setSavedPatternId(id); window.history.replaceState(null, '', `?pattern=${id}`); })
                       .catch(() => alert('Pattern not found or link has expired.'));
                   }},
-                  { type: 'item', label: 'Save & share…', shortcut: 'Ctrl+S', onClick: () => setSaveDialogOpen(true) },
+                  { type: 'item', label: 'Save', shortcut: 'Ctrl+S', onClick: handleSave },
+                  { type: 'item', label: 'Copy link', shortcut: '', onClick: handleCopyLink },
                 ],
               },
               {
@@ -1790,8 +1823,22 @@ export default function ConvertPage() {
         open={saveDialogOpen}
         defaultName={patternName}
         onSave={handleSavePattern}
-        onClose={() => setSaveDialogOpen(false)}
+        onSaved={(url) => {
+          if (afterSaveAction === 'copyLink') {
+            navigator.clipboard.writeText(url).then(() => showToast('Link copied ✓'));
+            setAfterSaveAction(null);
+          } else {
+            showToast('Saved ✓');
+          }
+        }}
+        onClose={() => { setSaveDialogOpen(false); setAfterSaveAction(null); }}
       />
+
+      {saveToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg pointer-events-none">
+          {saveToast}
+        </div>
+      )}
 
       <FeatureRequestDialog
         open={showFeatureRequest}
