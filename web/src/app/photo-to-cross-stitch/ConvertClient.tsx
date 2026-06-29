@@ -208,6 +208,8 @@ export default function ConvertPage() {
     return () => document.removeEventListener('mousedown', onOut);
   }, [showPencilMenu]);
 
+  const handleSaveRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const mod = e.ctrlKey || e.metaKey;
@@ -218,12 +220,12 @@ export default function ConvertPage() {
       if (key === 'c') { e.preventDefault(); handleCopy(); }
       if (key === 'x') { e.preventDefault(); handleCut(); }
       if (key === 'v') { e.preventDefault(); handlePaste(); }
-      if (key === 's') { e.preventDefault(); handleSave(); }
+      if (key === 's') { e.preventDefault(); handleSaveRef.current(); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
     }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, { capture: true });
+    return () => document.removeEventListener('keydown', onKey, { capture: true });
   }, [undoStack, redoStack, selection, clipboard]);
 
   const [showResizeDialog, setShowResizeDialog] = useState(false);
@@ -548,6 +550,8 @@ export default function ConvertPage() {
     const id = new URLSearchParams(window.location.search).get('pattern');
     if (id && !savedPatternId) loadPatternById(id);
   }, [isLoggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  handleSaveRef.current = handleSave;
 
   function showToast(msg: string) {
     if (saveToastTimer.current) clearTimeout(saveToastTimer.current);
