@@ -123,7 +123,6 @@ export async function POST(request: NextRequest) {
 
       const maxW = PAGE_W - MARGIN * 2;
       const maxH = PAGE_H - MARGIN - 100;
-      const ox = MARGIN;
       const oy = MARGIN;
 
       if (previewImage) {
