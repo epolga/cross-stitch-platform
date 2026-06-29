@@ -114,5 +114,5 @@ No content changes — just position. Cards stay as-is; they provide value after
 - [x] Step 2: "Try a Sample Image" works end-to-end (dialog opens pre-loaded) — 2026-06-29
 - [x] Step 3: Feature cards made compact (smaller padding, text, no shadow) — 2026-06-29
 - [x] Step 4: Empty-state text updated; `image_drop_started` fires on drag — 2026-06-29
-- [ ] Step 5: "Open in Editor" button on design pages, event tracked
-- [ ] Step 6: "Create your own pattern" CTA on album pages, event tracked
+- [x] Step 5: "Open in Editor" button on design pages, event tracked — already implemented
+- [x] Step 6: "Create your own pattern" CTA on album pages, event tracked — already implemented
