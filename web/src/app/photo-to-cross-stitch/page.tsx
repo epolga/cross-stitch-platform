@@ -4,13 +4,14 @@ import ConvertClient from './ConvertClient';
 
 const TITLE = 'Photo to Cross-Stitch Pattern Converter';
 const DESCRIPTION =
-  'Convert any photo into a counted cross-stitch pattern with DMC thread colors. ' +
-  'Set your stitch size, choose your palette, edit the result, and download a print-ready PDF chart — your pet, your garden, your favourite photo, ready to stitch on Aida or linen.';
+  'Convert any photo or image into a custom cross-stitch pattern with DMC thread colors. ' +
+  'Use the built-in cross-stitch editor, set your stitch size, choose your palette, and download a print-ready PDF chart — ' +
+  'your pet portrait, your garden, your favourite photo, ready to stitch on Aida or linen.';
 
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  keywords: 'photo to cross stitch, cross stitch pattern maker, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, cross stitch chart on phone, cross stitch chart on screen, stitch one color at a time, cross stitch color highlight',
+  keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch',
   alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
   robots: 'index, follow',
   openGraph: {
@@ -94,6 +95,10 @@ const FAQ = [
     a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen. Click any color in the palette to make all its stitches flash on the chart so you can find your place instantly. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
   },
   {
+    q: 'Can I make my own cross-stitch pattern from any photo?',
+    a: 'Yes — that is exactly what this tool does. Upload any JPEG, PNG, or WebP image and the converter maps every pixel to the nearest DMC floss color, then lets you edit the result before downloading your cross-stitch pattern from the photo as a PDF.',
+  },
+  {
     q: 'Do I need an account?',
     a: 'Yes. You need a free account to save your pattern or download the PDF. Your patterns belong to you — once saved, only you can access, edit, or re-download them.',
   },
@@ -126,11 +131,14 @@ export default function PhotoToCrossStitchPage() {
             Photo to Cross-Stitch Pattern Converter
           </h1>
           <p className="text-gray-600 mb-8 max-w-2xl">
-            Turn any photo into a counted cross-stitch pattern with DMC thread colors.
-            Choose your stitch size, adjust the palette, and download a print-ready PDF chart — your pet, your garden, your favourite photo, ready to stitch.
+            Turn any photo or image into a custom cross-stitch pattern with DMC thread colors.
+            Choose your stitch size, adjust the palette, and download a print-ready PDF chart —
+            your pet portrait, your garden, your favourite photo, ready to stitch.
+            The pattern generator and cross-stitch editor run entirely in your browser — no software to install.
           </p>
 
           {/* Editor feature highlights */}
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Built-in cross-stitch editor</h2>
           <div className="mb-8 grid gap-3 sm:grid-cols-3">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
               <span className="text-2xl flex-none leading-none mt-0.5">✨</span>
@@ -176,7 +184,7 @@ export default function PhotoToCrossStitchPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-3">Tips for the best result</h2>
               <ul className="space-y-2">
-                <li><span className="font-medium text-gray-800">Choose a simple subject.</span> A pet portrait, a single flower, a bird, or a landscape with a clear focal point converts much better than a busy group photo.</li>
+                <li><span className="font-medium text-gray-800">Choose a simple subject.</span> A pet portrait cross-stitch pattern comes out best from a photo with a single animal against a plain background. A single flower, a bird, or a landscape with a clear focal point also converts well. Busy group photos rarely make good patterns.</li>
                 <li><span className="font-medium text-gray-800">Good contrast helps.</span> Photos with a clear difference between the subject and background give cleaner, more stitchable patterns.</li>
                 <li><span className="font-medium text-gray-800">Start with fewer colors.</span> 10–15 thread colors is a lovely, manageable project. Add more if you want a portrait with fine detail.</li>
                 <li><span className="font-medium text-gray-800">Try different sizes.</span> 50×50 stitches on 14-count Aida makes a 9×9 cm piece — a great quick project. 80×80 gives a 14×14 cm result with more detail.</li>
