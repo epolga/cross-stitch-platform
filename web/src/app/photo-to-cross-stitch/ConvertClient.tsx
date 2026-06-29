@@ -221,6 +221,14 @@ export default function ConvertPage() {
       if (key === 'x') { e.preventDefault(); handleCut(); }
       if (key === 'v') { e.preventDefault(); handlePaste(); }
       if (key === 's') { e.preventDefault(); handleSaveRef.current(); }
+      if (key === 'a') {
+        e.preventDefault();
+        const g = gridRef.current;
+        if (g.length && g[0].length) {
+          setActiveTool('select');
+          setSelection({ r0: 0, c0: 0, r1: g.length - 1, c1: g[0].length - 1 });
+        }
+      }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
       if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
     }
@@ -1349,6 +1357,7 @@ export default function ConvertPage() {
                   { type: 'separator' },
                   { type: 'item', label: 'Clear All', onClick: clearAll },
                   { type: 'separator' },
+                  { type: 'item', label: 'Select All', shortcut: '⌘A', onClick: () => { const g = gridRef.current; if (g.length && g[0].length) { setActiveTool('select'); setSelection({ r0: 0, c0: 0, r1: g.length - 1, c1: g[0].length - 1 }); } } },
                   { type: 'item', label: 'Copy', shortcut: '⌘C', disabled: !selection, onClick: handleCopy },
                   { type: 'item', label: 'Cut', shortcut: '⌘X', disabled: !selection, onClick: handleCut },
                   { type: 'item', label: 'Paste', shortcut: '⌘V', disabled: !clipboard, onClick: handlePaste },
