@@ -506,8 +506,31 @@ export default function ConvertPage() {
     const params = new URLSearchParams(window.location.search);
     const source = params.get('source') ?? (document.referrer ? 'referrer' : 'direct');
     const patternId = params.get('pattern') ?? undefined;
+    trackEvent('editor_landing_viewed', { source, referrer: document.referrer || undefined, patternId });
     trackEvent('editor_opened', { source, referrer: document.referrer || undefined, patternId });
     postEditorEvent('editor_opened', { source, patternId });
+  }, []);
+
+  useEffect(() => {
+    function handler() { setShowImportDialog(true); }
+    window.addEventListener('openImportFromPhoto', handler);
+    return () => window.removeEventListener('openImportFromPhoto', handler);
+  }, []);
+
+  useEffect(() => {
+    async function handler() {
+      try {
+        const resp = await fetch('/sample-photo.jpg');
+        const blob = await resp.blob();
+        const file = new File([blob], 'sample-photo.jpg', { type: 'image/jpeg' });
+        setImportInitialFile(file);
+        setShowImportDialog(true);
+      } catch {
+        setShowImportDialog(true);
+      }
+    }
+    window.addEventListener('openSampleImage', handler);
+    return () => window.removeEventListener('openSampleImage', handler);
   }, []);
 
   // Auto-load pattern from ?pattern=<id> URL param on mount

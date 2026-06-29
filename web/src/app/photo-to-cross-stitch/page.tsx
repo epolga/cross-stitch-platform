@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import ConvertClient from './ConvertClient';
+import HeroCta from './HeroCta';
 
 const TITLE = 'Photo to Cross-Stitch Pattern Converter';
 const DESCRIPTION =
@@ -130,35 +131,36 @@ export default function PhotoToCrossStitchPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Photo to Cross-Stitch Pattern Converter
           </h1>
-          <p className="text-gray-600 mb-8 max-w-2xl">
+          <p className="text-gray-600 mb-8">
             Turn any photo or image into a custom cross-stitch pattern with DMC thread colors.
             Choose your stitch size, adjust the palette, and download a print-ready PDF chart —
             your pet portrait, your garden, your favourite photo, ready to stitch.
             The pattern generator and cross-stitch editor run entirely in your browser — no software to install.
           </p>
 
+          <HeroCta />
+
           {/* Editor feature highlights */}
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Built-in cross-stitch editor</h2>
-          <div className="mb-8 grid gap-3 sm:grid-cols-3">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
-              <span className="text-2xl flex-none leading-none mt-0.5">✨</span>
+          <div className="mb-8 grid gap-2 sm:grid-cols-3">
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">✨</span>
               <div>
-                <p className="font-semibold text-gray-900 text-sm">Find any color instantly</p>
-                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Click a color in the palette and all its stitches flash on the chart — no more hunting stitch by stitch.</p>
+                <p className="font-semibold text-gray-900 text-xs">Find any color instantly</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click a color in the palette and all its stitches flash on the chart.</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
-              <span className="text-2xl flex-none leading-none mt-0.5">👁</span>
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">👁</span>
               <div>
-                <p className="font-semibold text-gray-900 text-sm">Stitch one color at a time</p>
-                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Hide every other color with one click. Work through your threads one by one without losing your place.</p>
+                <p className="font-semibold text-gray-900 text-xs">Stitch one color at a time</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Hide every other color with one click.</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4 flex gap-3 items-start">
-              <span className="text-2xl flex-none leading-none mt-0.5">📱</span>
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">📱</span>
               <div>
-                <p className="font-semibold text-gray-900 text-sm">No printing needed</p>
-                <p className="text-gray-500 text-xs mt-1 leading-relaxed">Use the chart on your laptop, tablet, or phone propped beside your hoop — the chart updates as you work.</p>
+                <p className="font-semibold text-gray-900 text-xs">No printing needed</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Use the chart on your laptop, tablet, or phone beside your hoop.</p>
               </div>
             </div>
           </div>
