@@ -28,6 +28,18 @@ export async function POST(request: NextRequest) {
       const token = await createSessionToken({ userId: user.userId, email: user.email });
       const response = NextResponse.json({ success: true, email: user.email, firstName: user.firstName });
       setSessionCookie(response, token);
+
+      const adminEmails = (process.env.ADMIN_EMAILS || '')
+        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (adminEmails.includes(user.email.toLowerCase())) {
+        response.cookies.set('no_track', '1', {
+          maxAge: 60 * 60 * 24 * 365 * 10,
+          path: '/',
+          httpOnly: false,
+          sameSite: 'lax',
+        });
+      }
+
       return response;
     } else {
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logEditorEvent } from '@/lib/editor-events';
+import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,19 @@ export async function POST(req: NextRequest) {
     }
     if (!SERVER_SIDE_EVENTS.has(eventType)) {
       return NextResponse.json({ ok: true });
+    }
+
+    if (req.cookies.get('no_track')?.value === '1') {
+      return NextResponse.json({ ok: true });
+    }
+
+    const session = await getSession(req);
+    if (session) {
+      const adminEmails = (process.env.ADMIN_EMAILS || '')
+        .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (adminEmails.includes(session.email.toLowerCase())) {
+        return NextResponse.json({ ok: true });
+      }
     }
 
     const now = Date.now();
