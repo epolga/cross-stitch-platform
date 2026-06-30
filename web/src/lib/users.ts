@@ -365,9 +365,11 @@ export async function saveUserToDynamoDB(
     const msg =
       error instanceof Error ? error.message : String(error);
 
+    const errorName = error instanceof Error ? error.name : '';
     if (
+      errorName === 'ConditionalCheckFailedException' ||
       msg.includes('ConditionalCheckFailed') ||
-      msg.includes('ConditionalCheckFailedException')
+      msg.includes('The conditional request failed')
     ) {
       throw new EmailExistsError();
     }
@@ -629,9 +631,11 @@ export async function updateLastSeenAtByEmail(email: string): Promise<void> {
     return;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorName = error instanceof Error ? error.name : '';
     if (
+      errorName !== 'ConditionalCheckFailedException' &&
       !message.includes('ConditionalCheckFailed') &&
-      !message.includes('ConditionalCheckFailedException')
+      !message.includes('The conditional request failed')
     ) {
       console.error('Error updating LastSeenAt in users table:', error);
       return;
