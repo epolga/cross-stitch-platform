@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import dmcColors from '@/data/dmc-colors.json';
 import { SYMBOLS } from '@/lib/symbols';
+import type { ConversionMode } from '@/lib/image-analysis';
 
 export interface DmcColor {
   number: string;
@@ -179,12 +180,19 @@ export async function convertImage(
   targetWidth: number,
   targetHeight: number,
   maxColors: number,
+  mode: ConversionMode = 'photo',
 ): Promise<ConvertedPattern> {
-  const { data, info } = await sharp(imageBuffer)
+  // Line-art mode: sharpen before k-means so cluster boundaries land at edges, not gradients.
+  // Photo mode: unchanged pipeline.
+  let pipeline = sharp(imageBuffer)
     .resize(targetWidth, targetHeight, { fit: 'fill' })
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+    .removeAlpha();
+
+  if (mode === 'line-art') {
+    pipeline = pipeline.sharpen({ sigma: 2, m1: 0, m2: 4 });
+  }
+
+  const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
 
   const w = info.width;
   const h = info.height;
@@ -195,10 +203,12 @@ export async function convertImage(
   for (let i = 0; i < n; i++)
     pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
 
-  // Run k-means with overshoot so rare-color regions get dedicated cluster slots.
-  // After snapping to DMC we trim back to maxColors by pixel count.
+  // Photo mode: overshoot k so rare-colour regions get dedicated cluster slots, then trim.
+  // Line-art mode: use exact k — overshoot creates spurious intermediate colours on flat art.
   const sample = buildSample(pixelsLab);
-  const kOver = Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
+  const kOver = mode === 'line-art'
+    ? Math.min(maxColors, sample.length)
+    : Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
   const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver);
 
   // Snap each centroid to nearest DMC color
