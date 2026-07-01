@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 
 export type ImageType = 'photo' | 'line-art' | 'typography' | 'illustration';
-export type ConversionMode = 'auto' | 'photo' | 'line-art';
+export type ConversionMode = 'auto' | 'photo' | 'illustration' | 'line-art';
 
 export interface ImageAnalysis {
   type: ImageType;
@@ -31,8 +31,8 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
     const r = data[i * 3], g = data[i * 3 + 1], b = data[i * 3 + 2];
     const l = 0.299 * r + 0.587 * g + 0.114 * b;
     lum[i] = l;
-    if (l < 50) darkCount++;
-    else if (l > 205) lightCount++;
+    if (l < 64) darkCount++;
+    else if (l > 192) lightCount++;
     totalSat += Math.max(r, g, b) - Math.min(r, g, b);
   }
 
@@ -73,15 +73,11 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
   let type: ImageType;
   let confidence: 'high' | 'medium' | 'low';
 
-  if (bimodalFraction > 0.75 && meanSaturation < 25) {
-    // Strongly bimodal + near-grayscale → line art
-    // High edge density with text-like structure suggests typography
+  if (bimodalFraction > 0.65 && meanSaturation < 25) {
+    // Bimodal + near-grayscale → line art or typography.
+    // Widened brackets (dark<64, light>192) catch light-gray backgrounds and dark-gray outlines.
     type = edgeDensity > 0.25 ? 'typography' : 'line-art';
-    confidence = bimodalFraction > 0.85 ? 'high' : 'medium';
-  } else if (bimodalFraction > 0.60 && meanSaturation < 40 && edgeDensity > 0.18) {
-    // Moderate bimodality with strong edges — coloured line art / illustration with outlines
-    type = 'line-art';
-    confidence = 'medium';
+    confidence = bimodalFraction > 0.75 ? 'high' : 'medium';
   } else if (colorDiversity <= 12 && meanSaturation > 20) {
     // Few distinct colours, some saturation → flat illustration / logo
     type = 'illustration';
@@ -95,6 +91,11 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
   const warnings: string[] = [];
   let suggestedMinWidth: number | null = null;
 
+  if (type === 'illustration') {
+    warnings.push(
+      'This looks like flat/cartoon art. Illustration mode preserves distinct colour regions better than Photo mode.'
+    );
+  }
   if (type === 'line-art' || type === 'typography') {
     warnings.push(
       'This looks like line art. Photo mode may blur edges — Line Art mode preserves them better.'
@@ -103,15 +104,20 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
   }
   if (type === 'typography') {
     warnings.push(
-      'This image may contain text. At small pattern sizes, letters can become unreadable. Consider 120+ stitches wide.'
+      'This image contains text. Letters need at least 5 stitches each to stay readable — consider 200+ stitches wide.'
     );
-    suggestedMinWidth = 120;
+    suggestedMinWidth = 200;
   }
 
   return { type, confidence, warnings, suggestedMinWidth };
 }
 
-// Map ImageType to the two conversion pipelines
-export function imageTypeToMode(type: ImageType): ConversionMode {
-  return type === 'line-art' || type === 'typography' ? 'line-art' : 'photo';
+// Map ImageType to the two conversion pipelines.
+// Only switch to line-art pipeline when confidence is high — false positives on real
+// photos (using sharpen + no overshoot) are worse than false negatives on line art.
+// Medium-confidence detections still show the badge/warning so the user can override manually.
+export function imageTypeToMode(type: ImageType, confidence: ImageAnalysis['confidence']): ConversionMode {
+  if ((type === 'line-art' || type === 'typography') && confidence === 'high') return 'line-art';
+  if (type === 'illustration') return 'illustration';
+  return 'photo';
 }

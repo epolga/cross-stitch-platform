@@ -105,7 +105,7 @@ Bucket policy grants `arn:aws:iam::127311923021:root` (ELB service account, us-e
 ### IP Set: TencentCloud-Singapore-Bots
 
 - ID: `40a5bc43-325d-4923-98a4-55f9480f573a`
-- CIDR: `43.128.0.0/11` (Tencent Cloud Singapore data center)
+- CIDRs: `43.128.0.0/11`, `43.160.0.0/11` (Tencent Cloud Singapore data center, covers 43.128–43.191)
 - Reason: confirmed bot traffic crawling design pages and calling like/config APIs (detected 2026-06-30)
 
 ### Recreating WAF after environment rebuild

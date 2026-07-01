@@ -60,13 +60,35 @@ function nearestDmcLab(lab: Lab): number {
   return best;
 }
 
+// ── Seeded PRNG (mulberry32) ──────────────────────────────────────────────────
+
+function makePrng(seed: number): () => number {
+  let s = seed | 0;
+  return function() {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seedFromBuffer(buf: Buffer): number {
+  let h = 2166136261 >>> 0;
+  const step = Math.max(1, Math.floor(buf.length / 512));
+  for (let i = 0; i < buf.length; i += step) {
+    h ^= buf[i];
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
 // ── Sampling ─────────────────────────────────────────────────────────────────
 
 const KMEANS_MAX_SAMPLE = 6000;
 
 // Build a sample that gives equal weight to each unique color region, so
 // colors present in only a small part of the image still get representation.
-function buildSample(pixels: Lab[]): Lab[] {
+function buildSample(pixels: Lab[], rand: () => number): Lab[] {
   // Coarsely quantize each pixel to a bucket key (24 levels per LAB channel).
   // Two pixels sharing a bucket are "the same color" for sampling purposes.
   const Q = 24;
@@ -83,7 +105,7 @@ function buildSample(pixels: Lab[]): Lab[] {
 
   // Random subsample when there are too many unique colors (Fisher-Yates partial shuffle)
   for (let i = unique.length - 1; i > unique.length - 1 - KMEANS_MAX_SAMPLE; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rand() * (i + 1));
     const tmp = unique[i]; unique[i] = unique[j]; unique[j] = tmp;
   }
   return unique.slice(unique.length - KMEANS_MAX_SAMPLE);
@@ -101,13 +123,13 @@ interface KMeansResult {
   inertia: number;
 }
 
-function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
+function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => number): KMeansResult {
   const n = allPixels.length;
   const ns = sample.length;
   k = Math.min(k, ns);
 
   // k-means++ initialisation on sample
-  const centroids: Lab[] = [[...sample[Math.floor(Math.random() * ns)]]];
+  const centroids: Lab[] = [[...sample[Math.floor(rand() * ns)]]];
   for (let ci = 1; ci < k; ci++) {
     const dists = sample.map(p => {
       let minD = Infinity;
@@ -115,7 +137,7 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
       return minD;
     });
     const total = dists.reduce((s, d) => s + d, 0);
-    let rnd = Math.random() * total;
+    let rnd = rand() * total;
     let chosen = ns - 1;
     for (let i = 0; i < ns; i++) { rnd -= dists[i]; if (rnd <= 0) { chosen = i; break; } }
     centroids.push([...sample[chosen]]);
@@ -164,10 +186,10 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
   return { centroids, assignments, inertia };
 }
 
-function kmeansLab(allPixels: Lab[], sample: Lab[], k: number): KMeansResult {
+function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => number): KMeansResult {
   let best: KMeansResult | null = null;
   for (let run = 0; run < KMEANS_RUNS; run++) {
-    const result = kmeansOnce(allPixels, sample, k);
+    const result = kmeansOnce(allPixels, sample, k, rand);
     if (!best || result.inertia < best.inertia) best = result;
   }
   return best!;
@@ -182,17 +204,11 @@ export async function convertImage(
   maxColors: number,
   mode: ConversionMode = 'photo',
 ): Promise<ConvertedPattern> {
-  // Line-art mode: sharpen before k-means so cluster boundaries land at edges, not gradients.
-  // Photo mode: unchanged pipeline.
-  let pipeline = sharp(imageBuffer)
-    .resize(targetWidth, targetHeight, { fit: 'fill' })
-    .removeAlpha();
-
-  if (mode === 'line-art') {
-    pipeline = pipeline.sharpen({ sigma: 2, m1: 0, m2: 4 });
-  }
-
-  const { data, info } = await pipeline.raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await (
+    mode === 'line-art' || mode === 'illustration'
+      ? sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill', kernel: 'nearest' }).removeAlpha()
+      : sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill' }).removeAlpha()
+  ).raw().toBuffer({ resolveWithObject: true });
 
   const w = info.width;
   const h = info.height;
@@ -203,13 +219,17 @@ export async function convertImage(
   for (let i = 0; i < n; i++)
     pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
 
+  // Seed the PRNG from the raw file bytes so the same image always produces
+  // the same clustering regardless of how many times it's run.
+  const rand = makePrng(seedFromBuffer(imageBuffer));
+
   // Photo mode: overshoot k so rare-colour regions get dedicated cluster slots, then trim.
   // Line-art mode: use exact k — overshoot creates spurious intermediate colours on flat art.
-  const sample = buildSample(pixelsLab);
-  const kOver = mode === 'line-art'
+  const sample = buildSample(pixelsLab, rand);
+  const kOver = (mode === 'line-art' || mode === 'illustration')
     ? Math.min(maxColors, sample.length)
     : Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
-  const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver);
+  const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver, rand);
 
   // Snap each centroid to nearest DMC color
   const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c));

@@ -695,6 +695,17 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
     const cell = cellAt(e);
     if (!cell) return;
     if (activeTool === 'select') {
+      const existing = selRef.current;
+      if (existing) {
+        const rMin = Math.min(existing.r0, existing.r1), rMax = Math.max(existing.r0, existing.r1);
+        const cMin = Math.min(existing.c0, existing.c1), cMax = Math.max(existing.c0, existing.c1);
+        if (cell[0] < rMin || cell[0] > rMax || cell[1] < cMin || cell[1] > cMax) {
+          selRef.current = null;
+          draw();
+          onSelectionChange?.(null);
+          return;
+        }
+      }
       drawing.current = true;
       startCell.current = cell;
       const sel = { r0: cell[0], c0: cell[1], r1: cell[0], c1: cell[1] };

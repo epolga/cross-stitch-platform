@@ -631,6 +631,28 @@ export default function ConvertPage() {
     if (activeTool !== 'select') setSelection(null);
   }, [activeTool]);
 
+  function handleSelectionChange(sel: SelectionRect | null) {
+    setSelection(sel);
+    if (sel === null) {
+      setActiveTool('pencil');
+      setSelectedColor(0);
+    }
+  }
+
+  // Clicking outside the canvas while a selection is active exits select mode
+  useEffect(() => {
+    if (!selection) return;
+    function onDocMouseDown(e: MouseEvent) {
+      const wrapper = canvasWrapperRef.current;
+      if (!wrapper || wrapper.contains(e.target as Node)) return;
+      setSelection(null);
+      setActiveTool('pencil');
+      setSelectedColor(0);
+    }
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [selection]);
+
   function selectionBounds() {
     if (!selection) return null;
     return {
@@ -1737,7 +1759,7 @@ export default function ConvertPage() {
                 onStrokeEnd={handleStrokeEnd}
                 onShapePaint={handleShapePaint}
                 onRightClick={handleRightClickCell}
-                onSelectionChange={setSelection}
+                onSelectionChange={handleSelectionChange}
               />
             </div>
             </div>{/* end canvas column */}

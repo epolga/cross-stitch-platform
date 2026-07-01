@@ -5,11 +5,11 @@ import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-
 export const dynamic = 'force-dynamic';
 
 const VALID_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const VALID_MODES = new Set<string>(['auto', 'photo', 'line-art']);
+const VALID_MODES = new Set<string>(['auto', 'photo', 'illustration', 'line-art']);
 const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_DIM = 10;
 const MAX_DIM = 500;
-const VALID_COLORS = new Set([5, 10, 20, 30, 40, 50, 100]);
+const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     if (modeParam === 'auto') {
       const analysis = await analyzeImage(buffer);
-      resolvedMode = imageTypeToMode(analysis.type);
+      resolvedMode = imageTypeToMode(analysis.type, analysis.confidence);
       imageType = analysis.type;
       warnings = analysis.warnings.length > 0 ? analysis.warnings : undefined;
     } else {

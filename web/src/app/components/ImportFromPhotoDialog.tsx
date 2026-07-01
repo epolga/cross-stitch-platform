@@ -6,9 +6,10 @@ import type { ImageAnalysis } from '@/lib/image-analysis';
 
 import { trackEvent } from '@/lib/track-event';
 
-const COLOR_OPTIONS = [5, 10, 20, 30, 40, 50, 100] as const;
+const COLOR_OPTIONS_PHOTO = [5, 10, 20, 30, 40, 50, 100] as const;
+const COLOR_OPTIONS_LINEART = [2, 3, 4, 5, 10, 20] as const;
 
-type UserMode = 'auto' | 'photo' | 'line-art';
+type UserMode = 'auto' | 'photo' | 'illustration' | 'line-art';
 
 const TYPE_LABELS: Record<string, { icon: string; label: string }> = {
   photo:        { icon: '📷', label: 'Photo' },
@@ -26,11 +27,11 @@ interface Props {
 
 export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [patWidth, setPatWidth] = useState(80);
-  const [patHeight, setPatHeight] = useState(80);
+  const [patWidth, setPatWidth] = useState(100);
+  const [patHeight, setPatHeight] = useState(100);
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [lockAspect, setLockAspect] = useState(true);
-  const [numColors, setNumColors] = useState<5 | 10 | 20 | 30 | 40 | 50 | 100>(10);
+  const [numColors, setNumColors] = useState<2 | 3 | 4 | 5 | 10 | 20 | 30 | 40 | 50 | 100>(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dragOver, setDragOver] = useState(false);
@@ -44,6 +45,29 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
     if (open && initialFile) handleFile(initialFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialFile]);
+
+  // When analysis arrives with a suggested minimum width, auto-update the inputs.
+  useEffect(() => {
+    if (!analysis?.suggestedMinWidth) return;
+    if (patWidth >= analysis.suggestedMinWidth) return;
+    const newW = analysis.suggestedMinWidth;
+    setPatWidth(newW);
+    if (lockAspect && aspectRatio) setPatHeight(Math.round(newW / aspectRatio));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis]);
+
+  // Sync color count to the active mode's option list.
+  // line-art → 3 (outline + background + one shade)
+  // photo/illustration → reset to 10 only if current value isn't in that list (e.g. came from line-art)
+  useEffect(() => {
+    if (effectiveMode() === 'line-art') {
+      setNumColors(3);
+    } else {
+      const valid = new Set<number>(COLOR_OPTIONS_PHOTO);
+      if (!valid.has(numColors)) setNumColors(30);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userMode, analysis]);
 
   async function analyzeFile(file: File) {
     setAnalysis(null);
@@ -68,8 +92,14 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
     setPreviewUrl(url);
     setError('');
     setAnalysis(null);
+    setPatWidth(100);
+    setPatHeight(100);
     const img = document.createElement('img');
-    img.onload = () => setAspectRatio(img.naturalWidth / img.naturalHeight);
+    img.onload = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      setAspectRatio(ratio);
+      if (lockAspect) setPatHeight(Math.round(100 / ratio));
+    };
     img.src = url;
     void analyzeFile(file);
   }
@@ -91,10 +121,12 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
   }, []);
 
   // Effective mode: if user chose 'auto', use detected type; otherwise use user choice.
-  function effectiveMode(): 'photo' | 'line-art' {
+  function effectiveMode(): UserMode {
     if (userMode !== 'auto') return userMode;
     if (!analysis) return 'photo';
-    return analysis.type === 'line-art' || analysis.type === 'typography' ? 'line-art' : 'photo';
+    if (analysis.type === 'line-art' || analysis.type === 'typography') return 'line-art';
+    if (analysis.type === 'illustration') return 'illustration';
+    return 'photo';
   }
 
   // Warnings to show: only when mode is auto and analysis detected a non-photo type.
@@ -103,7 +135,6 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
 
   // Size warning: if analysis suggests a larger min width and user's width is small.
   const sizeWarning: string | null =
-    userMode === 'auto' &&
     analysis?.suggestedMinWidth != null &&
     patWidth < analysis.suggestedMinWidth
       ? `Consider at least ${analysis.suggestedMinWidth} stitches wide for this image type.`
@@ -279,11 +310,15 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
         {/* Colors */}
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-600 mb-0.5">How many thread colors?</label>
-          <p className="text-xs text-gray-400 mb-2">Fewer colors = easier to stitch. Start with 10 or 15 if you&apos;re new to cross-stitch.</p>
+          <p className="text-xs text-gray-400 mb-2">
+            {effectiveMode() === 'line-art'
+              ? 'Line art works well with 2–5 colors. More colors add shading but may blur edges.'
+              : 'Fewer colors = easier to stitch. Start with 10 if you\'re new to cross-stitch.'}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {COLOR_OPTIONS.map(n => (
-              <button key={n} type="button" onClick={() => setNumColors(n)}
-                title={n <= 5 ? 'Very simple — great for total beginners' : n <= 10 ? 'Simple, great for beginners' : n <= 20 ? 'Good balance of detail and simplicity' : n <= 40 ? 'More detailed, more thread colors to manage' : n <= 50 ? 'Complex, rich in color detail' : 'Maximum detail — suitable for advanced stitchers'}
+            {(effectiveMode() === 'line-art' ? COLOR_OPTIONS_LINEART : COLOR_OPTIONS_PHOTO).map(n => (
+              <button key={n} type="button" onClick={() => setNumColors(n as typeof numColors)}
+                title={n <= 2 ? 'Black & white only' : n <= 3 ? 'Minimal — outlines + one shade' : n <= 5 ? 'Simple, great for line art' : n <= 10 ? 'Good balance of detail and simplicity' : n <= 20 ? 'More detailed' : 'Rich in colour detail'}
                 className={`px-3 py-1.5 rounded border text-sm font-medium transition-colors
                   ${numColors === n ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-gray-700 border-gray-300 hover:border-rose-300'}`}
               >{n}</button>
@@ -295,10 +330,11 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
         <div className="mb-4">
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Processing mode</label>
           <div className="flex gap-2">
-            {(['auto', 'photo', 'line-art'] as UserMode[]).map(m => {
+            {(['auto', 'photo', 'illustration', 'line-art'] as UserMode[]).map(m => {
               const labels: Record<UserMode, string> = {
                 auto: analysis ? `Auto (${TYPE_LABELS[analysis.type]?.label ?? 'Photo'})` : 'Auto',
                 photo: 'Photo',
+                illustration: 'Illustration',
                 'line-art': 'Line Art',
               };
               const active = userMode === m;
@@ -307,8 +343,9 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
                 <button key={m} type="button" onClick={() => setUserMode(m)}
                   title={
                     m === 'auto' ? 'Let the editor detect the best mode automatically' :
-                    m === 'photo' ? 'Optimised for photographs — preserves color gradients' :
-                    'Optimised for line art, illustrations, and text — preserves sharp edges'
+                    m === 'photo' ? 'Optimised for photographs — preserves colour gradients' :
+                    m === 'illustration' ? 'Optimised for flat illustrations and cartoons — preserves distinct colour regions' :
+                    'Optimised for line art, sketches, and text — preserves sharp edges'
                   }
                   className={`flex-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors
                     ${active
@@ -325,6 +362,8 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               ? 'The editor will choose based on the detected image type.'
               : userMode === 'photo'
               ? 'Best for photographs and images with smooth colour gradients.'
+              : userMode === 'illustration'
+              ? 'Best for cartoons, clipart, and flat-colour art — preserves distinct shades without blending.'
               : 'Best for drawings, sketches, quotes, and images with sharp outlines.'}
           </p>
         </div>
