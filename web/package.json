@@ -10,8 +10,7 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:e2e": "playwright test",
-        "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts",
-        "test:e2e:converter": "playwright test tests/converter-*.spec.ts tests/editor-*.spec.ts tests/profile-auth-guard.spec.ts"
+        "test:e2e:paid-download": "playwright test tests/paid-download-flow.smoke.spec.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.104.1",
