@@ -645,10 +645,10 @@ export default function ConvertPage() {
     function onDocMouseDown(e: MouseEvent) {
       const wrapper = canvasWrapperRef.current;
       if (!wrapper || wrapper.contains(e.target as Node)) return;
-      // Skip when clicking toolbar buttons or menus — Mirror/Fill need the selection to persist
-      // until they actually run (the menu click fires after this mousedown).
+      // Skip when clicking toolbar buttons, menus, or dialog form elements — selection must
+      // persist through opening the Mirror dialog AND through clicking its radio buttons / OK.
       const t = e.target as HTMLElement;
-      if (t.closest('button, [role="menu"], [role="menuitem"], [role="dialog"], dialog')) return;
+      if (t.closest('button, input, label, select, [role="menu"], [role="menuitem"], [role="dialog"], dialog')) return;
       setSelection(null);
       setActiveTool('pencil');
       setSelectedColor(0);
