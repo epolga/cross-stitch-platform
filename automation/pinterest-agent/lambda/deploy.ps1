@@ -89,6 +89,14 @@ if ($autoBlockIpSetArn -and $autoBlockIpSetArn -ne "None") {
     Write-Host "  WARNING: AutoBlockedIPs IP set not found, WAF sync step will be skipped at runtime." -ForegroundColor Yellow
 }
 
+# Logs read: suspicious-IP detector needs to list/read ALB access logs.
+# Runs on every deploy for the same reason as the WAF policy above.
+$logsFile = Join-Path $tmpDir "policy-logs.json"
+& $toFile $logsFile '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:ListBucket"],"Resource":"arn:aws:s3:::cross-stitch-logs"},{"Effect":"Allow","Action":["s3:GetObject"],"Resource":"arn:aws:s3:::cross-stitch-logs/*"}]}'
+$logsUri = "file://" + $logsFile.Replace("\", "/")
+aws iam put-role-policy --role-name $ROLE_NAME --policy-name "CrossStitchLogsRead" --policy-document $logsUri | Out-Null
+Write-Host "  Logs-read policy attached (cross-stitch-logs)" -ForegroundColor Green
+
 # ── 3. Zip the bundle ─────────────────────────────────────────────────────────
 Write-Host "Zipping bundle..." -ForegroundColor Cyan
 $zipPath = "lambda\dist\handler.zip"

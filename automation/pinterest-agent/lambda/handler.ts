@@ -26,6 +26,7 @@ import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminde
 import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
 import { syncBlockedIpsToWaf } from "../src/services/wafIpSync";
+import { detectSuspiciousIps } from "../src/services/suspiciousIpDetector";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
 export interface PipelineEvent {
@@ -50,6 +51,18 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   } catch (err) {
     // Non-critical: don't let a WAF hiccup take down the daily business report.
     console.error("  WAF sync failed:", err instanceof Error ? err.message : err);
+  }
+
+  console.log("[init] suspicious IP detection");
+  try {
+    const suspiciousResult = await detectSuspiciousIps();
+    if (!suspiciousResult.checked) {
+      console.log(`  skipped: ${suspiciousResult.reason}`);
+    } else {
+      console.log(`  ${suspiciousResult.flagged.length} suspicious IP(s) flagged`);
+    }
+  } catch (err) {
+    console.error("  suspicious IP detection failed:", err instanceof Error ? err.message : err);
   }
 
   console.log("[1/14] daily business report");
