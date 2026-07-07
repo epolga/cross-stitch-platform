@@ -9,6 +9,7 @@ import {
 } from '@/lib/design-likes';
 import { sendEmailToAdmin } from '@/lib/email-service';
 import { buildCanonicalUrl, CreateDesignUrl } from '@/lib/url-helper';
+import { getSession } from '@/lib/session';
 
 function getClientIp(request: NextRequest): string {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -17,6 +18,40 @@ function getClientIp(request: NextRequest): string {
   }
 
   return request.headers.get('x-real-ip') || 'Unknown';
+}
+
+// Rate limit: 20 requests per IP per minute across GET/POST/DELETE on this
+// route. Caught bots were hammering GET at hundreds of requests per IP —
+// this bounds that regardless of which method a future bot uses.
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const hits = (rateLimitMap.get(ip) ?? []).filter((t) => t > cutoff);
+  hits.push(now);
+  rateLimitMap.set(ip, hits);
+
+  if (rateLimitMap.size > 10_000) {
+    for (const [key, times] of rateLimitMap) {
+      if (times.every((t) => t <= cutoff)) rateLimitMap.delete(key);
+    }
+  }
+
+  return hits.length > RATE_LIMIT_MAX;
+}
+
+// Defense in depth: if the caller has a valid session cookie, the claimed
+// email must match it — a logged-in user can't vote/read as someone else.
+// Callers with no session at all fall through unchanged (most of the app
+// still identifies users by email only, not the session cookie).
+async function sessionEmailMismatch(request: NextRequest, claimedEmail: string | undefined): Promise<boolean> {
+  if (!claimedEmail) return false;
+  const session = await getSession(request);
+  if (!session) return false;
+  return session.email.toLowerCase() !== claimedEmail;
 }
 
 async function sendVoteNotification(params: {
@@ -63,13 +98,22 @@ function getEmailFromRequest(request: NextRequest, bodyEmail?: string): string |
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ designId: string }> }) {
+  if (isRateLimited(getClientIp(request))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const designId = await resolveDesignId(params);
   if (designId === null) {
     return NextResponse.json({ error: 'Invalid designId' }, { status: 400 });
   }
 
+  const email = getEmailFromRequest(request);
+  if (await sessionEmailMismatch(request, email)) {
+    return NextResponse.json({ error: 'Email does not match session' }, { status: 403 });
+  }
+
   try {
-    const state = await getDesignLikeState(designId, getEmailFromRequest(request));
+    const state = await getDesignLikeState(designId, email);
     return NextResponse.json({ designId, ...state }, { status: 200 });
   } catch (error) {
     console.error('[design-like][GET] Failed to load like state:', error);
@@ -82,6 +126,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ designId: string }> }) {
+  if (isRateLimited(getClientIp(request))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const designId = await resolveDesignId(params);
   if (designId === null) {
     return NextResponse.json({ error: 'Invalid designId' }, { status: 400 });
@@ -91,6 +139,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const email = getEmailFromRequest(request, body.email);
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 401 });
+  }
+  if (await sessionEmailMismatch(request, email)) {
+    return NextResponse.json({ error: 'Email does not match session' }, { status: 403 });
   }
   if (body.direction !== 'up' && body.direction !== 'down') {
     return NextResponse.json({ error: 'Vote direction is required' }, { status: 400 });
@@ -128,6 +179,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ designId: string }> }) {
+  if (isRateLimited(getClientIp(request))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const designId = await resolveDesignId(params);
   if (designId === null) {
     return NextResponse.json({ error: 'Invalid designId' }, { status: 400 });
@@ -137,6 +192,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const email = getEmailFromRequest(request, body.email);
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 401 });
+  }
+  if (await sessionEmailMismatch(request, email)) {
+    return NextResponse.json({ error: 'Email does not match session' }, { status: 403 });
   }
 
   try {
