@@ -16,6 +16,7 @@ import DesignLikeButton from '@/app/components/DesignLikeButton';
 import { getDesignById } from '@/lib/data-access';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { devLog } from '@/lib/devLog';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,7 @@ async function getMissingDesigns(): Promise<Set<number>> {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { designId } = await params;
-console.log("Generating metadata for designId:", designId);
+devLog("Generating metadata for designId:", designId);
   let design: Design;
   try {
     const id = parseInt(designId, 10);

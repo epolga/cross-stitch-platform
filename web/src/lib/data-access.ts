@@ -11,6 +11,7 @@ import type { Design, DesignsResponse } from '@/app/types/design';
 import type { Album, AlbumsResponse } from '@/app/types/album';
 import { albumSubject } from '@/data/album-taxonomy';
 import { saveUserToDynamoDB } from '@/lib/users';
+import { devLog } from '@/lib/devLog';
 
 // Force SSR to avoid static generation issues
 export const dynamic = 'force-dynamic';
@@ -60,7 +61,7 @@ async function verifyUserInSecondaryTable(
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
-    console.log('Checking secondary users table:', tableName, { email });
+    devLog('Checking secondary users table:', tableName, { email });
 
     // 1) Filter only by password (cheap, selective)
     const scanParams: ScanCommandInput = {
@@ -79,7 +80,7 @@ async function verifyUserInSecondaryTable(
     for (const item of Items) {
       const dbEmail = item.Email?.S?.trim().toLowerCase();
       if (dbEmail === normalizedEmail) {
-        console.log('User found in secondary table (case-insensitive match)');
+        devLog('User found in secondary table (case-insensitive match)');
         return {
           userId: item.cid?.S ?? item.ID?.S ?? normalizedEmail,
           email: normalizedEmail,
@@ -127,18 +128,18 @@ let cacheInitializationPromise: Promise<void> | null = null;
 // Initialize the cache by fetching all designs and albums from DynamoDB
 async function initializeCache(): Promise<void> {
   if (cacheInitialized) {
-    console.info('Cache already initialized');
+    devLog('Cache already initialized');
     return;
   }
 
   if (cacheInitializationPromise) {
-    console.info('Cache initialization already in progress');
+    devLog('Cache initialization already in progress');
     return cacheInitializationPromise;
   }
 
   cacheInitializationPromise = (async () => {
     try {
-      console.info('Starting cache initialization');
+      devLog('Starting cache initialization');
 
       // Scan for designs
       const designScanParams: ScanCommandInput = {
@@ -258,7 +259,7 @@ async function initializeCache(): Promise<void> {
       } while (albumLastEvaluatedKey);
 
       cacheInitialized = true;
-      console.info(`Cache initialized with ${totalDesigns} designs and ${totalAlbums} albums`);
+      devLog(`Cache initialized with ${totalDesigns} designs and ${totalAlbums} albums`);
     } catch (error) {
       console.error('Error initializing cache:', error);
       cacheInitialized = false;
@@ -274,10 +275,10 @@ async function initializeCache(): Promise<void> {
 // Wrapper to initialize cache on first access
 async function ensureCacheReady(): Promise<void> {
   if (!cacheInitialized && !cacheInitializationPromise) {
-    console.debug('First access, initializing cache');
+    devLog('First access, initializing cache');
     await initializeCache();
   } else if (cacheInitializationPromise) {
-    console.debug('Waiting for cache initialization');
+    devLog('Waiting for cache initialization');
     await cacheInitializationPromise;
   }
 }
@@ -348,7 +349,7 @@ export async function getAllAlbumCaptions(): Promise<{ albumId: number; Caption:
         return [];
       }
 
-      console.info(`Fetched ${albums.length} albums from cache`);
+      devLog(`Fetched ${albums.length} albums from cache`);
       return albums;
     } catch (error) {
       console.error(`Error fetching all album captions:`, error);
@@ -727,10 +728,10 @@ export async function verifyUserWithProfile(
   password: string,
 ): Promise<VerifiedUserProfile | null> {
   try {
-    console.log('verifyUser called with:', { email, password });
+    devLog('verifyUser called with:', { email, password });
     const userId = `USR#${email}`;
     const normalizedEmail = email.trim().toLowerCase();
-    console.log('Querying primary DynamoDB table with ID:', userId);
+    devLog('Querying primary DynamoDB table with ID:', userId);
     const queryParams = {
       TableName: process.env.DYNAMODB_TABLE_NAME,
       KeyConditionExpression: "ID = :id",
@@ -741,32 +742,32 @@ export async function verifyUserWithProfile(
     };
 
     const { Items } = await dynamoDBClient.send(new QueryCommand(queryParams));
-    console.log('Primary table query result:', Items);
+    devLog('Primary table query result:', Items);
 
     // Not found in primary table → check secondary table
     if (!Items || Items.length === 0) {
-      console.log(`No user found for ID ${userId} in primary table, checking DDB_USERS_TABLE...`);
+      devLog(`No user found for ID ${userId} in primary table, checking DDB_USERS_TABLE...`);
 
       const secondaryMatch = await verifyUserInSecondaryTable(email, password);
       if (secondaryMatch) {
-        console.log('User validated via secondary users table');
+        devLog('User validated via secondary users table');
         return secondaryMatch;
       }
 
-      console.log('User not found in secondary users table either');
+      devLog('User not found in secondary users table either');
       return null;
     }
 
     // Found in primary table → use original password logic
     const storedPassword = Items[0].OpenPwd?.S;
-    console.log('Stored password:', storedPassword);
+    devLog('Stored password:', storedPassword);
     if (!storedPassword) {
-      console.log(`No OpenPwd found for ID ${userId}`);
+      devLog(`No OpenPwd found for ID ${userId}`);
       return null;
     }
 
     const isMatch = storedPassword === password;
-    console.log('Password match:', isMatch);
+    devLog('Password match:', isMatch);
     if (!isMatch) {
       return null;
     }
@@ -790,10 +791,10 @@ export async function verifyUser(email: string, password: string): Promise<boole
 }
 
 // Create a new user in DynamoDB
-export async function createUser(email: string, password: string, username: string, subscriptionId: string, receiveUpdates: boolean): Promise<void> {
+export async function createUser(email: string, password: string, username: string, subscriptionId: string, receiveUpdates: boolean, registrationSource?: string): Promise<void> {
   const resolvedName = username?.trim() || email.split('@')[0] || 'User';
   try {
-    console.log('Creating user:', { email, username, subscriptionId, receiveUpdates });
+    devLog('Creating user:', { email, username, subscriptionId, receiveUpdates });
     const { userId } = await saveUserToDynamoDB({
       email,
       firstName: resolvedName,
@@ -801,8 +802,9 @@ export async function createUser(email: string, password: string, username: stri
       username,
       subscriptionId,
       receiveUpdates,
+      registrationSource,
     });
-    console.log('User created successfully:', userId);
+    devLog('User created successfully:', userId);
   } catch (error: unknown) {
     const errorDetails = error instanceof Error
       ? { message: error.message, name: error.name, stack: error.stack }
@@ -813,11 +815,11 @@ export async function createUser(email: string, password: string, username: stri
 }
 
 // Create a new test user in DynamoDB
-export async function createTestUser(email: string, password: string, username: string, subscriptionId: string, receiveUpdates: boolean): Promise<void> {
+export async function createTestUser(email: string, password: string, username: string, subscriptionId: string, receiveUpdates: boolean, registrationSource?: string): Promise<void> {
   const resolvedName = username?.trim() || email.split('@')[0] || 'Test User';
   const testId = `TST#${email}` + Date.now();
   try {
-    console.log('Creating test user:', { email, username, subscriptionId, receiveUpdates });
+    devLog('Creating test user:', { email, username, subscriptionId, receiveUpdates });
     const { userId } = await saveUserToDynamoDB({
       email,
       firstName: resolvedName,
@@ -826,8 +828,9 @@ export async function createTestUser(email: string, password: string, username: 
       subscriptionId,
       receiveUpdates,
       idOverride: testId,
+      registrationSource,
     });
-    console.log('Test user created successfully:', userId);
+    devLog('Test user created successfully:', userId);
   } catch (error: unknown) {
     const errorDetails = error instanceof Error
       ? { message: error.message, name: error.name, stack: error.stack }
@@ -848,7 +851,7 @@ export async function updateLastEmailEntryByCid(cid: string): Promise<void> {
     return;
   }
 
-  console.log(`Updating LastEmailEntry for user with cid: ${cid}`);
+  devLog(`Updating LastEmailEntry for user with cid: ${cid}`);
   const trimmedCid = cid.trim();
   if (!trimmedCid) {
     console.warn('Empty cid provided; skipping LastEmailEntry update');
@@ -890,7 +893,7 @@ export async function updateLastEmailEntryByCid(cid: string): Promise<void> {
 }
 
 export async function refreshCache(): Promise<void> {
-  console.info('Refreshing cache');
+  devLog('Refreshing cache');
   designCache.clear();
   designKeyCache.clear();
   albumCache.clear();
@@ -992,7 +995,7 @@ export async function saveUserMock(
   await new Promise((r) => setTimeout(r, 200));
 
   // Server log to verify payload during development
-  console.log('[data-access] saveUserMock:', {
+  devLog('[data-access] saveUserMock:', {
     email: user.email,
     firstName: user.firstName,
     passwordLength: user.password?.length ?? 0,

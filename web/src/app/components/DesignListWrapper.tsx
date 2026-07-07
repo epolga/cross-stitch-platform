@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { DesignList } from './DesignList';
 import { isUserLoggedIn } from './AuthControl';
 import type { Design } from '@/app/types/design';
+import { devLog } from '@/lib/devLog';
 
 interface DesignListWrapperProps {
   designs: Design[];
@@ -30,15 +31,15 @@ export function DesignListWrapper({
     // Initialize login state (client-side only)
     if (typeof window !== 'undefined') {
       setIsLoggedIn(isUserLoggedIn());
-      console.log('DesignListWrapper mounted, isLoggedIn:', isUserLoggedIn());
+      devLog('DesignListWrapper mounted, isLoggedIn:', isUserLoggedIn());
 
       // Handle storage events for cross-tab updates
       const handleStorageChange = (e: StorageEvent) => {
-        console.log('Storage event detected:', e);
+        devLog('Storage event detected:', e);
         if (e.key === 'isLoggedIn') {
           const newLoginState = e.newValue === 'true';
           setIsLoggedIn(newLoginState);
-          console.log('Storage event: isLoggedIn updated to', newLoginState);
+          devLog('Storage event: isLoggedIn updated to', newLoginState);
         }
       };
 
@@ -46,7 +47,7 @@ export function DesignListWrapper({
       const handleAuthStateChange = () => {
         const newLoginState = isUserLoggedIn();
         setIsLoggedIn(newLoginState);
-        console.log('Auth state change event: isLoggedIn updated to', newLoginState);
+        devLog('Auth state change event: isLoggedIn updated to', newLoginState);
       };
 
       window.addEventListener('storage', handleStorageChange);

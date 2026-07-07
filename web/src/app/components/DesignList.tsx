@@ -8,6 +8,7 @@ import styles from './designList.module.css';
 import type { Design } from '@/app/types/design';
 import DownloadPdfLink from './DownloadPdfLink';
 import { CreateDesignUrl } from '@/lib/url-helper';
+import { devLog } from '@/lib/devLog';
 
 type ChartFormat = 'color-symbol' | 'symbol-chart' | 'color-chart';
 
@@ -49,7 +50,7 @@ async function loadMissingDesigns(): Promise<Set<number>> {
             if (!Number.isNaN(id)) set.add(id);
           });
         missingDesignsCache = set;
-        console.log('[DesignList] MissingDesignPdfs loaded', {
+        devLog('[DesignList] MissingDesignPdfs loaded', {
           count: set.size,
           sample: Array.from(set).slice(0, 5),
         });
@@ -77,7 +78,7 @@ function useMissingDesign(designId: number) {
       const nextValue = set.has(designId);
       setIsMissing(nextValue);
       setLoaded(true);
-      console.log('[useMissingDesign] resolved', { designId, isMissing: nextValue });
+      devLog('[useMissingDesign] resolved', { designId, isMissing: nextValue });
     });
     return () => {
       isMounted = false;
@@ -110,7 +111,7 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
   };
 
   useEffect(() => {
-    console.log('[DesignCard] render', {
+    devLog('[DesignCard] render', {
       designId: design.DesignID,
       albumId: design.AlbumID,
       isMissing,
@@ -205,11 +206,11 @@ export function DesignList({
 }: DesignListProps) {
   // Log when isLoggedIn prop changes
   useEffect(() => {
-    console.log('DesignList: isLoggedIn prop updated to', isLoggedIn);
+    devLog('DesignList: isLoggedIn prop updated to', isLoggedIn);
   }, [isLoggedIn]);
 
   // Log on every render to confirm component rendering
-  console.log('DesignList rendering with isLoggedIn:', isLoggedIn);
+  devLog('DesignList rendering with isLoggedIn:', isLoggedIn);
 
   return (
     <div className={`${styles.container} ${className || ''} shadow-md`}>

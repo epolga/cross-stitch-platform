@@ -8,6 +8,7 @@ import { sendEmailToAdmin } from '@/lib/email-service'; // Import the email serv
 import { updateLastEmailEntryInUsersTable } from '@/lib/users';
 import { headers } from 'next/headers';
 import { buildCanonicalUrl, getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
+import { devLog } from '@/lib/devLog';
 
 // Helper to parse slug (e.g., 'lion-37-114-Free-Design.aspx')
 function parseSlugForDesign(slug: string): { caption: string; albumId: number; nPage: number } | null {
@@ -68,7 +69,7 @@ async function GetAlbumDesignsPageFromSlug(slug: string, searchParams: Record<st
       }
 
       const albumId = await getAlbumIdByCaption(albumCaption);
-      console.log("albumId received:", albumId);
+      devLog("albumId received:", albumId);
 
       if (albumId === null) {
         notFound();
@@ -159,7 +160,7 @@ export default async function SlugPage({ params, searchParams }: {
   const eid = typeof resolvedSearchParams.eid === 'string' ? resolvedSearchParams.eid : Array.isArray(resolvedSearchParams.eid) ? resolvedSearchParams.eid[0] : undefined;
   const cid = typeof resolvedSearchParams.cid === 'string' ? resolvedSearchParams.cid : Array.isArray(resolvedSearchParams.cid) ? resolvedSearchParams.cid[0] : undefined;
 
-  console.log(`Accessed slug: ${resolvedParams.slug} with eid: ${eid} and cid: ${cid}`);
+  devLog(`Accessed slug: ${resolvedParams.slug} with eid: ${eid} and cid: ${cid}`);
   if (eid && cid) {
     const headersList = await headers();
     const ip = headersList.get('x-forwarded-for')?.split(',')[0].trim() || headersList.get('x-real-ip') || 'unknown';
@@ -174,7 +175,7 @@ export default async function SlugPage({ params, searchParams }: {
         updateLastEmailEntryInUsersTable(cid),
       ]);
       await sendEmailToAdmin(subject, body, false); // Send as plain text
-      console.log('Notification email sent to admin successfully.');
+      devLog('Notification email sent to admin successfully.');
     } catch (error) {
       console.error('Failed to send notification email to admin:', error);
     }

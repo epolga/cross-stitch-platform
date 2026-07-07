@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import DownloadPdfLink from '@/app/components/DownloadPdfLink';
 import type { Design } from '@/app/types/design';
 import styles from '@/app/components/designList.module.css';
+import { devLog } from '@/lib/devLog';
 
 type ChartFormat = 'color-symbol' | 'symbol-chart' | 'color-chart';
 
@@ -38,7 +39,7 @@ async function loadMissingDesigns(): Promise<Set<number>> {
             if (!Number.isNaN(id)) set.add(id);
           });
         missingDesignsCache = set;
-        console.log('[DesignDownloadControls] MissingDesignPdfs loaded', { count: set.size });
+        devLog('[DesignDownloadControls] MissingDesignPdfs loaded', { count: set.size });
         return set;
       })
       .catch((err) => {
@@ -89,7 +90,7 @@ export function DesignDownloadControls({ design, align = 'center', isMissingOver
   const showFormatSelector = loaded && !isMissing;
 
   useEffect(() => {
-    console.log('[DesignDownloadControls] render', {
+    devLog('[DesignDownloadControls] render', {
       designId: design.DesignID,
       isMissing,
       loaded,

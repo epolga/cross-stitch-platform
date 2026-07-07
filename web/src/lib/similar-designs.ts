@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getDesignById } from "@/lib/data-access";
 import type { Design } from "@/app/types/design";
+import { devLog } from "@/lib/devLog";
 
 const S3_BUCKET = "cross-stitch-sitemap-cache";
 const SIMILAR_KEY = "embeddings/similar-designs.json";
@@ -20,7 +21,7 @@ async function loadSimilarMap(): Promise<SimilarMap> {
     const resp = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: SIMILAR_KEY }));
     const text = await resp.Body!.transformToString();
     mapCache = JSON.parse(text) as SimilarMap;
-    console.info(`[similar-designs] Loaded ${Object.keys(mapCache).length} entries from S3`);
+    devLog(`[similar-designs] Loaded ${Object.keys(mapCache).length} entries from S3`);
     return mapCache;
   })().finally(() => {
     mapLoadPromise = null;
@@ -39,15 +40,15 @@ export async function getSimilarDesigns(designId: number, count = 12): Promise<D
     const map = await loadSimilarMap();
     const ids = map[String(designId)];
     if (!ids || ids.length === 0) {
-      console.log(`[similar-designs] No entry for design ${designId} in map (map size: ${Object.keys(map).length})`);
+      devLog(`[similar-designs] No entry for design ${designId} in map (map size: ${Object.keys(map).length})`);
       return [];
     }
     const designs = await Promise.all(ids.slice(0, count).map(id => getDesignById(id)));
     const found = designs.filter((d): d is Design => d !== undefined);
-    console.log(`[similar-designs] design ${designId}: ${found.length}/${count} resolved`);
+    devLog(`[similar-designs] design ${designId}: ${found.length}/${count} resolved`);
     return found;
   } catch (err) {
-    console.log(`[similar-designs] ERROR for design ${designId}: ${err}`);
+    devLog(`[similar-designs] ERROR for design ${designId}: ${err}`);
     return [];
   }
 }

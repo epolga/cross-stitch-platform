@@ -4,6 +4,8 @@ import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedroc
 const S3_BUCKET = "cross-stitch-sitemap-cache";
 const VECTORS_KEY = "embeddings/vectors.json";
 
+import { devLog } from "@/lib/devLog";
+
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const bedrock = new BedrockRuntimeClient({ region: "us-east-1" });
 
@@ -34,7 +36,7 @@ async function loadVectorIndex(): Promise<VectorIndex> {
       txt.set(Number(id), new Float32Array(vecs.textVec));
     }
     g.__vectorIndex = { img, txt };
-    console.info(`[semantic-search] Loaded vectors for ${img.size} designs`);
+    devLog(`[semantic-search] Loaded vectors for ${img.size} designs`);
     return g.__vectorIndex;
   })().finally(() => { g.__vectorLoadPromise = undefined; });
   return g.__vectorLoadPromise;

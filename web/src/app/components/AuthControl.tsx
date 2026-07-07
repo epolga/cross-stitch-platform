@@ -6,6 +6,7 @@ import { RegisterForm } from './RegisterForm';
 import { RegisterOnlyDialog } from './RegisterOnlyDialog';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { RegistrationSourceInfo } from '@/app/types/registration';
+import { devLog } from '@/lib/devLog';
 
 const USER_FIRST_NAME_STORAGE_KEY = 'userFirstName';
 export const USER_VOTES_CHANGED_EVENT = 'userVotesChanged';
@@ -59,7 +60,7 @@ const dispatchAuthStateChange = (): void => {
   if (typeof window !== 'undefined') {
     const event = new Event('authStateChange');
     window.dispatchEvent(event);
-    console.log('Dispatched authStateChange event');
+    devLog('Dispatched authStateChange event');
   }
 };
 
@@ -73,7 +74,7 @@ function AutoLogin({ onLoginSuccess }: { onLoginSuccess: () => void }) {
     const loggedIn = isUserLoggedIn();
 
     if (eid && cid && !loggedIn) {
-      console.log('Attempting email auto-login with cid');
+      devLog('Attempting email auto-login with cid');
       const autoLogin = async (): Promise<void> => {
         try {
           const response = await fetch('/api/auth/login-from-email', {
@@ -118,7 +119,7 @@ const normalizeDownloadMode = (raw: string): DownloadMode => {
 
 export const resolveDownloadMode = (): DownloadMode => {
   const raw = (process.env.NEXT_PUBLIC_DOWNLOAD_MODE || '').toLowerCase().trim();
-  console.log('resolveDownloadMode:', raw);
+  devLog('resolveDownloadMode:', raw);
   return normalizeDownloadMode(raw);
 };
 
@@ -201,7 +202,7 @@ export function AuthControl() {
       setCurrentEmail((localStorage.getItem('userEmail') || '').trim().toLowerCase());
       setCurrentFirstName(readStoredFirstName());
     }
-    console.log('AuthControl component mounted, isLoggedIn from storage:', loggedIn);
+    devLog('AuthControl component mounted, isLoggedIn from storage:', loggedIn);
   }, []);
 
   useEffect(() => {
@@ -312,7 +313,7 @@ export function AuthControl() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const handleOpenPayPal = (event: Event) => {
-        console.log('Received openPayPalModal event');
+        devLog('Received openPayPalModal event');
         if (mode === 'paid') {
           const detail = (
             event as CustomEvent<{
@@ -349,7 +350,7 @@ export function AuthControl() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const handleOpenRegisterOnly = (event: Event) => {
-        console.log('Received openRegister event');
+        devLog('Received openRegister event');
         if (mode === 'register') {
           const detail =
             (event as CustomEvent<RegistrationSourceInfo | null>).detail ?? null;
@@ -369,7 +370,7 @@ export function AuthControl() {
   }, [mode]);
 
   const handleLoginClick = (): void => {
-    console.log('Login button clicked, opening login modal...');
+    devLog('Login button clicked, opening login modal...');
     setIsLoginModalOpen(true);
     setIsRegisterModalOpen(false);
     closeRegisterOnly();
@@ -400,11 +401,11 @@ export function AuthControl() {
 
   const handleLoginSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    console.log('Form submitted, starting login process');
+    devLog('Form submitted, starting login process');
 
     try {
       if (!isValidEmail(loginUsername)) {
-        console.log('Invalid email format');
+        devLog('Invalid email format');
         setErrorMessage('Please enter a valid email address');
         setForgotMessage('');
         return;
@@ -417,10 +418,10 @@ export function AuthControl() {
       });
 
       const data: { success?: boolean; error?: string; email?: string; firstName?: string } = await response.json();
-      console.log('API response:', data);
+      devLog('API response:', data);
 
       if (response.ok && data.success) {
-        console.log('Login successful:', { username: loginUsername });
+        devLog('Login successful:', { username: loginUsername });
         const normalizedEmail = (data.email || loginUsername).trim().toLowerCase();
         const firstName = persistStoredFirstName(data.firstName);
         if (typeof window !== 'undefined') {
@@ -438,7 +439,7 @@ export function AuthControl() {
         setIsForgotMode(false);
         dispatchAuthStateChange();
       } else {
-        console.log('Invalid credentials');
+        devLog('Invalid credentials');
         setErrorMessage(data.error || 'Invalid email or password');
         setForgotMessage('');
       }
@@ -451,7 +452,7 @@ export function AuthControl() {
 
   const handleForgotSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    console.log('Submitting forgot password form');
+    devLog('Submitting forgot password form');
 
     setErrorMessage('');
     setForgotMessage('');
@@ -493,7 +494,7 @@ export function AuthControl() {
   };
 
   const handleLogout = (): void => {
-    console.log('Logging out...');
+    devLog('Logging out...');
     void fetch('/api/auth/logout', { method: 'POST' });
     if (typeof window !== 'undefined') {
       localStorage.removeItem('isLoggedIn');
@@ -509,7 +510,7 @@ export function AuthControl() {
   };
 
   const handleRegisterClick = (): void => {
-    console.log('Register button clicked, opening register modal...');
+    devLog('Register button clicked, opening register modal...');
     setErrorMessage('');
     setForgotMessage('');
     setIsLoginModalOpen(false);
@@ -532,7 +533,7 @@ export function AuthControl() {
   };
 
   const closeLoginModal = (): void => {
-    console.log('Closing login modal');
+    devLog('Closing login modal');
     setIsLoginModalOpen(false);
     setLoginUsername('');
     setLoginPassword('');
@@ -575,7 +576,7 @@ export function AuthControl() {
     }
   };
 
-  console.log(
+  devLog(
     'Rendering AuthControl, isLoggedIn:',
     isLoggedIn,
     'isLoginModalOpen:',

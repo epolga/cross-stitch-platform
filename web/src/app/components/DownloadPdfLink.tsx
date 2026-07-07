@@ -8,6 +8,7 @@ import {
   DownloadMode,
 } from './AuthControl';
 import { Design } from '../types/design';
+import { devLog } from '@/lib/devLog';
 //import { CreateDesignUrl } from '@/lib/url-helper';
 
 type Props = {
@@ -88,7 +89,7 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
   }, [design.PdfUrl, fallbackPdfUrl, isMissing]);
 
   useEffect(() => {
-    console.log('[DownloadPdfLink] init', {
+    devLog('[DownloadPdfLink] init', {
       designId: design.DesignID,
       albumId: design.AlbumID,
       pdfUrl: design.PdfUrl,
@@ -110,7 +111,7 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
       return;
     }
 
-    console.log('[DownloadPdfLink] handleDownload', {
+    devLog('[DownloadPdfLink] handleDownload', {
       designId: design.DesignID,
       albumId: design.AlbumID,
       resolvedPdfUrl,
@@ -358,7 +359,7 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
   const downloadLabel = 'Download PDF';
   const labelContent = <span>Download PDF</span>;
 
-  console.log(
+  devLog(
     `DownloadPdfLink: mode = ${mode}, loggedIn = ${loggedIn}, format = ${formatLabel ?? 'default'}, formatNumber = ${formatNumber ?? 'default'}, url = ${resolvedPdfUrl}`,
   );
 

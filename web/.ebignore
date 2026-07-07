@@ -3,3 +3,4 @@ node_modules/
 .gitignore
 !.next/
 !public/
+.next/cache/
