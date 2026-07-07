@@ -123,29 +123,44 @@ export const resolveDownloadMode = (): DownloadMode => {
   return normalizeDownloadMode(raw);
 };
 
+// Shared across every caller in the page — a listing page renders one
+// DownloadPdfLink per design card, and each one used to fire its own
+// independent fetch on mount (9 cards = 9 identical requests). Caching the
+// in-flight/resolved promise means the first caller fetches and everyone
+// else on the same page load reuses that result.
+let cachedDownloadModePromise: Promise<DownloadMode> | null = null;
+
 export const fetchRuntimeDownloadMode = async (): Promise<DownloadMode> => {
   if (typeof window === 'undefined') {
     return resolveDownloadMode();
   }
 
-  try {
-    const response = await fetch('/api/config/download-mode', {
-      method: 'GET',
-      cache: 'no-store',
-    });
-
-    const data: { mode?: string } | null = await response
-      .json()
-      .catch(() => null);
-
-    if (response.ok && typeof data?.mode === 'string') {
-      return normalizeDownloadMode(data.mode.toLowerCase().trim());
-    }
-  } catch (error) {
-    console.warn('Failed to fetch runtime download mode:', error);
+  if (cachedDownloadModePromise) {
+    return cachedDownloadModePromise;
   }
 
-  return resolveDownloadMode();
+  cachedDownloadModePromise = (async (): Promise<DownloadMode> => {
+    try {
+      const response = await fetch('/api/config/download-mode', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const data: { mode?: string } | null = await response
+        .json()
+        .catch(() => null);
+
+      if (response.ok && typeof data?.mode === 'string') {
+        return normalizeDownloadMode(data.mode.toLowerCase().trim());
+      }
+    } catch (error) {
+      console.warn('Failed to fetch runtime download mode:', error);
+    }
+
+    return resolveDownloadMode();
+  })();
+
+  return cachedDownloadModePromise;
 };
 
 export function AuthControl() {
