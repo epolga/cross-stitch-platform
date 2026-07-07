@@ -11,6 +11,7 @@ interface StartTrialRequestBody {
   firstName?: string;
   username?: string;
   receiveUpdates?: boolean;
+  registrationSource?: string;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -35,6 +36,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       receiveUpdates: body?.receiveUpdates,
       trialDownloadLimit: getTrialDownloadLimit(),
       trialDurationDays: getTrialDurationDays(),
+      registrationSource: body?.registrationSource,
     });
 
     if (result.outcome === 'MISSING_REGISTRATION_FIELDS') {

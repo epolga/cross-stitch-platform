@@ -31,6 +31,7 @@ export interface NewUserRegistration {
   startTrial?: boolean;
   trialDownloadLimit?: number;
   trialDurationDays?: number;
+  registrationSource?: string;
 }
 
 export interface UserSubscriptionStatus {
@@ -349,6 +350,10 @@ export async function saveUserToDynamoDB(
 
   if (username) {
     item.UserName = { S: username };
+  }
+
+  if (input.registrationSource) {
+    item.RegistrationSource = { S: input.registrationSource };
   }
 
   const params: PutItemCommandInput = {
@@ -749,6 +754,7 @@ export interface StartTrialInput {
   receiveUpdates?: boolean;
   trialDownloadLimit?: number;
   trialDurationDays?: number;
+  registrationSource?: string;
 }
 
 export type StartTrialOutcome =
@@ -872,6 +878,7 @@ export async function startTrialForEmail(
         startTrial: true,
         trialDownloadLimit: input.trialDownloadLimit,
         trialDurationDays: input.trialDurationDays,
+        registrationSource: input.registrationSource,
       });
     } catch (error) {
       if (!isConditionalCheckFailure(error)) {

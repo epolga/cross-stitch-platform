@@ -50,6 +50,7 @@ export async function POST(req: Request): Promise<Response> {
       verificationToken,
       verificationTokenExpiresAt,
       startTrial: true,
+      registrationSource: sourceInfo?.source,
     });
 
     const baseUrl = resolveBaseUrl(req);

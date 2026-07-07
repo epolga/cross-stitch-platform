@@ -17,6 +17,7 @@ interface ConfirmSubscriptionRequestBody {
   username?: string;
   subscriptionId?: string;
   receiveUpdates?: boolean;
+  registrationSource?: string;
 }
 
 function isDuplicateUserError(error: unknown): boolean {
@@ -40,6 +41,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const username = body?.username?.trim() || email.split('@')[0] || 'User';
     const subscriptionId = body?.subscriptionId?.trim() ?? '';
     const receiveUpdates = Boolean(body?.receiveUpdates);
+    const registrationSource = body?.registrationSource;
 
     if (!email || !subscriptionId) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
@@ -51,9 +53,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (password) {
       try {
         if (isLocal) {
-          await createTestUser(email, password, username, subscriptionId, receiveUpdates);
+          await createTestUser(email, password, username, subscriptionId, receiveUpdates, registrationSource);
         } else {
-          await createUser(email, password, username, subscriptionId, receiveUpdates);
+          await createUser(email, password, username, subscriptionId, receiveUpdates, registrationSource);
         }
       } catch (error) {
         if (!isDuplicateUserError(error)) {

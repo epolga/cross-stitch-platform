@@ -779,6 +779,7 @@ export function RegisterForm({
           password: isLoggedIn ? undefined : registerPassword,
           username: effectiveEmail.split('@')[0],
           receiveUpdates,
+          registrationSource: (sourceInfo ?? inferSourceInfoFromClient())?.source,
         }),
       });
 
@@ -828,6 +829,7 @@ export function RegisterForm({
           firstName: effectiveEmail.split('@')[0] || 'User',
           username: effectiveEmail.split('@')[0] || 'user',
           receiveUpdates,
+          registrationSource: (sourceInfo ?? inferSourceInfoFromClient())?.source,
         }),
       });
 
