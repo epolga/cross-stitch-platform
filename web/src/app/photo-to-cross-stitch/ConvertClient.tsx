@@ -1342,6 +1342,13 @@ export default function ConvertPage() {
                 New Pattern
               </button>
               <button
+                type="button" onClick={handleSave} disabled={!hasDesign}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                title={savedPatternId ? 'Save changes to this pattern' : 'Save this cross-stitch pattern to your free account, so you can come back and keep editing later'}
+              >
+                {savedPatternId ? '💾 Save' : '💾 Save pattern'}
+              </button>
+              <button
                 type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
                 className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
                 title={!hasDesign ? 'Import a photo first, then download as PDF' : 'Download the current pattern as a print-ready PDF'}
@@ -1350,6 +1357,9 @@ export default function ConvertPage() {
               </button>
             </div>
           </div>
+          {!savedPatternId && hasDesign && (
+            <p className="mt-1 text-xs text-gray-400">💾 Save your pattern to a free account to come back and finish editing later.</p>
+          )}
           {downloadError && <p className="mt-1 text-xs text-red-600">{downloadError}</p>}
 
           {/* Menu bar */}

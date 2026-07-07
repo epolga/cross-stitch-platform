@@ -12,7 +12,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
-  keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch',
+  keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
   alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
   robots: 'index, follow',
   openGraph: {
@@ -121,7 +121,7 @@ export default function PhotoToCrossStitchPage() {
           </p>
 
           {/* Editor feature highlights */}
-          <div className="mb-8 grid gap-2 sm:grid-cols-3">
+          <div className="mb-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
               <span className="text-lg flex-none leading-none mt-0.5">✨</span>
               <div>
@@ -141,6 +141,20 @@ export default function PhotoToCrossStitchPage() {
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Your chart on any device</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Keep the chart open on a tablet or phone propped beside your hoop. No printing, no paper to lose.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">💾</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-xs">Come back anytime</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Save your cross-stitch pattern to a free account and pick up right where you left off — no need to finish in one sitting.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">🔗</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-xs">Share with a friend</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Copy a link to your saved pattern and send it to anyone — great for showing a gift design before you stitch it.</p>
               </div>
             </div>
           </div>
