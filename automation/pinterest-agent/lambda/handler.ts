@@ -25,6 +25,7 @@ import { sendEditorDailySummary } from "../src/services/editorDailySummary";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
 import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
+import { syncBlockedIpsToWaf } from "../src/services/wafIpSync";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 
 export interface PipelineEvent {
@@ -37,6 +38,19 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
 
   console.log("[init] Pinterest token");
   await initPinterestToken();
+
+  console.log("[init] WAF auto-block IP sync");
+  try {
+    const wafResult = await syncBlockedIpsToWaf();
+    if (!wafResult.synced) {
+      console.log(`  skipped: ${wafResult.reason}`);
+    } else {
+      console.log(`  synced ${wafResult.activeIpCount} active blocked IP(s)`);
+    }
+  } catch (err) {
+    // Non-critical: don't let a WAF hiccup take down the daily business report.
+    console.error("  WAF sync failed:", err instanceof Error ? err.message : err);
+  }
 
   console.log("[1/14] daily business report");
   await runDailyReport(dateStr);

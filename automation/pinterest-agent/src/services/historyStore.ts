@@ -28,7 +28,8 @@ export type EntityType =
   | "PROMOTED_AD_STATS"
   | "LANDING_PAGE_STATS"
   | "PIN_ATTRIBUTION"
-  | "PINTEREST_TOKEN";
+  | "PINTEREST_TOKEN"
+  | "BLOCKED_IP";
 
 export type AnalysisType = "trend" | "design";
 
@@ -56,6 +57,7 @@ export const sortKey = {
   promotedAdStats: (date: string, adId: string) => `${date}#${adId}`,
   landingPageStats: (date: string, page: string) => `${date}#${page}`,
   pinAttribution: (date: string, adId: string) => `${date}#${adId}`,
+  blockedIp: (ip: string) => ip,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -374,6 +376,41 @@ export async function batchPutPinAttribution(inputs: PinAttributionInput[]): Pro
       ...input,
       writtenAt: now,
     }))
+  );
+}
+
+export interface BlockedIpInput {
+  ip: string; // IPv4 address, no CIDR suffix (the /32 is added at WAF-sync time)
+  reason: string;
+  blockedAt?: string; // defaults to now
+  ttlDays?: number; // defaults to 30; DDB expires the row after this, which
+  // un-blocks the IP on the next WAF sync since it drops out of the query.
+}
+
+export interface BlockedIpRecord {
+  EntityType: "BLOCKED_IP";
+  SortKey: string; // the IP address
+  ip: string;
+  reason: string;
+  blockedAt: string;
+  ttl: number; // epoch seconds; DDB's native TTL attribute for this table
+}
+
+export async function putBlockedIp(input: BlockedIpInput): Promise<void> {
+  const { ip, reason, blockedAt = new Date().toISOString(), ttlDays = 30 } = input;
+  const ttl = Math.floor(Date.now() / 1000) + ttlDays * 86400;
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        EntityType: "BLOCKED_IP",
+        SortKey: sortKey.blockedIp(ip),
+        ip,
+        reason,
+        blockedAt,
+        ttl,
+      },
+    })
   );
 }
 

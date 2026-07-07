@@ -32,6 +32,7 @@
     "similar": "tsx scripts/compute-similar-designs.ts",
     "check-images": "tsx scripts/check-missing-images.ts",
     "search-analytics": "tsx scripts/search-analytics.ts",
+    "block-ip": "tsx scripts/block-ip.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
@@ -45,6 +46,7 @@
     "@aws-sdk/client-iam": "^3.1053.0",
     "@aws-sdk/client-s3": "^3.1051.0",
     "@aws-sdk/client-sesv2": "^3.1053.0",
+    "@aws-sdk/client-wafv2": "^3.1080.0",
     "@aws-sdk/lib-dynamodb": "^3.1051.0",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0",

@@ -24,16 +24,14 @@ Write-Host "Checking IAM role $ROLE_NAME..." -ForegroundColor Cyan
 $roleCheckOut = (aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text 2>&1)
 $roleExists   = ($LASTEXITCODE -eq 0)
 
+# Write policies to temp files without BOM — PowerShell 5.1 -Encoding utf8 adds a BOM that
+# breaks AWS CLI JSON parsing; [System.IO.File]::WriteAllText writes plain UTF-8.
+$tmpDir = [System.IO.Path]::GetTempPath()
+$toFile = { param($path, $content) [System.IO.File]::WriteAllText($path, $content) }
+$acctId  = (aws sts get-caller-identity --query Account --output text)
+
 if (-not $roleExists) {
     Write-Host "  Creating role..." -ForegroundColor Yellow
-
-    # Write policies to temp files — PowerShell 5.1 mangles inline JSON with braces when passed to native exes
-    $tmpDir = [System.IO.Path]::GetTempPath()
-
-    # Write policies to temp files without BOM — PowerShell 5.1 -Encoding utf8 adds a BOM that
-    # breaks AWS CLI JSON parsing; [System.IO.File]::WriteAllText writes plain UTF-8.
-    $tmpDir = [System.IO.Path]::GetTempPath()
-    $toFile = { param($path, $content) [System.IO.File]::WriteAllText($path, $content) }
 
     $trustFile = Join-Path $tmpDir "trust.json"
     & $toFile $trustFile '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
@@ -49,7 +47,6 @@ if (-not $roleExists) {
         --policy-arn "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole" | Out-Null
 
     # DynamoDB
-    $acctId  = (aws sts get-caller-identity --query Account --output text)
     $ddbArn1 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchBusinessHistory"
     $ddbArn2 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchItems"
     $ddbArn3 = "arn:aws:dynamodb:${REGION}:${acctId}:table/CrossStitchItems/index/*"
@@ -76,6 +73,21 @@ if (-not $roleExists) {
 
 $roleArn = (aws iam get-role --role-name $ROLE_NAME --query "Role.Arn" --output text)
 Write-Host "  Role ARN: $roleArn" -ForegroundColor Green
+
+# WAF: ensure the role can sync the AutoBlockedIPs IP set. Runs on every
+# deploy (not just role creation) so a role created before this feature
+# existed still picks up the permission.
+$wafQuery = "IPSets[?Name=='AutoBlockedIPs'].ARN | [0]"
+$autoBlockIpSetArn = (aws wafv2 list-ip-sets --scope REGIONAL --region $REGION --query $wafQuery --output text)
+if ($autoBlockIpSetArn -and $autoBlockIpSetArn -ne "None") {
+    $wafFile = Join-Path $tmpDir "policy-waf.json"
+    & $toFile $wafFile "{`"Version`":`"2012-10-17`",`"Statement`":[{`"Effect`":`"Allow`",`"Action`":[`"wafv2:GetIPSet`",`"wafv2:UpdateIPSet`"],`"Resource`":`"$autoBlockIpSetArn`"}]}"
+    $wafUri = "file://" + $wafFile.Replace("\", "/")
+    aws iam put-role-policy --role-name $ROLE_NAME --policy-name "CrossStitchWAF" --policy-document $wafUri | Out-Null
+    Write-Host "  WAF policy attached ($autoBlockIpSetArn)" -ForegroundColor Green
+} else {
+    Write-Host "  WARNING: AutoBlockedIPs IP set not found, WAF sync step will be skipped at runtime." -ForegroundColor Yellow
+}
 
 # ── 3. Zip the bundle ─────────────────────────────────────────────────────────
 Write-Host "Zipping bundle..." -ForegroundColor Cyan
