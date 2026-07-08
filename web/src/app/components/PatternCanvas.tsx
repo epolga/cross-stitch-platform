@@ -207,6 +207,13 @@ function constrainToSquare(r0: number, c0: number, r1: number, c1: number): [num
   return [r0 + Math.sign(dr) * side, c0 + Math.sign(dc) * side];
 }
 
+// Same constraint, in raw pixel space — for the free-angle shape preview during drag
+function constrainToSquarePx(x0: number, y0: number, x1: number, y1: number): [number, number] {
+  const dx = x1 - x0, dy = y1 - y0;
+  const side = Math.min(Math.abs(dx), Math.abs(dy));
+  return [x0 + Math.sign(dx) * side, y0 + Math.sign(dy) * side];
+}
+
 function shapeCells(
   mode: DrawMode,
   r0: number, c0: number, r1: number, c1: number,
@@ -276,6 +283,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const drawing     = useRef(false);
   const startCell   = useRef<[number, number] | null>(null);
   const previewRef  = useRef<[number, number][]>([]);
+  const rawShapeRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const lastPxRef   = useRef<[number, number] | null>(null); // last raw (unconstrained) cursor px during shape drag
 
   // Simulation mode assets
   const aidaCellCache   = useRef<{ cs: number; dpr: number; canvas: HTMLCanvasElement } | null>(null);
@@ -572,6 +581,31 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       ctx.setLineDash([]);
     }
 
+    // Raw pixel-precise shape preview (during line/rect/ellipse drag) — follows the
+    // actual cursor position instead of the grid-snapped staircase, snapping to
+    // cells only once the mouse is released.
+    const rawShape = rawShapeRef.current;
+    if (rawShape) {
+      const { x0, y0, x1, y1 } = rawShape;
+      const dm = drawModeRef.current;
+      ctx.save();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1;
+      if (dm === 'rect' || dm === 'rect-fill') {
+        ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+      } else if (dm === 'ellipse' || dm === 'ellipse-fill') {
+        ctx.beginPath();
+        ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, Math.abs(x1 - x0) / 2, Math.abs(y1 - y0) / 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Preview cells (ghost overlay for shape drawing)
     const preview = previewRef.current;
     if (preview.length > 0) {
@@ -622,12 +656,13 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       if (e.key !== 'Shift') return;
       shiftRef.current = e.type === 'keydown';
       const dm = drawModeRef.current;
-      if (!drawing.current || !startCell.current || !lastCellRef.current) return;
+      if (!drawing.current || !rawShapeRef.current || !lastPxRef.current) return;
       if (dm === 'point' || dm === 'line') return;
-      const [r0, c0] = startCell.current;
-      let [r1, c1] = lastCellRef.current;
-      if (shiftRef.current) [r1, c1] = constrainToSquare(r0, c0, r1, c1);
-      previewRef.current = expandCells(shapeCells(dm, r0, c0, r1, c1), penWidthRef.current);
+      const { x0, y0 } = rawShapeRef.current;
+      const [rawPx, rawPy] = lastPxRef.current;
+      let [x1, y1] = [rawPx, rawPy];
+      if (shiftRef.current) [x1, y1] = constrainToSquarePx(x0, y0, rawPx, rawPy);
+      rawShapeRef.current = { x0, y0, x1, y1 };
       draw();
     };
     window.addEventListener('keydown', onKey);
@@ -674,6 +709,15 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       ctx.fillStyle = col ? `rgb(${col.r},${col.g},${col.b})` : '#fff';
       ctx.fillRect(c * cs + ML, r * cs + MT, cs, cs);
     }
+  }
+
+  // Raw cursor position in canvas CSS-pixel coordinates (not snapped to a cell) —
+  // used for the free-angle line preview during a 'line' tool drag.
+  function pxAt(e: React.MouseEvent<HTMLCanvasElement>): [number, number] {
+    const canvas = canvasRef.current;
+    if (!canvas) return [0, 0];
+    const rect = canvas.getBoundingClientRect();
+    return [e.clientX - rect.left, e.clientY - rect.top];
   }
 
   function cellAt(e: React.MouseEvent<HTMLCanvasElement>): [number, number] | null {
@@ -730,10 +774,13 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         for (const [r, c] of painted) onPaint?.(r, c);
       }
     } else {
-      // Shape tool — record start, show preview
+      // Shape tool (line/rect/ellipse) — record start, show raw pixel-precise preview
       drawing.current = true;
       startCell.current = cell;
-      previewRef.current = expandCells([cell], penWidthRef.current);
+      const [px, py] = pxAt(e);
+      rawShapeRef.current = { x0: px, y0: py, x1: px, y1: py };
+      lastPxRef.current = [px, py];
+      previewRef.current = [];
       draw();
     }
   }
@@ -774,12 +821,15 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         directPaint(painted);
         for (const [r, c] of painted) onPaint?.(r, c);
       }
-    } else if (startCell.current) {
+    } else if (startCell.current && rawShapeRef.current) {
       lastCellRef.current = cell;
-      const [r0, c0] = startCell.current;
-      let [r1, c1]: [number, number] = [cell[0], cell[1]];
-      if (e.shiftKey && drawMode !== 'line') [r1, c1] = constrainToSquare(r0, c0, r1, c1);
-      previewRef.current = expandCells(shapeCells(drawMode, r0, c0, r1, c1), penWidthRef.current);
+      const [rawPx, rawPy] = pxAt(e);
+      lastPxRef.current = [rawPx, rawPy];
+      let [x1, y1] = [rawPx, rawPy];
+      if (e.shiftKey && drawMode !== 'line') {
+        [x1, y1] = constrainToSquarePx(rawShapeRef.current.x0, rawShapeRef.current.y0, rawPx, rawPy);
+      }
+      rawShapeRef.current = { ...rawShapeRef.current, x1, y1 };
       draw();
     }
   }
@@ -806,6 +856,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       if (e.shiftKey && drawMode !== 'line') [r1, c1] = constrainToSquare(r0, c0, r1, c1);
       const cells = expandCells(shapeCells(drawMode, r0, c0, r1, c1), penWidthRef.current);
       previewRef.current = [];
+      rawShapeRef.current = null;
+      lastPxRef.current = null;
       startCell.current = null;
       lastCellRef.current = null;
       onShapePaint?.(cells);
@@ -841,6 +893,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
     if (drawMode !== 'point') {
       drawing.current = false;
       previewRef.current = [];
+      rawShapeRef.current = null;
+      lastPxRef.current = null;
       startCell.current = null;
       lastCellRef.current = null;
       draw();
