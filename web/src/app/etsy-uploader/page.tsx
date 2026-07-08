@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   alternates: {
     canonical: canonicalUrl,
   },
-  robots: 'index, follow',
+  robots: 'noindex, follow',
 };
 
 export default function EtsyUploaderPage() {

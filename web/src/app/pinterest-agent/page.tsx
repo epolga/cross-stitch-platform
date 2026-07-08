@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Cross Stitch Pinterest Agent | Cross Stitch Pattern',
   description:
     'Cross Stitch Pinterest Agent — internal analytics and reporting tool for cross-stitch.com.',
-  robots: 'index, follow',
+  robots: 'noindex, follow',
 };
 
 const supportEmail = buildSiteEmail('ann');
