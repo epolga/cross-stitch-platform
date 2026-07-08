@@ -1,49 +1,37 @@
 [Subject]
-Would you help me test something I've been working on?
+You spoke, I listened — here's what changed
 
 [Greeting]
 Hi [FName],
 
 [Body1]
-For the past several months I've been working on something I've wanted to build for a long time.
+A little while back, I asked some of my friends — the people who already know my work — to try the new pattern editor and tell me, honestly, what felt off.
 
-Many of you have downloaded patterns from my website, and over the years I've received countless emails with ideas, questions and suggestions. They all pointed to the same thing: people don't just want patterns — they want to make them their own.
+You did. And I want you to know I read every single word.
 
-So I decided to build a cross-stitch editor.
+Since then, thanks entirely to what you told me, I've fixed:
 
-It's finally ready for its first real users.
+Drawing a diagonal line now follows your mouse at a real angle instead of stair-stepping — no more fighting the grid just to draw a simple line.
+
+Dragging a photo straight out of Google (or almost any other site) into the editor now actually works — before, it silently did nothing.
+
+The Save and Download buttons no longer overlap on a phone screen — a small thing, but I know it was blocking real work.
+
+Saved patterns now remember exactly which colors you had hidden, so picking up where you left off actually works the way it should.
 
 [EditorLink]
-👉 Try it here: <editor_url>
+👉 Come see it for yourself: <editor_url>
+
+📋 Full list of what changed: <changelog_url>
 
 [Body2]
-Before I tell the wider cross-stitch community about it, I'd much rather hear from people who already know my work.
+None of this happened because I guessed what to fix. It happened because you told me.
 
-Would you be willing to spend just 5–10 minutes trying it?
+So please — keep telling me. If something still feels clunky, confusing, or just wrong, I want to hear about it. And if you have an idea, however small or however wild it sounds, I want that too.
 
-I don't need praise.
+You can leave a note through the feedback button inside the editor, or just hit Reply — I read every message myself.
 
-What I really need is honesty.
-
-Was anything confusing?
-Did something not work the way you expected?
-Was there a feature you immediately wished existed?
-
-If you find yourself thinking, "I wish I could...", please tell me. Those are exactly the ideas that will shape the next version of the editor.
-
-And one more thing...
-
-Please don't worry about whether your idea sounds realistic or impossible. If there's something you've always wished a cross-stitch editor could do, tell me anyway.
-
-Don't limit your imagination. Let me worry about how (or whether!) it can be built. Sometimes the best ideas sound impossible at first.
-
-You can submit suggestions directly through the feedback button inside the editor, or simply reply to this email if you'd rather tell me in your own words. I read every message personally.
-
-This editor is still at the beginning of its journey, and your feedback can genuinely influence where it goes next.
-
-Thank you for being part of this community and for supporting my work over the years.
-
-It truly means a lot.
+Thank you for being the kind of friend who tells me the truth instead of just being polite about it. It's made this editor genuinely better.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:

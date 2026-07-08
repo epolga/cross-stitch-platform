@@ -2008,7 +2008,8 @@ namespace Uploader
         private async Task<List<UserRecipient>> FetchAllUserEmailsAsync(
             bool onlyVerified = false,
             bool onlySubscribed = false,
-            DateTime? minLastEmailEntryOrVerifiedAtUtc = null)
+            DateTime? minLastEmailEntryOrVerifiedAtUtc = null,
+            DateTime? minLastSeenAtUtc = null)
         {
             string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
             string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
@@ -2021,6 +2022,7 @@ namespace Uploader
             const string unsubscribeTokenAttribute = "UnsubscribeToken";
             const string lastEmailEntryAttribute = "LastEmailEntry";
             const string verifiedAtAttribute = "VerifiedAt";
+            const string lastSeenAtAttribute = "LastSeenAt";
 
             var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var recipients = new List<UserRecipient>();
@@ -2043,6 +2045,8 @@ namespace Uploader
                     projectionParts.Add(verifiedAttribute);
                 if (onlySubscribed)
                     projectionParts.Add(unsubscribedAttribute);
+                if (minLastSeenAtUtc.HasValue)
+                    projectionParts.Add(lastSeenAtAttribute);
 
                 var scanRequest = new ScanRequest
                 {
@@ -2140,6 +2144,17 @@ namespace Uploader
 
                         if (minLastEmailEntryOrVerifiedAtUtc.HasValue &&
                             !MatchesRecentEmailRecipientWindow(item, minLastEmailEntryOrVerifiedAtUtc.Value))
+                        {
+                            continue;
+                        }
+
+                        // Recent-site-visit filter — separate from the email/verification
+                        // recency above. Used to avoid mailing people who registered once
+                        // and never came back; a missing/unparseable LastSeenAt is treated
+                        // as "not recently active" and excluded when this filter is on.
+                        if (minLastSeenAtUtc.HasValue &&
+                            !(TryGetDateTimeAttributeUtc(item, lastSeenAtAttribute, out DateTime lastSeenAtUtc) &&
+                              lastSeenAtUtc >= minLastSeenAtUtc.Value))
                         {
                             continue;
                         }
@@ -2412,6 +2427,7 @@ namespace Uploader
                 return;
 
             string editorUrl      = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
+            string changelogUrl   = $"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
             string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
 
             RenderedEmailContent content = RenderAnnouncementEmailContent(
@@ -2420,7 +2436,8 @@ namespace Uploader
                 "Ann",
                 editorUrl,
                 _linkHelper.SiteBaseUrl,
-                unsubscribeUrl);
+                unsubscribeUrl,
+                changelogUrl);
 
             await _emailHelper.SendEmailAsync(
                 _sesClient,
@@ -2447,15 +2464,20 @@ namespace Uploader
             if (string.IsNullOrEmpty(sender))
                 return;
 
+            // Only mail people who've actually visited in the last 3 months — skip
+            // accounts that registered once and never came back (Olga, 2026-07-08).
+            DateTime recentVisitCutoffUtc = DateTime.UtcNow.AddMonths(-3);
+
             var recipients = await FetchAllUserEmailsAsync(
                     onlyVerified: true,
                     onlySubscribed: true,
-                    minLastEmailEntryOrVerifiedAtUtc: null)
+                    minLastEmailEntryOrVerifiedAtUtc: null,
+                    minLastSeenAtUtc: recentVisitCutoffUtc)
                 .ConfigureAwait(false);
 
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                txtStatus.Text += $"[Announcement] Found {recipients.Count} eligible recipients.\r\n";
+                txtStatus.Text += $"[Announcement] Found {recipients.Count} eligible recipients (visited since {recentVisitCutoffUtc:yyyy-MM-dd}).\r\n";
             }));
 
             List<UserRecipient> eligibleRecipients = recipients
@@ -2481,6 +2503,7 @@ namespace Uploader
             }
 
             string editorUrl = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
+            string changelogUrl = $"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
             int sent = 0;
             int total = eligibleRecipients.Count;
             var stopwatch = Stopwatch.StartNew();
@@ -2496,7 +2519,8 @@ namespace Uploader
                     recipient.FirstName,
                     editorUrl,
                     _linkHelper.SiteBaseUrl,
-                    unsubscribeUrl);
+                    unsubscribeUrl,
+                    changelogUrl);
 
                 await _emailHelper.SendEmailAsync(
                     _sesClient,
@@ -3220,10 +3244,12 @@ namespace Uploader
             string? firstName,
             string editorUrl,
             string? siteUrl,
-            string? unsubscribeUrl)
+            string? unsubscribeUrl,
+            string? changelogUrl = null)
         {
             Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
             replacements["<editor_url>"] = editorUrl;
+            replacements["<changelog_url>"] = changelogUrl ?? string.Empty;
             replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
 
             string subject    = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Subject"),    replacements);
@@ -3244,6 +3270,7 @@ namespace Uploader
 
             Dictionary<string, string> textReplacements = CreateCommonTemplateReplacements(firstName);
             textReplacements["<editor_url>"] = editorUrl;
+            textReplacements["<changelog_url>"] = changelogUrl ?? string.Empty;
             textReplacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
 
             string tGreeting    = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Greeting"),   textReplacements);
@@ -4279,7 +4306,7 @@ namespace Uploader
         private async void BtnSendAnnouncementEmails_Click(object sender, RoutedEventArgs e)
         {
             var result = MessageBox.Show(
-                "This will send the announcement email to ALL verified, non-unsubscribed users.\n\nAre you sure?",
+                "This will send the announcement email to verified, non-unsubscribed users who visited the site in the last 3 months.\n\nAre you sure?",
                 "Send Announcement",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -4287,7 +4314,7 @@ namespace Uploader
             if (result != MessageBoxResult.Yes)
                 return;
 
-            txtStatus.Text += "[Announcement] Starting send to all users...\r\n";
+            txtStatus.Text += "[Announcement] Starting send to recently active users...\r\n";
             try
             {
                 await SendAnnouncementEmailsAsync().ConfigureAwait(false);
