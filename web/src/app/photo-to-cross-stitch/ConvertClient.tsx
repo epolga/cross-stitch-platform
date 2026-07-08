@@ -1733,7 +1733,28 @@ export default function ConvertPage() {
                 if (file?.type.startsWith('image/')) {
                   setImportInitialFile(file);
                   setShowImportDialog(true);
+                  return;
                 }
+                // Dragging an image out of another site (e.g. Google Photos) hands
+                // over a URL, not file bytes — the browser never downloads it for a
+                // cross-origin drag. Fetch it through our proxy instead.
+                const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                if (!/^https?:\/\//i.test(url)) return;
+                setPatternLoadError('');
+                setPatternLoading(true);
+                fetch(`/api/import-image-url?url=${encodeURIComponent(url)}`)
+                  .then(res => {
+                    if (!res.ok) throw new Error('fetch failed');
+                    return res.blob();
+                  })
+                  .then(blob => {
+                    setImportInitialFile(new File([blob], 'imported-photo.jpg', { type: blob.type || 'image/jpeg' }));
+                    setShowImportDialog(true);
+                  })
+                  .catch(() => {
+                    setPatternLoadError("Couldn't import that image — try saving it to your device first, then use Upload Your Photo.");
+                  })
+                  .finally(() => setPatternLoading(false));
               }}
             >
               {!hasDesign && (
