@@ -1268,7 +1268,7 @@ export default function ConvertPage() {
       <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
 
           {/* Header */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-gray-900">Cross-Stitch Pattern Editor</h2>
@@ -1306,7 +1306,7 @@ export default function ConvertPage() {
                 <span>· {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
                 <button
                   type="button"
