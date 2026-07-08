@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getDesignById, incrementDesignDownloadCount } from '@/lib/data-access';
+import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
+
+// Rate limit: 20 increments per IP per minute. NDownloaded is unauthenticated
+// (fired fire-and-forget by DownloadPdfLink on click, no login required) and
+// is shown publicly on design pages ("Downloaded N times") — a bot with a
+// fake account was found inflating it across many designs with plain POSTs.
+const isRateLimited = createRateLimiter(60_000, 20);
+
 export async function GET(request: Request, { params }: { params: Promise<{ designId: string }> }) {
   const { designId } = await params;
 
@@ -30,6 +38,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ desi
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ designId: string }> }) {
+  if (isRateLimited(getClientIp(request))) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
   const { designId } = await params;
 
   try {
