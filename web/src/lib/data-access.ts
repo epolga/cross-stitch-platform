@@ -80,6 +80,10 @@ async function verifyUserInSecondaryTable(
     for (const item of Items) {
       const dbEmail = item.Email?.S?.trim().toLowerCase();
       if (dbEmail === normalizedEmail) {
+        if (item.BotSuspect?.BOOL) {
+          devLog('User found in secondary table but flagged BotSuspect — login blocked');
+          return null;
+        }
         devLog('User found in secondary table (case-insensitive match)');
         return {
           userId: item.cid?.S ?? item.ID?.S ?? normalizedEmail,

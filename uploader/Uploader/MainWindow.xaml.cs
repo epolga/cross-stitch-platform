@@ -2017,6 +2017,7 @@ namespace Uploader
             string userCidAttribute = ConfigurationManager.AppSettings["UserCidAttribute"] ?? "cid";
             string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
             string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+            string botSuspectAttribute = ConfigurationManager.AppSettings["UserBotSuspectAttribute"] ?? "BotSuspect";
             const string unsubscribeTokenAttribute = "UnsubscribeToken";
             const string lastEmailEntryAttribute = "LastEmailEntry";
             const string verifiedAtAttribute = "VerifiedAt";
@@ -2034,7 +2035,8 @@ namespace Uploader
                     userCidAttribute,
                     unsubscribeTokenAttribute,
                     lastEmailEntryAttribute,
-                    verifiedAtAttribute
+                    verifiedAtAttribute,
+                    botSuspectAttribute
                 };
 
                 if (onlyVerified)
@@ -2112,6 +2114,13 @@ namespace Uploader
                         {
                             cid = cidAttr.S.Trim();
                         }
+
+                        // Always excluded, regardless of onlyVerified/onlySubscribed — a
+                        // flagged account should never receive mail, in any send flow.
+                        bool isBotSuspect = item.TryGetValue(botSuspectAttribute, out var botSuspectAttr) &&
+                                           botSuspectAttr.BOOL;
+                        if (isBotSuspect)
+                            continue;
 
                         if (onlyVerified)
                         {
@@ -2216,6 +2225,7 @@ namespace Uploader
             string userCidAttribute = ConfigurationManager.AppSettings["UserCidAttribute"] ?? "cid";
             string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
             string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+            string botSuspectAttribute = ConfigurationManager.AppSettings["UserBotSuspectAttribute"] ?? "BotSuspect";
             const string unsubscribeTokenAttribute = "UnsubscribeToken";
 
             var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2231,7 +2241,7 @@ namespace Uploader
                     {
                         { ":userPrefix", new AttributeValue { S = "USR#" } }
                     },
-                    ProjectionExpression = $"{emailAttribute}, {firstNameAttribute}, {userIdAttribute}, {userCidAttribute}, {unsubscribeTokenAttribute}"
+                    ProjectionExpression = $"{emailAttribute}, {firstNameAttribute}, {userIdAttribute}, {userCidAttribute}, {unsubscribeTokenAttribute}, {botSuspectAttribute}"
                 };
 
                 Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
@@ -2296,6 +2306,11 @@ namespace Uploader
                         {
                             cid = cidAttr.S.Trim();
                         }
+
+                        bool isBotSuspect = item.TryGetValue(botSuspectAttribute, out var botSuspectAttr) &&
+                                           botSuspectAttr.BOOL;
+                        if (isBotSuspect)
+                            continue;
 
                         if (onlyVerified)
                         {

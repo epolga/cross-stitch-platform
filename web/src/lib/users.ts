@@ -391,6 +391,85 @@ export type UnsubscribeResult =
 /**
  * Fetch a verified user by cid (secondary users table).
  */
+/**
+ * Flag a user record as a suspected bot/fraud account by email. Checked at
+ * login (both password login and the email-link login) to block access
+ * without needing to also chase down every IP the account might log in
+ * from next — blocking the IP alone doesn't stop a bot that gets a new
+ * residential IP but keeps using the same already-verified account.
+ */
+export async function flagUserAsBotSuspect(email: string, reason: string): Promise<void> {
+  const tableName = USERS_TABLE_NAME;
+  if (!tableName) {
+    console.warn('DDB_USERS_TABLE not set; cannot flag bot suspect');
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    console.warn('Empty email provided; skipping bot-suspect flag');
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const primaryId = `USR#${normalizedEmail}`;
+  const updateParams: UpdateItemCommandInput = {
+    TableName: tableName,
+    Key: { ID: { S: primaryId } },
+    UpdateExpression: 'SET BotSuspect = :true, BotSuspectReason = :reason, BotSuspectAt = :now',
+    ExpressionAttributeValues: {
+      ':true': { BOOL: true },
+      ':reason': { S: reason },
+      ':now': { S: nowIso },
+    },
+    ConditionExpression: 'attribute_exists(ID)',
+  };
+
+  try {
+    await client.send(new UpdateItemCommand(updateParams));
+    return;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const errorName = error instanceof Error ? error.name : '';
+    if (
+      errorName !== 'ConditionalCheckFailedException' &&
+      !message.includes('ConditionalCheckFailed') &&
+      !message.includes('The conditional request failed')
+    ) {
+      console.error('Error flagging bot suspect:', error);
+      return;
+    }
+  }
+
+  // Fallback: ID doesn't follow the USR#{email} convention — scan by Email.
+  const scanParams: ScanCommandInput = {
+    TableName: tableName,
+    FilterExpression: '#email = :email',
+    ExpressionAttributeNames: { '#email': 'Email' },
+    ExpressionAttributeValues: { ':email': { S: normalizedEmail } },
+    ProjectionExpression: 'ID',
+    Limit: 100,
+  };
+  const { Items } = await client.send(new ScanCommand(scanParams));
+  const id = Items?.[0]?.ID?.S;
+  if (!id) {
+    console.warn(`No user found for email ${normalizedEmail}; could not flag bot suspect`);
+    return;
+  }
+  await client.send(
+    new UpdateItemCommand({
+      TableName: tableName,
+      Key: { ID: { S: id } },
+      UpdateExpression: 'SET BotSuspect = :true, BotSuspectReason = :reason, BotSuspectAt = :now',
+      ExpressionAttributeValues: {
+        ':true': { BOOL: true },
+        ':reason': { S: reason },
+        ':now': { S: nowIso },
+      },
+    }),
+  );
+}
+
 export async function getVerifiedUserByCid(
   cid: string,
 ): Promise<{ id: string; email?: string; firstName?: string } | null> {
@@ -408,7 +487,7 @@ export async function getVerifiedUserByCid(
     FilterExpression: '#cid = :cid',
     ExpressionAttributeNames: { '#cid': 'cid' },
     ExpressionAttributeValues: { ':cid': { S: trimmedCid } },
-    ProjectionExpression: 'ID, Email, FirstName, Verified, VerifiedAt',
+    ProjectionExpression: 'ID, Email, FirstName, Verified, VerifiedAt, BotSuspect',
   };
 
   let lastEvaluatedKey: Record<string, AttributeValue> | undefined;
@@ -419,6 +498,7 @@ export async function getVerifiedUserByCid(
         firstName?: string;
         verified?: boolean;
         verifiedAt?: string;
+        botSuspect?: boolean;
       }
     | null = null;
 
@@ -434,6 +514,7 @@ export async function getVerifiedUserByCid(
         firstName: found.FirstName?.S,
         verified: found.Verified?.BOOL,
         verifiedAt: found.VerifiedAt?.S,
+        botSuspect: found.BotSuspect?.BOOL,
       };
       break;
     }
@@ -441,6 +522,7 @@ export async function getVerifiedUserByCid(
   } while (lastEvaluatedKey);
 
   if (!match) return null;
+  if (match.botSuspect) return null;
   if (match.verified || (match.verifiedAt && match.verifiedAt.length > 0)) {
     return { id: match.id, email: match.email, firstName: match.firstName };
   }
