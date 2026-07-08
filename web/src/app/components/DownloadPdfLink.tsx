@@ -43,6 +43,11 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
   const [referrerBypass, setReferrerBypass] = useState(false);
   const [isCheckingPaidAccess, setIsCheckingPaidAccess] = useState(false);
   const [accessFeedback, setAccessFeedback] = useState('');
+  // Give the click a visible reaction — without it, users can't tell the
+  // click registered and re-click several times in a row (each one still
+  // hits the download-count endpoint), mistaking a working button for a
+  // stuck one.
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [mode, setMode] = useState<DownloadMode>(() => resolveDownloadMode());
 
@@ -118,6 +123,9 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
       formatLabel,
       formatNumber,
     });
+
+    setIsDownloading(true);
+    window.setTimeout(() => setIsDownloading(false), 1500);
 
     recordDownload();
     if (typeof window !== 'undefined') {
@@ -357,7 +365,7 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
   }
 
   const downloadLabel = 'Download PDF';
-  const labelContent = <span>Download PDF</span>;
+  const labelContent = <span>{isDownloading ? 'Downloading…' : 'Download PDF'}</span>;
 
   devLog(
     `DownloadPdfLink: mode = ${mode}, loggedIn = ${loggedIn}, format = ${formatLabel ?? 'default'}, formatNumber = ${formatNumber ?? 'default'}, url = ${resolvedPdfUrl}`,
@@ -371,7 +379,8 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
       <button
         type="button"
         onClick={handleDownload}
-        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer'}
+        disabled={isDownloading}
+        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer disabled:opacity-60 disabled:cursor-default'}
         aria-label={downloadLabel}
       >
         {labelContent}
@@ -387,7 +396,8 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
       <button
         type="button"
         onClick={handleDownload}
-        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer'}
+        disabled={isDownloading}
+        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer disabled:opacity-60 disabled:cursor-default'}
         aria-label={downloadLabel}
       >
         {labelContent}
@@ -411,10 +421,10 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
         onClick={() => {
           void handlePaidClick();
         }}
-        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer'}
+        className={className ?? 'inline-block text-gray-600 text-sm leading-tight underline cursor-pointer disabled:opacity-60 disabled:cursor-default'}
         aria-label={loggedIn ? 'Open subscription checkout' : 'Review download plans'}
         type="button"
-        disabled={isCheckingPaidAccess}
+        disabled={isCheckingPaidAccess || isDownloading}
       >
         {labelContent}
       </button>
