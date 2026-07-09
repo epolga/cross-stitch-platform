@@ -99,7 +99,9 @@ devLog("Generating metadata for designId:", designId);
     design.NDownloaded ? `${design.NDownloaded} downloads` : null,
   ].filter(Boolean);
 
-  const baseTitle = `${design.Caption} (Design ${designId}) - Free Cross-Stitch Pattern`;
+  const baseTitle = design.SeoTitle
+    ? `${design.SeoTitle} - Free Cross-Stitch Pattern`
+    : `${design.Caption} (Design ${designId}) - Free Cross-Stitch Pattern`;
   const fallbackDescription = design.Description
     ? `${design.Description} (Design ${designId}${featureParts.length ? ` · ${featureParts.join(' · ')}` : ''})`
     : `Free cross-stitch pattern ${design.Caption} (Design ${designId})${featureParts.length ? ` with ${featureParts.join(' · ')}` : ''}.`;
@@ -211,7 +213,7 @@ export default async function DesignPage({ params }: Props) {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CreativeWork",
-    "name": `${design.Caption} - Free Cross-Stitch Pattern`,
+    "name": design.SeoTitle ? `${design.SeoTitle} - Free Cross-Stitch Pattern` : `${design.Caption} - Free Cross-Stitch Pattern`,
     "description": jsonLdDescription,
     "image": toAbsoluteUrl(design.ImageUrl) || DEFAULT_OG_IMAGE,
     "url": buildCanonicalUrl(CreateDesignUrl(design)),
@@ -223,7 +225,7 @@ export default async function DesignPage({ params }: Props) {
   return (
     <div className="container mx-auto p-4">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <h1 className="text-center text-3xl font-bold mb-6">{design.Caption}</h1>
+      <h1 className="text-center text-3xl font-bold mb-6">{design.SeoTitle || design.Caption}</h1>
       <div className="max-w-3xl mx-auto md:max-w-none">
         <div className="border border-gray-500 rounded-lg shadow hover:shadow-lg p-5 text-center
                         md:grid md:grid-cols-[3fr_2fr] md:gap-8 md:p-8 md:items-start md:text-left">

@@ -18,6 +18,7 @@ export interface Design {
     PinterestPinUrl?: string | null;
     NGlobalPage: number;
     SeoDescription?: string;
+    SeoTitle?: string;
     // Computed facets — derived at cache load, not stored in DDB
     subject?: string;
     orientation?: 'portrait' | 'landscape' | 'square';

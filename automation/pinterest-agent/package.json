@@ -25,6 +25,7 @@
     "pin-trend": "tsx scripts/pin-trend-report.ts",
     "gsc": "tsx scripts/gsc-report.ts",
     "seo:backfill": "tsx scripts/backfill-seo-description.ts",
+    "seo:visual": "tsx scripts/backfill-visual-seo.ts",
     "seo:backfill-albums": "tsx scripts/backfill-album-seo-description.ts",
     "setup-token": "tsx scripts/get-google-refresh-token.ts",
     "seed-pinterest-token": "tsx scripts/seed-pinterest-token.ts",
