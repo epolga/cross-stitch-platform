@@ -24,7 +24,7 @@ interface LandingPageRow {
 
 interface DailyBusinessRow {
   adsenseRevenue: number;
-  ga4Sessions: number;
+  ga4TotalAllSessions?: number;
   usdIlsRate?: number;
 }
 
@@ -54,13 +54,20 @@ export async function run(dateStr?: string): Promise<void> {
     console.log(`  no DAILY_BUSINESS row for ${date}`);
     return;
   }
+  if (bizRows[0].ga4TotalAllSessions == null) {
+    console.log(`  no ga4TotalAllSessions on DAILY_BUSINESS row for ${date} (pre-fix row) — skipping, backfill first`);
+    return;
+  }
 
   const totalRevenue = bizRows[0].adsenseRevenue;   // ILS
-  const totalAllSessions = bizRows[0].ga4Sessions;
+  const totalAllSessions = bizRows[0].ga4TotalAllSessions; // true site-wide sessions, all sources
   const usdIlsRate = bizRows[0].usdIlsRate ?? 3.65; // fallback for old rows without rate
 
-  // Total sessions per page across all sources (paid + organic + referral)
-  // Promotion lifts total traffic, not just paid clicks, so we measure full impact.
+  // Pinterest-sourced sessions per page (paid + organic + referral subtypes,
+  // all from sessionSource CONTAINS "pinterest" — see getGA4LandingPageStats).
+  // Promotion lifts a pin's organic/referral pull too, not just paid clicks,
+  // so we measure the pin's full Pinterest-driven impact, then attribute a
+  // share of TOTAL SITE revenue (all sources) proportional to that.
   const pageSessionMap = new Map<string, number>();
   let totalTrackedSessions = 0;
   for (const r of pageRows) {

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
 import { getPinterestAdMetrics } from "../src/services/pinterestAds";
-import { getGA4PinterestSessions, getAdSenseEarnings } from "../src/services/googleAnalytics";
+import { getGA4PinterestSessions, getGA4TotalSessions, getAdSenseEarnings } from "../src/services/googleAnalytics";
 import { putDailyBusiness, queryRange } from "../src/services/historyStore";
 import { getUsdIlsRate } from "../src/services/currencyRate";
 import type { BusinessReport } from "../src/services/types";
@@ -21,9 +21,10 @@ export async function run(dateStr?: string): Promise<BusinessReport> {
   });
   const lastKnownRate = recentRows.find((r) => r.usdIlsRate != null)?.usdIlsRate ?? 2.89;
 
-  const [pinterestAds, ga4Sessions, adsenseEarnings, usdIlsRate] = await Promise.all([
+  const [pinterestAds, ga4Sessions, ga4TotalAllSessions, adsenseEarnings, usdIlsRate] = await Promise.all([
     getPinterestAdMetrics(adAccountId, date),
     getGA4PinterestSessions(),
+    getGA4TotalSessions(date),
     getAdSenseEarnings(),
     getUsdIlsRate(lastKnownRate),
   ]);
@@ -53,6 +54,7 @@ export async function run(dateStr?: string): Promise<BusinessReport> {
   console.log(`  Pinterest clicks:             ${pinterestAds.clicks}`);
   console.log(`  Pinterest outbound clicks:    ${pinterestAds.outboundClicks}`);
   console.log(`  GA4 Pinterest sessions:       ${ga4Sessions.total} (paid: ${ga4Sessions.paidSocial}, organic: ${ga4Sessions.organic}, referral: ${ga4Sessions.referral})`);
+  console.log(`  GA4 total site sessions:      ${ga4TotalAllSessions}`);
   console.log(`  AdSense estimated earnings:   ₪${adsenseEarnings.toFixed(2)}`);
   console.log(`  Est. revenue / 100 sessions:  ${revPer100 !== null ? `₪${revPer100.toFixed(2)}` : "N/A"}`);
   console.log(`  Rough profit estimate:        ₪${roughProfit.toFixed(2)} (revenue ₪ − spend ₪)`);
@@ -71,6 +73,7 @@ export async function run(dateStr?: string): Promise<BusinessReport> {
     ga4PaidSessions: ga4Sessions.paidSocial,
     ga4OrganicSessions: ga4Sessions.organic,
     ga4ReferralSessions: ga4Sessions.referral,
+    ga4TotalAllSessions,
     adsenseRevenue: adsenseEarnings,
     revenuePerHundredSessions: revPer100 ?? undefined,
     profit: roughProfit,

@@ -74,10 +74,11 @@ export interface DailyBusinessInput {
   ctr: number;
   cpc: number;
   outboundClicks: number;
-  ga4Sessions: number;
+  ga4Sessions: number; // Pinterest-sourced sessions only (paid+organic+referral) — NOT site-wide total
   ga4PaidSessions: number;
   ga4OrganicSessions: number;
   ga4ReferralSessions: number;
+  ga4TotalAllSessions?: number; // true site-wide sessions, all sources — the correct attribution denominator
   adsenseRevenue: number;
   revenuePerHundredSessions?: number;
   profit: number;

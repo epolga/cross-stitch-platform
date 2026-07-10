@@ -84,6 +84,23 @@ export async function getGA4LandingPageStats(date: string): Promise<Omit<Landing
   }));
 }
 
+// Site-wide sessions across ALL traffic sources (no Pinterest filter) —
+// the correct denominator for revenue attribution, since AdSense revenue
+// is earned from all traffic, not just Pinterest-sourced sessions. Distinct
+// from getGA4PinterestSessions(), which is scoped to sessionSource CONTAINS
+// "pinterest" and is used for Pinterest-specific metrics elsewhere.
+export async function getGA4TotalSessions(date: string): Promise<number> {
+  const response = await analyticsData.properties.runReport({
+    property: `properties/${GA4_PROPERTY_ID}`,
+    requestBody: {
+      dateRanges: [{ startDate: date, endDate: date }],
+      metrics: [{ name: "sessions" }],
+    },
+  });
+
+  return parseInt(response.data.rows?.[0]?.metricValues?.[0]?.value ?? "0", 10);
+}
+
 export async function getAdSenseEarnings(): Promise<number> {
   const accountsResponse = await adsense.accounts.list();
   const accounts = accountsResponse.data.accounts || [];
