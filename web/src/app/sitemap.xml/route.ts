@@ -5,14 +5,13 @@
 // The sitemap is generated dynamically using your existing DataAccess functions to fetch all albums and designs.
 // It caches the generated XML in S3 for 1 hour to reduce load on DynamoDB, suitable for multi-instance Elastic Beanstalk deployments.
 // If your total URLs exceed 50,000 in the future, consider splitting into an index with subsidiary sitemaps via additional routes.
-// The base URL is now derived dynamically from the incoming request headers for flexibility across environments.
 
 import { SitemapStream, streamToPromise } from 'sitemap';
 import { Readable } from 'stream';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getAllAlbumCaptions, fetchAllDesigns } from '@/lib/data-access';
 import { Design } from '../types/design';
-import { CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
+import { CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } from '@/lib/url-helper';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,17 +24,6 @@ interface AwsError extends Error {
 
 function isAwsError(error: unknown): error is AwsError {
   return error instanceof Error && '$metadata' in error;
-}
-
-function resolveBaseUrl(request: Request): string {
-  const host = request.headers.get('host');
-  if (host) {
-    const protocol = host.includes('localhost') || host.startsWith('127.')
-      ? 'http'
-      : request.headers.get('x-forwarded-proto') || 'https';
-    return normalizeBaseUrl(`${protocol}://${host}`);
-  }
-  return getSiteBaseUrl();
 }
 
 // Initialize S3 client (credentials managed via environment variables or IAM role)
@@ -157,7 +145,7 @@ async function getSitemap(baseUrl: string) {
 }
 
 // Route handler for GET /sitemap.xml
-export async function GET(request: Request) {
+export async function GET() {
   const requiredEnvVars = [
     "AWS_REGION",
     "S3_BUCKET_NAME",
@@ -175,7 +163,7 @@ export async function GET(request: Request) {
     );
   }
   try {
-    const baseUrl = resolveBaseUrl(request);
+    const baseUrl = getSiteBaseUrl();
     const xml = await getSitemap(baseUrl);
     return new Response(xml, {
       status: 200,

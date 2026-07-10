@@ -9,24 +9,41 @@ const DESCRIPTION =
   'Use the built-in cross-stitch editor, set your stitch size, choose your palette, and download a print-ready PDF chart — ' +
   'your pet portrait, your garden, your favourite photo, ready to stitch on Aida or linen.';
 
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
-  alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
-  robots: 'index, follow',
-  openGraph: {
+interface Props {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const params = await searchParams;
+  // designId/albumId are referrer-tracking params (which page linked here) —
+  // real, valuable data we keep in the URL/analytics, but they turn this one
+  // page into thousands of crawlable near-duplicate URLs (one per design/
+  // album). Canonical alone wasn't enough — GSC classified them "Duplicate
+  // without user-selected canonical" despite a correct canonical tag, likely
+  // because so many of them are individually internally-linked. noindex on
+  // just the referrer-tagged variants is the reliable fix; the bare URL and
+  // ?source=-only variant stay indexable.
+  const hasReferrerId = Boolean(params?.designId || params?.albumId);
+
+  return {
     title: TITLE,
     description: DESCRIPTION,
-    url: buildCanonicalUrl('/photo-to-cross-stitch'),
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: TITLE,
-    description: DESCRIPTION,
-  },
-};
+    keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
+    alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
+    robots: hasReferrerId ? 'noindex, follow' : 'index, follow',
+    openGraph: {
+      title: TITLE,
+      description: DESCRIPTION,
+      url: buildCanonicalUrl('/photo-to-cross-stitch'),
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: TITLE,
+      description: DESCRIPTION,
+    },
+  };
+}
 
 const structuredData = {
   '@context': 'https://schema.org',
