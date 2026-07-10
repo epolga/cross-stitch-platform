@@ -29,7 +29,8 @@ export type EntityType =
   | "LANDING_PAGE_STATS"
   | "PIN_ATTRIBUTION"
   | "PINTEREST_TOKEN"
-  | "BLOCKED_IP";
+  | "BLOCKED_IP"
+  | "WATCHED_IP";
 
 export type AnalysisType = "trend" | "design";
 
@@ -58,6 +59,7 @@ export const sortKey = {
   landingPageStats: (date: string, page: string) => `${date}#${page}`,
   pinAttribution: (date: string, adId: string) => `${date}#${adId}`,
   blockedIp: (ip: string) => ip,
+  watchedIp: (ip: string) => ip,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -408,6 +410,42 @@ export async function putBlockedIp(input: BlockedIpInput): Promise<void> {
         ip,
         reason,
         blockedAt,
+        ttl,
+      },
+    })
+  );
+}
+
+export interface WatchedIpInput {
+  ip: string;
+  reason: string;
+  watchedAt?: string; // defaults to now
+  ttlDays?: number; // defaults to 3; when this expires, the watch period is
+  // over and a human should review the accumulated daily counts and decide
+  // block/ignore. Does not block anything by itself.
+}
+
+export interface WatchedIpRecord {
+  EntityType: "WATCHED_IP";
+  SortKey: string; // the IP address
+  ip: string;
+  reason: string;
+  watchedAt: string;
+  ttl: number; // epoch seconds — when the watch period ends, not an auto-block
+}
+
+export async function putWatchedIp(input: WatchedIpInput): Promise<void> {
+  const { ip, reason, watchedAt = new Date().toISOString(), ttlDays = 3 } = input;
+  const ttl = Math.floor(Date.now() / 1000) + ttlDays * 86400;
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        EntityType: "WATCHED_IP",
+        SortKey: sortKey.watchedIp(ip),
+        ip,
+        reason,
+        watchedAt,
         ttl,
       },
     })

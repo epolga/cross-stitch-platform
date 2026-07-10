@@ -34,6 +34,8 @@
     "check-images": "tsx scripts/check-missing-images.ts",
     "search-analytics": "tsx scripts/search-analytics.ts",
     "block-ip": "tsx scripts/block-ip.ts",
+    "watch-ip": "tsx scripts/watch-ip.ts",
+    "analyze-ip": "tsx scripts/analyze-ip.ts",
     "reg-source": "tsx scripts/registration-source-report.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
