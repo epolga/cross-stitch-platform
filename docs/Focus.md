@@ -406,6 +406,46 @@ baseline established above. That's the only way to settle the halo-effect
 question properly; the retrospective correlation done today is too
 confounded to be conclusive either way.
 
+### Singapore GA4 anomaly — confirmed bot traffic (2026-07-10)
+
+Investigated the Singapore session anomaly flagged earlier today (5187
+sessions/30d, ~$0 revenue). Five independent signals, all pointing the
+same way — **confirmed JS-executing bot traffic, not real users**:
+
+1. **Engagement:** 0.7% engagement rate, 1.1s avg session duration, 99.3%
+   bounce rate, exactly 1.00 pageviews/session (US: 50.2% / 196.4s / 49.8%
+   / 3.63 PV — China shows a similar bot-like profile: 5.8% / 12.0s /
+   94.2%).
+2. **Source/medium:** 5137/5187 (99%) are `(direct) / (none)` — no
+   referrer, no campaign.
+3. **Device/browser:** 5172/5187 (99.7%) are `desktop / Chrome` — the
+   default headless-Chrome fingerprint (Puppeteer/Playwright), far more
+   uniform than any real-user population.
+4. **Landing pages:** top two are `/` and `/photo-to-cross-stitch` (513
+   sessions) — the same "hot paths" already identified in today's non-JS
+   ALB-log scraping investigation, plus a long tail of individual design
+   pages at 0% engagement (systematic catalog crawl signature).
+5. **Daily trend:** not steady background noise — 82.7% of the 30-day
+   total (4292/5187 sessions) landed in a single 5-day burst, 2026-06-26
+   → 06-30 (peak 1427 on 06-28), then crashed to 1-7 sessions/day for a
+   week, small resurgence 07-07→09.
+
+**Conclusion:** this is very likely a headless-browser bot/scraper hosted
+on cloud infrastructure GA4 geolocates to Singapore (not necessarily real
+Singaporean users) — the same broad scraping problem as the ALB-log
+findings, except this one executes JS and therefore also pollutes GA4,
+unlike the non-JS scrapers found in the ALB logs earlier today.
+
+**Actionable implication, not yet done:** the Milestone 9 pin-attribution
+formula (`pin_revenue = pin_paid_sessions / total_all_sessions *
+adsense_revenue`) divides by **total GA4 sessions** — if ~5000 bot
+sessions/month are included in that denominator, real paid/organic
+traffic's revenue attribution is being systematically understated. Worth
+adding a session-quality filter (e.g. exclude sessions with 0 engaged
+time + direct/none + single-pageview) to the attribution pipeline, or at
+minimum re-running recent attribution numbers with Singapore/China/Russia
+excluded to see how much this actually moves the numbers.
+
 ## Pending for next session
 
 0. ~~AdSense decline — re-check against a full month~~ **Done 2026-07-10:
@@ -488,11 +528,14 @@ confounded to be conclusive either way.
    to properly settle the halo-effect question, since today's retrospective
    check was confounded by the SEO backfill/blog launch/sitemap fix
    happening in the same window.
-7. **Singapore GA4 traffic anomaly** — 5187 sessions/30 days, ~$0/session
-   revenue, looks like JS-executing bot traffic inflating session counts
-   (China/Russia show a similar pattern). Flagged 2026-07-10, not
-   investigated. Worth checking since it could be skewing session-based
-   metrics site-wide, including the Milestone 9 pin-attribution formula.
+7. **Singapore GA4 traffic anomaly — confirmed bot traffic 2026-07-10**
+   (see session notes above: 0.7% engagement, 99% direct/none, 99.7%
+   desktop/Chrome, same hot-path signature as the ALB scrapers, 83% of
+   month's volume in one 5-day burst). **Not yet done:** add a
+   session-quality filter to the Milestone 9 pin-attribution pipeline (or
+   at least re-run recent numbers with Singapore/China/Russia excluded)
+   to see how much this bot volume is understating real traffic's revenue
+   attribution.
 
 ## Done when
 
