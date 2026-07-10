@@ -271,15 +271,34 @@ done.
 a real multi-day trend or still within normal variance at a longer
 baseline.
 
+### AdSense decline — resolved as normal variance (2026-07-10, later same session)
+
+Pulled `ESTIMATED_EARNINGS`/`IMPRESSIONS`/`CLICKS` by `DATE` for the full
+30 days 2026-06-10 → 2026-07-09 (new script:
+`automation/pinterest-agent/scripts/_check_adsense_month.ts`, not committed —
+scratch diagnostic, same pattern as the earlier `_check_*.ts` files).
+
+**Month stats:** mean $16.07/day, median $15.81, stddev $6.25 (~39% of
+mean — a genuinely noisy series; day-to-day swings of 2-3x are normal
+throughout the month, not unique to early July).
+
+**The 4 "declining" days are not a trend.** 2026-07-06 ($22.73) through
+07-09 ($15.46) are all at-or-above the monthly mean except 07-09, which is
+only -3.8% vs. mean — well inside normal variance. The real pattern is that
+**2026-07-01 → 07-05 was an anomalously strong stretch** ($18.36 → $29.40 →
+$22.18 → $21.05 → $25.74, peaking 83% above the monthly mean), and 07-06→09
+is a reversion toward the mean from that peak, not a new decline. Same
+"yesterday was the anomaly, not today" shape as the 2026-07-09 traffic
+investigation above.
+
+**Conclusion: no ad-side (RPM/CTR) problem found.** Pending item #0 closed —
+no further action needed unless a future window looks low relative to a
+similarly long baseline.
+
 ## Pending for next session
 
-0. **AdSense decline — re-check against a full month, not 5 days**, before
-   drawing any conclusion about an ad-side (RPM/CTR) problem. Pull
-   `ESTIMATED_EARNINGS`/`IMPRESSIONS`/`CLICKS` by `DATE` for the last ~30
-   days and see whether 2026-07-06→09 sits inside normal fluctuation or is
-   a genuine break from trend. If still looks like a real decline, look at
-   the AdSense dashboard's ad-unit/page breakdown (not available via this
-   API integration) before proposing any fix.
+0. ~~AdSense decline — re-check against a full month~~ **Done 2026-07-10:
+   resolved as normal variance, see session notes above. No action needed.**
 1. **Send the Announcement email** — open Uploader → "Reload Email Template"
    → "Test Announcement Email" to admin first → review → "Send Announcement
    Emails". Not sent yet, waiting on Olga.
@@ -289,20 +308,39 @@ baseline.
    established trust-before-vulnerability order in `Email_Content_Plan.md`.
 3. Newsletter cadence going forward: recommended **every 2-4 weeks**,
    sent when there's real content, not on a rigid calendar.
-4. **Distributed scraping mitigation — do this next session, explicitly
-   deferred from 2026-07-09 (confirmed still-open, chronic, ≥2 days old).**
-   Per-IP blocking does not scale against this pattern (hundreds of
-   residential IPs, ~1 request each, never repeat) — options discussed,
-   none yet decided or built:
-   - **Cheapest first step:** keep monitoring via `/review-ip` a few more
-     days to see if it's steady-state or growing before spending money.
-   - **AWS WAF Bot Control** (managed rule group, paid per-request) — ML/
-     heuristic bot detection beyond UA/IP matching; the closest thing to a
-     purpose-built fix for exactly this pattern.
-   - **CAPTCHA/JS challenge** on the specific hot paths (e.g.
-     `/photo-to-cross-stitch`, which got disproportionate hits) — cheaper
-     and more targeted than site-wide Bot Control; filters simple HTTP
-     scrapers (no JS execution) without a full managed-rules bill.
+4. **Distributed scraping mitigation — decision 2026-07-10: keep monitoring,
+   revisit later.** Not building WAF Challenge/Bot Control yet.
+   - **Infra check done 2026-07-10:** WAF (`CrossStitchBotProtection`) is
+     already attached to the production ALB. `BlockAutoBlockedIPs` rule
+     (priority 2, Block) confirmed correctly wired to the `AutoBlockedIPs`
+     IP set that `wafIpSync.ts` updates daily — the existing per-IP block
+     pipeline (`/review-ip` → `block-ip.ts` → daily `[init]` sync) does
+     work, was not a silent no-op. It just doesn't scale to this pattern
+     (hundreds of residential IPs, ~1 request each, never repeat).
+   - **Options evaluated, not yet chosen:**
+     - **WAF Challenge action** (silent JS check, not a visible CAPTCHA —
+       AWS distinguishes the two; Challenge is normally invisible to real
+       users) on specific hot paths (e.g. `/photo-to-cross-stitch`,
+       individual `/designs/*`/`/albums/*`) — matches the confirmed
+       scraper signature from 2026-07-09 (no JS execution, no
+       `_next/static/*` fetch). Cost is small: ~$1/mo new rule + $0.15 per
+       1,000 challenge responses (not per visit — token caches) — a few
+       $/month at current traffic.
+     - **AWS WAF Bot Control** (managed rule group) — broader ML/heuristic
+       coverage (TLS fingerprint, header order), ~$10/mo base + $1-10 per
+       million requests depending on tier. More expensive, less
+       transparent about why something is flagged.
+   - **Key risk found 2026-07-10, must handle before enabling either
+     option:** Googlebot also may not execute JS on first crawl pass.
+     `/designs/*` and `/albums/*` are exactly the pages under active SEO
+     recovery (visual SEO backfill, GSC Validate Fix, both 2026-07-09) —
+     challenging them risks blocking Googlebot and undoing that work.
+     `/photo-to-cross-stitch` bare URL is also `index, follow` (only the
+     `?designId=`/`?albumId=`-tagged referrer variants are `noindex` —
+     see `web/src/app/photo-to-cross-stitch/page.tsx:33`), so it carries
+     the same risk, just smaller blast radius (1 page vs. thousands).
+     Any future Challenge/Bot Control rollout needs an explicit allow-list
+     for verified search-engine crawler IPs first.
    - Likely motive (not confirmed): scraping of the design/pattern catalog
      content (images + descriptions), possibly for a competing catalog or
      AI training data — the site's structure (thousands of individually
@@ -312,6 +350,9 @@ baseline.
    - Possible connection (unconfirmed, worth keeping in mind, not stated as
      fact): if this traffic renders ads, Google's own invalid-traffic
      detection could in principle notice the same pattern we did.
+   - **Next session: re-check via `/review-ip` whether the pattern is
+     steady-state or growing before deciding to spend money on either
+     option above.**
 5. Bianca's fabric-merge idea and Céline's PDF-quarter-overlap idea remain
    `nice-to-have`, unscheduled.
 
