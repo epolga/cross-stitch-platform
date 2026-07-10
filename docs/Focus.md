@@ -295,6 +295,117 @@ investigation above.
 no further action needed unless a future window looks low relative to a
 similarly long baseline.
 
+### Distributed scraping — infra check, live surge confirmed, 6 IPs reviewed (2026-07-10)
+
+**WAF infra check:** verified via `aws wafv2 get-web-acl` that `BlockAutoBlockedIPs`
+(priority 2, Block) is correctly wired into `CrossStitchBotProtection` against
+the `AutoBlockedIPs` IP set — the daily `/review-ip` → `block-ip.ts` →
+`wafIpSync.ts` pipeline built 2026-07-09 does work, not a silent no-op.
+Evaluated WAF Challenge (silent JS check, ~$1/mo + $0.15/1,000 responses) vs.
+WAF Bot Control (managed rule group, ~$10/mo+) as future options — **decided
+to keep monitoring for now**, not build either yet. Key risk flagged: both
+options could challenge Googlebot on `/designs/*`/`/albums/*` (under active
+SEO recovery) or the indexable bare `/photo-to-cross-stitch` URL — see
+`web/src/app/photo-to-cross-stitch/page.tsx:33` (only `?designId=`/`?albumId=`
+referrer variants are `noindex`, the bare URL is `index, follow`). Needs a
+crawler allow-list before enabling either.
+
+**Live surge check (new script, not committed:
+`automation/pinterest-agent/scripts/_check_bot_surge_now.ts`):** pulled ALB
+logs for the 25 minutes 05:55-06:20 UTC today. **755 unique IPs, 1260
+requests, 87.4% made exactly 1 request, only 0.9% fetched `_next/static`**
+(real-browser signal). Scaled to a 30-min window this is *larger* than the
+2026-07-08 baseline (563 unique IPs/30min) — the pattern looks like it's
+**growing, not steady-state**. Top path was `/photo-to-cross-stitch` (137
+hits), consistent with prior findings.
+
+**`/review-ip` round 1** — the 5 highest-volume outlier IPs from that same
+25-min window (concentrated, not part of the 1-shot pattern):
+- `62.60.130.210` — **blocked** (30d): no rDNS, 100% 404, WordPress
+  exploit-scanner path pattern (`/images/images/.../cache.php`,
+  `/wp-content/plugins/plugins/cache.php`) — site isn't WordPress.
+- `45.127.44.48` — **watched** (3d): no rDNS, 521 req/day, 234 distinct
+  paths — systematic catalog crawl, not exploit-probe.
+- `112.209.162.158` (PLDT Philippines), `161.41.252.202`, `73.34.243.35`
+  (Comcast) — **no action**, real-user signals (asset loading, editor
+  analytics events, normal path diversity).
+
+**`/review-ip` round 2** — 5 IPs from the daily ≥800req/day Telegram alert
+(2026-07-09 data): `199.38.125.98`, `74.7.227.179`, `99.107.137.100`,
+`5.29.18.71`, `186.151.100.235` — **all watched** (3d). None matched the
+exploit-probe bar (near-zero error rates, only real content paths hit) but
+all showed clear automation signatures: 3 of the 5 did near-full-catalog
+crawls (1924/1209/763 distinct paths, one visiting ~1900 different URLs in a
+day), one hammered `/photo-to-cross-stitch` alone 648 times (43% of its own
+traffic), one hit a handful of pages/API routes with suspiciously uniform
+~27-35x repeat counts (scripted-navigation signature). Confirms the
+catalog-scraping motive already suspected in the 2026-07-09 session notes.
+
+**Net effect: the chronic distributed-scraping problem is confirmed still
+active and trending up in raw volume, not resolved.** Decision from earlier
+today (keep monitoring, don't build Challenge/Bot Control yet) stands, but
+the growth data point argues for revisiting sooner rather than later — see
+updated pending item #4.
+
+### Revenue-by-country + Pinterest ad ROI (2026-07-10)
+
+**Country RPM check (GA4, 30 days, prompted by an India traffic spike
+Olga noticed):** confirms India monetizes far worse per session than
+Olga suspected — $0.0038/session vs. $0.0830 for the US (~22x gap). India
+contributed $0.70 of $439 total (top-20-country) ad revenue over 30 days
+despite 185 sessions. **Conclusion: not worth investing effort to grow
+Hindu-themed/India-targeted content for ad-revenue reasons** — existing
+content stays (free, organic-only, no marginal cost), but no active
+promotion push.
+
+**Unrelated but important finding surfaced during this check, not yet
+investigated:** Singapore shows 5187 sessions/30 days (more than
+UK+Canada+Australia combined) but only $0.25 total revenue
+($0.0000/session). China and Russia show a similar near-zero-revenue
+pattern. Singapore's volume+zero-engagement combination looks like
+JS-executing bot traffic (unlike the ALB-log-detected non-JS scrapers,
+this would still register in GA4 since it runs the tracking script) —
+**flagged, not investigated further this session. Worth a dedicated look
+next time**, since if confirmed it would inflate GA4 session counts
+site-wide and skew any session-based metric (including the pin-attribution
+revenue formula from Milestone 9, which divides by total GA4 sessions).
+
+**Pinterest ad ROI (DAILY_BUSINESS, 29 days):** spend $196.50 (≈₪583),
+whole-site AdSense revenue ₪471.88, naive profit (revenue minus spend,
+crediting Pinterest with ALL site revenue) = **₪-111.29**. Properly
+attributed (revenue weighted by paid-session share of all sessions, same
+method as the Milestone 9 pin-attribution formula) = est. Pinterest-only
+profit **≈₪-363**. Spend was already cut ~58% around 2026-06-19
+($11.84→$4.99/day avg); the naive whole-site profit metric turned mostly
+positive after that cut, but that's the spend cut talking, not improved
+ROI — the properly-attributed number stays deeply negative throughout.
+
+**Olga's decision: stop Pinterest ad spend.** Data supports it — even at
+the already-reduced budget, paid traffic doesn't cover its own cost once
+revenue is honestly attributed to it instead of the whole site.
+
+**Halo-effect check (does Pinterest ad spend drive organic traffic
+beyond the paid clicks themselves?) — investigated because this would be
+the one reason to keep spending despite direct ROI being negative.** Full
+54-day history (2026-05-15 → 07-09): same-day correlation spend↔organic
+sessions r=0.489 (moderate, r²≈24%), spend↔referral r=-0.635 (negative —
+inconsistent with a clean halo story). Before/after the 06-19 spend cut:
+organic sessions -24% (48.9→37.2/day), but referral sessions **+106%**
+over the same window. **Not treated as evidence of a real halo effect** —
+the before/after window overlaps major confounding events (visual SEO
+backfill, blog+newsletter launch, sitemap Host-header bug fix, all
+2026-07-08/09), and full-period day-to-day organic noise is already 26%
+of the mean, similar magnitude to the observed drop. Correlation ≠
+causation with only one natural before/after transition point.
+
+**Recommendation recorded for when ads are actually stopped:** run a
+clean controlled test — pause Pinterest spend entirely for 1-2 weeks with
+no other site changes in that window, compare organic sessions
+before/during/after (day-of-week matched) against the 26%-of-mean noise
+baseline established above. That's the only way to settle the halo-effect
+question properly; the retrospective correlation done today is too
+confounded to be conclusive either way.
+
 ## Pending for next session
 
 0. ~~AdSense decline — re-check against a full month~~ **Done 2026-07-10:
@@ -309,7 +420,17 @@ similarly long baseline.
 3. Newsletter cadence going forward: recommended **every 2-4 weeks**,
    sent when there's real content, not on a rigid calendar.
 4. **Distributed scraping mitigation — decision 2026-07-10: keep monitoring,
-   revisit later.** Not building WAF Challenge/Bot Control yet.
+   revisit sooner rather than later.** Not building WAF Challenge/Bot
+   Control yet, but a same-day live check (see session notes above) found
+   755 unique IPs / 25 min (87.4% single-request) — scaled to volume this
+   is *larger* than the 2026-07-08 baseline (563/30min), i.e. **the pattern
+   looks like it's growing, not flat.** 6 IPs reviewed and actioned today:
+   1 blocked (`62.60.130.210`, WordPress exploit-scanner pattern), 6 total
+   put on watch (`45.127.44.48` from the live check;
+   `199.38.125.98`/`74.7.227.179`/`99.107.137.100`/`5.29.18.71`/
+   `186.151.100.235` from the daily alert) — all watch entries expire in 3
+   days, **re-review them via `/review-ip` around 2026-07-13** and decide
+   block vs. release based on whether they're still active.
    - **Infra check done 2026-07-10:** WAF (`CrossStitchBotProtection`) is
      already attached to the production ALB. `BlockAutoBlockedIPs` rule
      (priority 2, Block) confirmed correctly wired to the `AutoBlockedIPs`
@@ -350,11 +471,28 @@ similarly long baseline.
    - Possible connection (unconfirmed, worth keeping in mind, not stated as
      fact): if this traffic renders ads, Google's own invalid-traffic
      detection could in principle notice the same pattern we did.
-   - **Next session: re-check via `/review-ip` whether the pattern is
-     steady-state or growing before deciding to spend money on either
-     option above.**
+   - **Next session:** (1) re-review the 6 watched IPs above (~2026-07-13,
+     when watch expires) via `/review-ip`, block or release each based on
+     whether they're still active; (2) given the growth signal found
+     2026-07-10 (755 IPs/25min vs. 563/30min baseline), reconsider whether
+     "keep monitoring" is still the right call, or whether it's time to
+     build the WAF Challenge rule (with a crawler allow-list) on
+     non-SEO-critical paths first.
 5. Bianca's fabric-merge idea and Céline's PDF-quarter-overlap idea remain
    `nice-to-have`, unscheduled.
+6. **Stop Pinterest ad spend** (decision made 2026-07-10, see session notes
+   above — properly-attributed ROI is ≈₪-363 over 29 days, halo-effect
+   check found nothing conclusive). Not yet executed. **When stopping:
+   pause cleanly with no other concurrent site changes for 1-2 weeks and
+   compare organic sessions before/during/after** — this is the only way
+   to properly settle the halo-effect question, since today's retrospective
+   check was confounded by the SEO backfill/blog launch/sitemap fix
+   happening in the same window.
+7. **Singapore GA4 traffic anomaly** — 5187 sessions/30 days, ~$0/session
+   revenue, looks like JS-executing bot traffic inflating session counts
+   (China/Russia show a similar pattern). Flagged 2026-07-10, not
+   investigated. Worth checking since it could be skewing session-based
+   metrics site-wide, including the Milestone 9 pin-attribution formula.
 
 ## Done when
 
