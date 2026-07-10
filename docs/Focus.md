@@ -446,6 +446,60 @@ time + direct/none + single-pageview) to the attribution pipeline, or at
 minimum re-running recent attribution numbers with Singapore/China/Russia
 excluded to see how much this actually moves the numbers.
 
+### Pin-attribution denominator bug — found and fixed (2026-07-10)
+
+Investigating whether bot-blocking might change the Pinterest ROI picture
+(Olga's question) led to finding a real production bug, not just a bot
+question. `build-pin-attribution-report.ts` used `DAILY_BUSINESS.ga4Sessions`
+as "totalAllSessions" — but that field is Pinterest-source-only (see
+`getGA4PinterestSessions()`, filters `sessionSource CONTAINS "pinterest"`),
+not genuinely site-wide. Spot-checked 2026-07-09: true site-wide sessions
+= 315-316, vs. the 61 actually used as the denominator — **~5x
+understatement**, meaning every pin's attributed revenue in `PIN_ATTRIBUTION`
+has been overstated since Milestone 9 launched 2026-06-05. Direction
+matters: fixing this makes Pinterest's true historical performance look
+**worse**, not better — the opposite of what the bot-blocking hypothesis
+hoped for.
+
+**Fixed going forward:** added `getGA4TotalSessions(date)` (unfiltered GA4
+query) in `googleAnalytics.ts`, new field `DAILY_BUSINESS.ga4TotalAllSessions`
+(kept the old `ga4Sessions` field as-is — it's correctly used elsewhere for
+Pinterest-specific metrics), `daily-business-report.ts` now writes it,
+`build-pin-attribution-report.ts` now reads it as the attribution
+denominator and skips gracefully (with a log line) on pre-fix rows instead
+of silently dividing by the wrong number.
+
+**Not done — historical backfill.** Old `DAILY_BUSINESS` rows lack the new
+field, so historical `PIN_ATTRIBUTION` numbers stay wrong unless backfilled.
+Found a second, separate bug that blocks a naive backfill:
+`getGA4PinterestSessions()` and `getAdSenseEarnings()` in
+`daily-business-report.ts` are hardcoded to always query "yesterday",
+ignoring the `--date=` argument — re-running the full script for an old
+date would silently corrupt that date's spend/revenue with today's
+"yesterday" values instead. A real backfill needs a narrow script that only
+patches `ga4TotalAllSessions` via a targeted DynamoDB update, not a full
+`putDailyBusiness` overwrite. **Decided not to do this** — see decision
+below, campaign is being stopped, so historical accuracy stopped being
+urgent.
+
+### Final decision: stop Pinterest ad spend (2026-07-10)
+
+Olga's decision, made after the ROI (₪-111 naive / ≈₪-363 rough-attributed,
+likely worse per the bug above), inconclusive halo-effect check, and
+confirmed-bot Singapore traffic all failed to turn up a case for continuing.
+**Campaign to be paused/stopped manually in Pinterest Ads Manager — this
+codebase is read-only against the Pinterest Ads API (`getPinterestAdMetrics`
+only, no create/update/pause calls exist), so Claude cannot do this step.**
+11 ads currently active/paused, ~$5/day total spend as of 2026-07-10 (see
+`npm run promoted` in `automation/pinterest-agent`). Historical backfill of
+the attribution bug above is explicitly deprioritized given this decision —
+the code fix stays in place for correctness going forward only, in case
+Pinterest advertising is reconsidered later.
+
+**Topic closed for this session.** If Pinterest ads are ever reconsidered,
+re-read this section plus the halo-effect controlled-test recommendation
+above before resuming spend.
+
 ## Pending for next session
 
 0. ~~AdSense decline — re-check against a full month~~ **Done 2026-07-10:
@@ -520,14 +574,15 @@ excluded to see how much this actually moves the numbers.
      non-SEO-critical paths first.
 5. Bianca's fabric-merge idea and Céline's PDF-quarter-overlap idea remain
    `nice-to-have`, unscheduled.
-6. **Stop Pinterest ad spend** (decision made 2026-07-10, see session notes
-   above — properly-attributed ROI is ≈₪-363 over 29 days, halo-effect
-   check found nothing conclusive). Not yet executed. **When stopping:
-   pause cleanly with no other concurrent site changes for 1-2 weeks and
-   compare organic sessions before/during/after** — this is the only way
-   to properly settle the halo-effect question, since today's retrospective
-   check was confounded by the SEO backfill/blog launch/sitemap fix
-   happening in the same window.
+6. **Stop Pinterest ad spend — decision final, 2026-07-10** (see "Final
+   decision" session notes above). **Olga to pause the campaign manually in
+   Pinterest Ads Manager** — this codebase has no write access to the
+   Pinterest Ads API, Claude cannot do this step. Not yet executed as of
+   end of session. If ever reconsidering: **pause cleanly with no other
+   concurrent site changes for 1-2 weeks and compare organic sessions
+   before/during/after** — the only way to properly settle the halo-effect
+   question, since today's retrospective check was confounded by the SEO
+   backfill/blog launch/sitemap fix happening in the same window.
 7. **Singapore GA4 traffic anomaly — confirmed bot traffic 2026-07-10**
    (see session notes above: 0.7% engagement, 99% direct/none, 99.7%
    desktop/Chrome, same hot-path signature as the ALB scrapers, 83% of
