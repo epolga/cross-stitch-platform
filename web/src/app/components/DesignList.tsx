@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import PaginationControl from './PaginationControl';
-import styles from './designList.module.css';
+import styles from './DesignList.module.css';
 import type { Design } from '@/app/types/design';
 import DownloadPdfLink from './DownloadPdfLink';
 import { CreateDesignUrl } from '@/lib/url-helper';

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import DownloadPdfLink from '@/app/components/DownloadPdfLink';
 import type { Design } from '@/app/types/design';
-import styles from '@/app/components/designList.module.css';
+import styles from '@/app/components/DesignList.module.css';
 import { devLog } from '@/lib/devLog';
 
 type ChartFormat = 'color-symbol' | 'symbol-chart' | 'color-chart';

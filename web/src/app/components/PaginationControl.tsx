@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import Image from 'next/image';
-import styles from './paginationControl.module.css';
+import styles from './PaginationControl.module.css';
 
 interface PaginationControlProps {
   page: number;
