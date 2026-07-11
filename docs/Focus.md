@@ -446,6 +446,31 @@ time + direct/none + single-pageview) to the attribution pipeline, or at
 minimum re-running recent attribution numbers with Singapore/China/Russia
 excluded to see how much this actually moves the numbers.
 
+### "Big activity on the editor page" — investigated, resolved as PetalBot (2026-07-10)
+
+Olga noticed what looked like unusually high activity on `/photo-to-cross-stitch`
+and asked whether a link had been shared. GA4 Realtime snapshot at the time
+showed nothing unusual (25 active users, normal country/device spread, only 3
+on that page). ALB logs for the prior 90 min told a different story: 640
+requests to `/photo-to-cross-stitch*`, 528 unique IPs, 95.6% single-request —
+same chronic distributed-scraping signature as the rest of today's findings
+(see below), running at a higher rate than this morning's baseline (640/90min
+vs. 137/25min), not a shared-link spike (no referral source, no geographic/UA
+clustering).
+
+One repeat-IP cluster stood out: six `114.119.x.x` IPs, 47-64 requests each,
+19-32 of them counted against the bare `/photo-to-cross-stitch` path. Ran
+through `/review-ip`: all six reverse-DNS to `petalbot-*.petalsearch.com`
+(Huawei Petal Search crawler — legitimate, like Googlebot/Bingbot). All GET,
+all 200, 25-32 distinct paths per IP (real content pages, `robots.txt`), no
+error/exploit pattern. The repeated `/photo-to-cross-stitch` hits aren't the
+bot re-requesting the same URL — `analyze-ip.ts` strips query strings when
+counting paths, and every design/album page links its own
+`?source=design_page&designId=N` variant (the same param pattern noted in the
+2026-07-09 GSC "Duplicate without canonical" finding); PetalBot is just
+following that link once per page it crawls. **No action** — legitimate
+crawler, don't block. Closed by Olga.
+
 ### Pin-attribution denominator bug — found and fixed (2026-07-10)
 
 Investigating whether bot-blocking might change the Pinterest ROI picture
@@ -591,6 +616,38 @@ above before resuming spend.
    at least re-run recent numbers with Singapore/China/Russia excluded)
    to see how much this bot volume is understating real traffic's revenue
    attribution.
+8. ~~Editor feedback fixes~~ **Done 2026-07-10:** all 3 confirmed bugs from a
+   user email fixed and typecheck/lint-clean — resize dialog clear-to-retype,
+   "Open" raw `prompt()` replaced with a saved-patterns list dialog, and
+   `localStorage` autosave + "Resume your last pattern" banner (fixes the
+   "start over every time" pain — see
+   `docs/plan/web/Editor Feedback Fixes — July 2026.md` for root causes and
+   file-level detail). **Not built (explicitly deferred):** "make it an app"
+   (native Windows installer or PWA) — the actual complaint is very likely a
+   mobile mail-app webview issue, a Windows-only installer wouldn't reach
+   that user and Olga can currently only test on Windows anyway; a
+   cross-platform PWA is a bigger separate lift. Revisit only if the
+   back-button complaint recurs after autosave. **Verified live in a real
+   browser 2026-07-10** (dev server + Playwright): resize clear-to-retype,
+   localStorage autosave + Resume/Discard banner (reload recovered a 200×100
+   draft exactly), and the Open dialog (graceful "log in" state on a 401,
+   matches the pre-existing Save-button login-gate pattern). No automated
+   test coverage added for the three fixes.
+9. **Read through the full `docs/srs/` documentation set** (built 2026-07-11):
+   `00-Overview.md` → `15-Security-and-Threat-Model.md`, plus the `use-cases/`,
+   `lld/`, `adr/`, and `test-cases/` subfolders — SRS, use cases, SAD, LLD,
+   ADRs, API Specification, ERD, Data Dictionary, Test Plan, Test Cases,
+   Deployment Guide, Runbook, Monitoring/Alerting Spec, Configuration
+   Reference, Security/Threat Model, and `10-Deferred-Items.md` (parking lot
+   for the Data Migration Plan, Backup/DR Plan, legacy-USER migration, and
+   the missing `SubscriptionEvents` table). **Then: build the automated tests
+   `09-Test-Plan.md` and `test-cases/*.md` already specify but that don't
+   exist yet** — real coverage today is thin and concentrated in `web/`
+   (~10 Vitest files, mostly `converter/patterns*`); `pinterest-agent`,
+   `autopinner`, and the Uploader have none. `09-Test-Plan.md` §4.2 has a
+   risk-ordered priority list (PayPal webhook → auth/session → conversion
+   algorithm → autopinner claim/pin logic → download-mode gating → Uploader
+   publish sequence) — start there rather than wherever's easiest.
 
 ## Done when
 
@@ -609,3 +666,10 @@ above before resuming spend.
 - [ ] Announcement email actually sent (test, then real)
 - [ ] Blog teaser email sent
 - [ ] **Distributed scraping mitigation — decide + implement (see Pending #4)**
+- [x] Editor fix: ResizeDialog clear-to-retype bug — 2026-07-10
+- [x] Editor fix: localStorage autosave + resume draft — 2026-07-10
+- [x] Editor fix: "Open" saved-patterns list (replace prompt()) — 2026-07-10
+- [x] Editor fixes deployed to production (eb deploy, Health Green) — 2026-07-10
+- [ ] Thank-you reply sent to Leisa (feedback source for these 3 fixes) — waiting on her email address
+- [ ] Olga has read through the `docs/srs/` documentation set (see Pending #9)
+- [ ] Automated tests built for at least the priority-1 area in `09-Test-Plan.md` §4.2 (PayPal webhook)
