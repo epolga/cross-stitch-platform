@@ -649,6 +649,31 @@ above before resuming spend.
    algorithm → autopinner claim/pin logic → download-mode gating → Uploader
    publish sequence) — start there rather than wherever's easiest.
 
+   **Update 2026-07-12 (same day, later):**
+   - **CI built:** `.github/workflows/web-ci.yml` — `npm run build` + `npm run test`
+     (Vitest) for `web/` on every push/PR. Playwright e2e and deployment are
+     deliberately not in it yet (see `09-Test-Plan.md` §4.4).
+   - **Fixed 4 pre-existing failing Vitest tests** found while verifying the
+     workflow locally before wiring it in (`converter/patterns` POST/PUT route
+     tests asserted the old `savePattern`/`updatePattern` call shape, missing
+     the `hiddenColors` param added since — not caused by this session's work,
+     just discovered by it). All 58 Vitest tests pass now.
+   - **Corrected `09-Test-Plan.md`:** it wrongly claimed `web/` had no e2e
+     tooling. It does — 10 real Playwright spec files under `web/tests/`
+     (`auth-ui`, `converter-smoke`, `converter-pattern-load`, `design-gallery`,
+     `editor-mirror-selection` regression suite, `paid-download-flow.smoke`,
+     `profile-auth-guard`, `site-homepage`, `site-nav`, `static-pages`), now
+     documented in a new §2.2. Check that section before assuming a flow is
+     untested.
+   - **Olga's decision, confirmed:** write tests for the rest of the codebase
+     too (pinterest-agent, autopinner, Uploader), not just `web/`. Strategy
+     agreed: build CI now, don't wait for full coverage — add a new job to
+     `web-ci.yml` (or a sibling workflow) the moment a component gets its
+     *first* real test, not before. Priority order for what to test first is
+     unchanged (PayPal webhook → auth/session → conversion algorithm →
+     autopinner claim/pin logic → download-mode gating → Uploader publish
+     sequence).
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -672,4 +697,5 @@ above before resuming spend.
 - [x] Editor fixes deployed to production (eb deploy, Health Green) — 2026-07-10
 - [ ] Thank-you reply sent to Leisa (feedback source for these 3 fixes) — waiting on her email address
 - [ ] Olga has read through the `docs/srs/` documentation set (see Pending #9)
+- [x] CI workflow built for `web/` (build + Vitest) — 2026-07-12
 - [ ] Automated tests built for at least the priority-1 area in `09-Test-Plan.md` §4.2 (PayPal webhook)
