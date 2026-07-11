@@ -30,7 +30,8 @@ export type EntityType =
   | "PIN_ATTRIBUTION"
   | "PINTEREST_TOKEN"
   | "BLOCKED_IP"
-  | "WATCHED_IP";
+  | "WATCHED_IP"
+  | "IP_HISTORY";
 
 export type AnalysisType = "trend" | "design";
 
@@ -60,6 +61,7 @@ export const sortKey = {
   pinAttribution: (date: string, adId: string) => `${date}#${adId}`,
   blockedIp: (ip: string) => ip,
   watchedIp: (ip: string) => ip,
+  ipHistory: (ip: string, at: string) => `${ip}#${at}`,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -415,6 +417,7 @@ export async function putBlockedIp(input: BlockedIpInput): Promise<void> {
       },
     })
   );
+  await putIpHistory({ ip, action: "blocked", reason, at: blockedAt });
 }
 
 export interface WatchedIpInput {
@@ -451,6 +454,51 @@ export async function putWatchedIp(input: WatchedIpInput): Promise<void> {
       },
     })
   );
+  await putIpHistory({ ip, action: "watched", reason, at: watchedAt });
+}
+
+// Permanent (non-expiring) log of every block/watch decision ever made for
+// an IP. BLOCKED_IP/WATCHED_IP rows carry a DDB-native TTL and are deleted
+// outright once they expire, so without this, a repeat offender that comes
+// back after its block/watch lapsed would look brand new to review-ip.
+export interface IpHistoryInput {
+  ip: string;
+  action: "blocked" | "watched";
+  reason: string;
+  at?: string; // defaults to now
+}
+
+export interface IpHistoryRecord {
+  EntityType: "IP_HISTORY";
+  SortKey: string; // `${ip}#${at}`
+  ip: string;
+  action: "blocked" | "watched";
+  reason: string;
+  at: string;
+}
+
+export async function putIpHistory(input: IpHistoryInput): Promise<void> {
+  const { ip, action, reason, at = new Date().toISOString() } = input;
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        EntityType: "IP_HISTORY",
+        SortKey: sortKey.ipHistory(ip, at),
+        ip,
+        action,
+        reason,
+        at,
+      },
+    })
+  );
+}
+
+// No TTL on this entity type, so queryRange("IP_HISTORY") returns every
+// past decision ever recorded; filter by ip to get one IP's full history.
+export async function getIpHistory(ip: string): Promise<IpHistoryRecord[]> {
+  const rows = await queryRange<IpHistoryRecord>("IP_HISTORY");
+  return rows.filter((r) => r.ip === ip);
 }
 
 export interface PinterestTokenRecord {

@@ -16,7 +16,7 @@ All commands below run from the `automation/pinterest-agent/` directory.
 
    Omit `--date` to default to yesterday (UTC), matching what the daily suspicious-IP alert covers. This prints, per IP: reverse DNS (PTR record), HTTP methods, response status codes, top 8 requested paths, and total distinct paths hit.
 
-2. **Check for already-known IPs first.** Before recommending anything, check whether the IP is already in `BLOCKED_IP` or `WATCHED_IP` — if there's an existing entity for it, say so and ask whether the user wants to extend/replace it rather than silently creating a duplicate entry.
+2. **Check for already-known IPs first.** Before recommending anything, check whether the IP is already in `BLOCKED_IP` or `WATCHED_IP` — if there's an existing entity for it, say so and ask whether the user wants to extend/replace it rather than silently creating a duplicate entry. Also check `IP_HISTORY` (permanent, non-expiring log written automatically by `putBlockedIp`/`putWatchedIp`) — this is how a repeat offender is recognized even after its earlier block/watch TTL has lapsed and the operational row is gone. If an IP has prior history, factor that into the classification (e.g. a repeat offender that was watched-then-lapsed and is back with the same pattern is stronger evidence for block, not another watch).
 
 3. **Classify each IP using this evidence, not gut feel:**
    - **Known legitimate crawler** — PTR resolves to `*.googlebot.com` (Google, range `66.249.66.0/24` is well-documented as Googlebot) or `*.babbar.tech`/similar documented SEO crawler. → **No action.** Blocking Google's crawler actively hurts the site's own SEO goals — flag this explicitly if the user seems inclined to block one of these.
