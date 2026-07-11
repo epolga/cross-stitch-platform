@@ -107,9 +107,11 @@ PDF export) is functionally independent of the catalog.
   delete their own saved patterns.
 - **FR-SAV-3.** Saved patterns shall be private to their owner by default and accessible via
   a shareable link.
-- **FR-SAV-4.** The system shall generate a print-ready PDF containing: a colored grid view,
-  a black-and-white symbol grid view, and a thread/color-key table (DMC number, name,
-  symbol, stitch count per color).
+- **FR-SAV-4.** The system shall generate a print-ready PDF containing a cover page, a
+  thread/color-key table (DMC number, name, symbol, stitch count per color), a page-tiling
+  map, and the chart itself, tiled across multiple physical pages as needed; the chart
+  pages shall render in one of three selectable modes (symbol only, color only, or color
+  with symbol overlay).
 - **FR-SAV-5.** The system shall support using the editor as an on-screen stitching aid
   (colored/symbol toggle) without requiring the PDF to be printed, on phone, tablet, and
   desktop viewports.
