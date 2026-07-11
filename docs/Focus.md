@@ -673,6 +673,19 @@ above before resuming spend.
      unchanged (PayPal webhook → auth/session → conversion algorithm →
      autopinner claim/pin logic → download-mode gating → Uploader publish
      sequence).
+10. **Idea, not committed: an MCP server for platform data + IP-review actions**
+    (raised 2026-07-12). Motivated by a real pattern from this session — ~30
+    one-off `_check_*.ts` scratch scripts, each re-implementing a similar
+    DynamoDB query/format pattern (AdSense by day, GA4 by channel, IP status,
+    table sizes, etc.). Candidate tools: `query_business_history(entityType,
+    dateRange)`, `get_ip_status(ip)` / `get_ip_history(ip)`, `count_table_items
+    (table)`, plus wrapping `analyze-ip`/`block-ip`/`watch-ip` as typed calls
+    (would also sidestep the Windows `npx.cmd` multi-line-quoted-arg
+    truncation issue that forced the heredoc workaround in `/review-ip`).
+    **Explicitly not a "do this" — a trade-off:** build/maintain cost (a
+    running server, DynamoDB/AdSense/GA4 auth) vs. how often this kind of
+    ad-hoc investigation actually recurs for a single operator. Revisit only
+    if the scratch-script pattern keeps recurring session after session.
 
 ## Done when
 
