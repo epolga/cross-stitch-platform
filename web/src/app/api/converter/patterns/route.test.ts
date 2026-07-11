@@ -62,7 +62,7 @@ describe('POST /api/converter/patterns', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: 'new-pattern-id' });
     expect(mocks.savePattern).toHaveBeenCalledWith(
-      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined,
+      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined, undefined,
     );
   });
 
@@ -73,7 +73,7 @@ describe('POST /api/converter/patterns', () => {
 
     await POST(makeRequest(VALID_BODY, thumb));
     expect(mocks.savePattern).toHaveBeenCalledWith(
-      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', thumb,
+      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', thumb, undefined,
     );
   });
 });

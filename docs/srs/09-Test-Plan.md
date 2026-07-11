@@ -18,7 +18,7 @@ the two are never confused with each other.
 
 | Component | Test framework configured | Test files found | What they cover |
 |---|---|---|---|
-| **Website** (`web/`) | Vitest (`npm run test` → `vitest run`) | 10 files | See §2.1 |
+| **Website** (`web/`) | Vitest (`npm run test`) + Playwright (`npm run test:e2e`) | 10 Vitest files + 10 Playwright spec files | See §2.1 and §2.2 — **correction, 2026-07-12:** an earlier version of this document claimed no e2e tooling existed; that was wrong, found while wiring up CI (§4.4) |
 | **Pinterest automation — pinterest-agent** (`automation/pinterest-agent/`) | None — `package.json` `"test"` script is a stub (`echo "Error: no test specified" && exit 1`) | 0 | Nothing |
 | **Pinterest automation — autopinner** (`automation/autopinner/`, .NET) | None found | 0 | Nothing |
 | **Uploader** (`uploader/`, .NET/WPF) | None found | 0 | Nothing |
@@ -39,13 +39,45 @@ the two are never confused with each other.
 | `src/lib/pattern-storage.test.ts` | RLE encode/decode round-trips (incl. edge cases: uniform grid, empty cells, empty grid), `savePattern`/`updatePattern`/`listPatternsByOwner` DDB call shape |
 | `src/lib/pattern-thumbnail.test.ts` | Thumbnail canvas generation: empty grid, dimension capping, background fill order, empty-cell skipping, color fill format |
 
-**What this means concretely:** the only API surface with meaningful automated coverage is
-the **saved-pattern CRUD** family (`/api/converter/patterns*`) plus two unrelated single
-endpoints (`/api/profile/votes`, `/api/subscription/plan`). Every other route in
-`06-API-Specification.md` — all of auth/registration, all of designs/albums, all of search,
-`/api/convert` and `/api/convert/pdf` themselves (the conversion algorithm and PDF
-generation are untested despite being the converter's core value), the PayPal webhook, and
-every admin route — has **zero automated test coverage** today.
+**What this means concretely for API-level (Vitest) coverage:** the only API surface with
+meaningful automated coverage is the **saved-pattern CRUD** family
+(`/api/converter/patterns*`) plus two unrelated single endpoints (`/api/profile/votes`,
+`/api/subscription/plan`). Every other route in `06-API-Specification.md` — all of
+auth/registration, all of designs/albums, all of search, `/api/convert` and
+`/api/convert/pdf` themselves (the conversion algorithm and PDF generation are untested at
+the API-route level despite being the converter's core value — though see §2.2, the
+converter *page* does have smoke-level e2e coverage), the PayPal webhook, and every admin
+route — has **zero API-route-level test coverage** today.
+
+### 2.2 Website — existing Playwright e2e coverage (verified by reading each file)
+
+`web/playwright.config.ts`: Chromium, headless, `baseURL: http://127.0.0.1:3000`, auto-
+starts `npm run dev` as the target server (`DOWNLOAD_MODE`/`NEXT_PUBLIC_DOWNLOAD_MODE`
+forced to `paid` for the test run), 1 worker, 1 retry. **The browser executable path is
+hardcoded to a Windows Chrome install** (`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+overridable via `PLAYWRIGHT_CHROME_PATH`) — this is directly relevant to §4.4 (CI), since a
+standard Linux GitHub Actions runner does not have that path.
+
+| File | Covers |
+|---|---|
+| `tests/auth-ui.spec.ts` | Login/Register button visibility when logged out, login modal open/fields/submit/close, registration modal open |
+| `tests/converter-pattern-load.spec.ts` | Loading the converter with no `?pattern` param, a non-existent pattern ID, a 403 (owned by someone else), and the owner-name-in-header happy path |
+| `tests/converter-smoke.spec.ts` | Converter page loads, New Pattern / Download PDF buttons present, Download PDF disabled pre-import, Import menu item present, empty-state prompt, broken-pattern-link error message |
+| `tests/design-gallery.spec.ts` | Converter heading/empty-state/menu smoke checks (overlaps `converter-smoke.spec.ts`'s scope) + homepage-links-to-catalog check |
+| `tests/editor-mirror-selection.spec.ts` | **Regression suite** (per its own `describe` name) for a specific mirror-with-active-selection bug class: selection preserved across Edit-menu open and mirror-dialog radio clicks, correct grid-width expansion on full vs. partial selection |
+| `tests/paid-download-flow.smoke.spec.ts` | The inline registration UI renders correctly on the paid-mode download-access page |
+| `tests/profile-auth-guard.spec.ts` | `/profile`, `/profile/patterns`, `/profile/votes` all redirect unauthenticated visitors to `/`, with a visible "Redirecting…" state |
+| `tests/site-homepage.spec.ts` | Homepage heading, filter/search section, design results section, at least one design card or empty state, no error message, footer |
+| `tests/site-nav.spec.ts` | Nav landmark, key links present, Home/catalog link targets, Articles dropdown, auth controls visible, footer |
+| `tests/static-pages.spec.ts` | Parametrized 200-status + correct-heading check across a list of static pages |
+
+**What this means concretely for e2e coverage:** unlike the Vitest suite (API/lib-level,
+converter-CRUD-focused), the Playwright suite is **UI-focused and broader across the
+Website's surface** — homepage, nav, auth modals, profile guards, static pages, and a real
+regression suite for a previously-fixed editor bug. It does **not** cover the deeper
+paid/register download-gating decision table (§5.2 of `01-LLD-Website.md`) beyond the one
+`paid-download-flow.smoke.spec.ts` render check, PayPal webhook handling, or admin routes —
+those gaps in §4.2's priority list stand as written.
 
 ## 3. Test levels in use / available
 
@@ -53,7 +85,7 @@ every admin route — has **zero automated test coverage** today.
 |---|---|---|---|
 | Unit | Vitest, partial (§2.1) | None | None |
 | Integration (API route + mocked AWS SDK) | Vitest, partial (the route.test.ts files mock DynamoDB clients) | None | None |
-| End-to-end / UI | None found (no Playwright/Cypress config in `web/`) | N/A (no UI) | None (no UI automation for WPF found) |
+| End-to-end / UI | **Playwright, real and reasonably broad (§2.2)** — corrects an earlier draft of this document that missed it entirely | N/A (no UI) | None (no UI automation for WPF found) |
 | Manual | Implied by operator workflow (e.g. "send test email to admin before a real send," `04-SRS-Uploader.md` NFR-3) but not documented as a formal test procedure anywhere | The `/review-ip` skill's evidence-gathering step is itself a form of manual pre-action verification | Same — "test" buttons (Test Pinterest, Test Announcement Email, Send Admin Test Email) are the *only* pre-production verification mechanism |
 
 ## 4. Recommended approach going forward
@@ -98,11 +130,34 @@ This section is a proposal, not a description of existing practice.
 - No .NET test project exists anywhere in `uploader/`, `automation/autopinner/`, or
   `shared/` — establishing one (xUnit is the common default for .NET 8) is a prerequisite
   for priority 4 and 6 above, not an optional nice-to-have.
-- No end-to-end/browser test tooling exists for the Website despite it having the most
-  test-relevant user flows (registration, download gating, checkout) of any component in
-  the platform — out of scope for this plan's priority list (§4.2 focuses on the highest-
-  risk *individual* flows first) but worth a separate follow-up decision once 1–5 are
-  addressed.
+- ~~No end-to-end/browser test tooling exists for the Website~~ **Correction: it does**
+  (§2.2) — Playwright, 10 spec files, real UI coverage. What's still missing is e2e coverage
+  of the *highest-risk* flows specifically (checkout/PayPal, the full paid-mode download
+  gate beyond one smoke render check) — §4.2's priority list already covers this gap at the
+  API/integration level; extending the *existing* Playwright suite to also exercise those
+  flows end-to-end is a reasonable alternative or complement once the underlying logic has
+  integration coverage.
+
+### 4.4 Continuous Integration (added 2026-07-12)
+
+A lightweight GitHub Actions workflow now runs on every push/PR touching `web/`:
+`npm ci` → `npm run build` → `npm run test` (Vitest). See `.github/workflows/web-ci.yml`.
+
+**Deliberately excluded from this first pass — `npm run test:e2e` (Playwright).** Not an
+oversight: `playwright.config.ts` hardcodes the browser executable to a Windows Chrome
+install path (§2.2), which does not exist on a standard Linux GitHub Actions runner.
+Running the e2e suite in CI needs either a `windows-latest` runner (uses CI minutes at 2×
+the Linux rate on the free tier) or reconfiguring the config to use Playwright's own
+bundled Chromium (`npx playwright install chromium`) instead of a system install — a real
+follow-up, not done yet. **CD (automatic deployment) is intentionally not part of this
+workflow** — deploys stay manual via the `/deploy-web` skill (`11-Deployment-Guide.md` §2),
+by explicit decision: a single operator wants to control the moment of deploy, and the
+skill's own pre-deploy smoke-test steps are a deliberate pause, not friction to automate
+away.
+
+This workflow will grow a new job per component the moment that component gets its first
+real test — not before (an empty "build-only, no tests" job for a component with zero test
+coverage adds CI runtime for no verification value).
 
 ## 5. Test environments
 

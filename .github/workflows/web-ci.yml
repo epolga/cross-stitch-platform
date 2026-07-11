@@ -1,0 +1,45 @@
+name: web-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm run test
+
+# Deliberately not run here: `npm run test:e2e` (Playwright). See
+# docs/srs/09-Test-Plan.md §4.4 for why — playwright.config.ts hardcodes a Windows
+# Chrome path, which doesn't exist on this Linux runner. Add a separate e2e job once
+# that's reconfigured to use Playwright's bundled Chromium (or move to a Windows runner).
+#
+# Deliberately not part of this workflow at all: deployment. Deploys stay manual via
+# the /deploy-web skill (docs/srs/11-Deployment-Guide.md §2) by design.
