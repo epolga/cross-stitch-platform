@@ -170,6 +170,21 @@ live) to actually explain the revenue/traffic dip.
     for each to `docs/integration/dynamodb-schema.md`, following the
     existing `PasswordResetTokens`/`SubscriptionEvents` pattern.
     Prioritize the two non-self-provisioning tables first.
+12. **Unauthenticated email-in-body endpoints — consider rate-limit or
+    verification (found 2026-07-12, `docs/srs/06-API-Specification.md`
+    §2).** `/api/trial/start`, `/api/subscription/status`, and
+    `/api/subscription/download-access` take a plain `email` field in
+    the JSON body with no session, password, or token proving the
+    requester owns that email (`Auth: none (email in body)` in the API
+    spec). Confirmed in code: `/api/subscription/status`
+    (`route.ts:15-21`) returns subscription/trial entitlement status
+    (active/inactive, downloads remaining) for **any** email passed in —
+    no rate limit on this route today (`—` in the spec's rate-limit
+    column). Likely intentional (called right after PayPal
+    redirect/registration before a session cookie exists), not flagged
+    as a bug — but worth a deliberate decision: add rate-limiting at
+    least on `/subscription/status` (info-disclosure of subscription
+    state by email), or accept the trade-off as-is. Not yet actioned.
 
 ## Done when
 
