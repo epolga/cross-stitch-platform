@@ -128,7 +128,23 @@ live) to actually explain the revenue/traffic dip.
     overridable, so these are defaults, not confirmed-live):
     - Saved editor patterns — `ConverterPatterns` (`pattern-storage.ts`),
       PK `patternId`, GSI `ownerID-index`. **Self-provisions** (creates
-      table + TTL on first use).
+      table + TTL on first use). Fields: `ownerID` (session userId),
+      `name`, `width`/`height`, `palette` (JSON `PatternPalette[]` — DMC
+      number/name/RGB/symbol/stitchCount), `grid` (RLE-compressed, capped
+      at 350KB compressed), `hiddenColors` (optional, JSON `number[]`),
+      `thumbnail` (optional, client-generated JPEG data-URL), `createdAt`
+      (ISO-8601). **Notes for the future:**
+      - `createdAt` is misleading — `updatePattern()` overwrites it on
+        every resave, so the "Open" list's sort-by-`createdAt` is really
+        "last modified," not true creation date. No separate `updatedAt`
+        exists; if a real creation date is ever needed, nothing captures
+        it today.
+      - The 350KB compressed-grid cap is the only overflow guard; large
+        low-repetition patterns (poor RLE compression) can hit it sooner
+        than the grid dimensions alone would suggest.
+      - `expiresAt` TTL is enabled on the table but no code path writes
+        that attribute — saved drafts never actually expire despite TTL
+        being configured.
     - Design likes/votes — `CrossStitchLikes` (`design-likes.ts`), PK
       `PK`=`DESIGN#<id>` / SK `SK`=`USER#<email>`, GSI `GSI1`. **Does
       NOT self-provision** — must already exist manually in AWS.
