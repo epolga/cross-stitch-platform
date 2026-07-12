@@ -11,44 +11,44 @@ This document set specifies the requirements for the cross-stitch-platform monor
 public cross-stitch pattern website plus the internal tools that publish content to it,
 promote it on Pinterest, and monitor its business performance.
 
-Because no prior SRS exists, this set was written **from the current codebase**, not from
-a pre-implementation spec. It documents what the system does today (an "as-built" SRS) so
-that it can serve as a baseline for future requirements work, onboarding, and gap analysis
+This set serves as a baseline for future requirements work and gap analysis
 — not as a description of an idealized future system. Sections describing known weaknesses
 or gaps are marked explicitly.
 
 ## 2. Product overview
 
 The platform's business is: publish free/paid cross-stitch pattern charts, drive traffic to
-them mainly via Pinterest, monetize that traffic (ads, subscriptions), and let visitors
-convert their own photos into custom cross-stitch patterns. One person (the site owner)
-operates the internal tooling; there is no team of end-user-facing customer support.
+them (organic search, Pinterest, and direct/referral being the largest channels — the exact
+mix is a live analysis subject, not a fixed fact, and shifts over time), monetize that
+traffic (ads, subscriptions), and let visitors convert their own photos into custom
+cross-stitch patterns. One person (the site owner) operates the internal tooling; there is
+no team of end-user-facing customer support.
 
 ```
-                    ┌─────────────────────────┐
-                    │   Uploader (WPF, desktop) │  operator: publishes new designs,
+                    ┌──────────────────────────┐
+                    │  Uploader (WPF, desktop) │  operator: publishes new designs,
                     │                          │  sends subscriber emails
                     └───────────┬──────────────┘
                                 │ writes designs, creates pins
                                 ▼
    ┌────────────────────────────────────────────────────┐
-   │        CrossStitchItems / CrossStitchUsers          │   AWS DynamoDB
-   │              (catalog + user data)                  │
-   └───────────┬───────────────────────────┬─────────────┘
-               │ reads/writes                │ reads
-               ▼                            ▼
-   ┌───────────────────────┐      ┌──────────────────────────────┐
-   │   Website (Next.js)    │      │  autopinner (.NET worker)     │
-   │   cross-stitch.com      │      │  backfills Pinterest pins     │
-   │   + photo-to-cross-     │      └──────────────┬─────────────┘
-   │     stitch converter    │                     │
-   └───────────┬────────────┘                     │ pins, ads, GA4, AdSense
-               │ ad revenue, GA4 events              ▼
+   │        CrossStitchItems / CrossStitchUsers         │   AWS DynamoDB
+   │              (catalog + user data)                 │
+   └───────────┬───────────────────────────┬────────────┘
+               │ reads/writes              │ reads
+               ▼                           ▼
+   ┌───────────────────────┐      ┌────────────────────────────┐
+   │   Website (Next.js)   │      │  autopinner (.NET worker)  │
+   │   cross-stitch.com    │      │  backfills Pinterest pins  │
+   │   + photo-to-cross-   │      └──────────────┬─────────────┘
+   │     stitch converter  │                     │
+   └───────────┬───────────┘                     │ pins, ads, GA4, AdSense
+               │ ad revenue, GA4 events          ▼
                ▼                       ┌──────────────────────────────┐
-   ┌───────────────────────┐          │  pinterest-agent (Lambda,      │
-   │  Visitors / Pinterest  │◀─────────│  cron): analytics, AI trend    │
-   │  users                 │  pins    │  analysis, IP-abuse defense,   │
-   └───────────────────────┘          │  alerting                      │
+   ┌────────────────────────┐          │  pinterest-agent (Lambda,    │
+   │  Visitors / Pinterest  │◀──────── │  cron): analytics, AI trend │
+   │  users                 │  pins    │  analysis, IP-abuse defense, │
+   └────────────────────────┘          │  alerting                    │
                                        └──────────────────────────────┘
 ```
 
