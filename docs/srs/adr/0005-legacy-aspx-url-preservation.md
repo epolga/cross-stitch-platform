@@ -1,7 +1,9 @@
 # ADR-0005: Preserve legacy `.aspx` URLs via catch-all routing
 
 **Status:** Accepted (reflects current implementation)
+
 **Date recorded:** 2026-07-11 (reverse-engineered — no contemporaneous record found)
+
 **Related:** `../05-SAD.md` §4.1, `../01-SRS-Website.md` FR-CAT-4, NFR-2,
 `../lld/01-LLD-Website.md` §5.3
 

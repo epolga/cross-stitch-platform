@@ -3,6 +3,7 @@
 **Status:** Draft, consolidated from `01-LLD-Website.md` §2, `02-LLD-Photo-to-Cross-Stitch-Converter.md`
 §2, `03-LLD-Pinterest-Automation.md` §2, `04-LLD-Uploader.md` §2, and `06-API-Specification.md`
 **Date:** 2026-07-11
+
 **Purpose:** Single canonical reference for every DynamoDB table/entity in the platform —
 this document exists specifically because `docs/integration/dynamodb-schema.md` (the
 pre-existing formal schema doc) has not kept pace with feature development (`05-SAD.md`

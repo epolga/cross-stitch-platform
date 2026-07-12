@@ -1,6 +1,7 @@
 # Test Cases — Pinterest Automation
 
 **Derived from:** `../use-cases/03-UseCases-Pinterest-Automation.md`
+
 **Status:** Draft. Per `../09-Test-Plan.md` §2, this subsystem has **zero automated test
 coverage** today (no test runner configured for pinterest-agent, no .NET test project for
 autopinner) — every test case below is currently manual-only or unexercised. This document

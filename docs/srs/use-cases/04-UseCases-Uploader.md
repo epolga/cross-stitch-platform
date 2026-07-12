@@ -1,7 +1,7 @@
 # Use Cases — Uploader
 
 **Corresponds to:** `../04-SRS-Uploader.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 This document covers the key, non-trivial workflows in the Uploader — the scenarios with
@@ -25,6 +25,7 @@ requirement IDs it realizes.
 ## UC-U-01 — Publish a new design batch
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-PUB-1 … FR-PUB-9.
 
 **Trigger:** Operator has a finished design batch (chart file, PDF kit variants, preview
@@ -68,6 +69,7 @@ subscriber email has been sent yet.
 ## UC-U-02 — Notify subscribers about a new design
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-MAIL-1, FR-MAIL-2, FR-MAIL-6, FR-MAIL-7, FR-MAIL-8.
 
 **Trigger:** Operator has just published a design (UC-U-01) and is ready to tell
@@ -100,6 +102,7 @@ than maximizing reach).
 ## UC-U-03 — Send an announcement email
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-MAIL-1, FR-MAIL-3, FR-MAIL-4.
 
 **Trigger:** Operator has a broader announcement to make (not tied to a single new design)
@@ -126,6 +129,7 @@ two rely on the operator's deliberate button click as the safety gate).
 ## UC-U-04 — Get AI-assisted pin-title suggestions
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-AI-1, FR-AI-2, FR-AI-3.
 
 **Trigger:** Operator has just selected a batch folder (UC-U-01 step 1).
@@ -153,6 +157,7 @@ only the title choice has a real effect on the published pin.
 ## UC-U-05 — Maintain mailing-list hygiene
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-MAIL-9.
 
 **Trigger:** Operator notices a data-quality issue (e.g., a batch of addresses that should
@@ -181,6 +186,7 @@ these are one-off, operator-initiated corrections, not continuously running proc
 ## UC-U-06 — Update and hot-reload an email template
 
 **Primary actor:** Site operator (often assisted by an AI coding agent for drafting content).
+
 **Related requirements:** FR-MAIL-7, FR-MAIL-8.
 
 **Trigger:** Operator wants to change the wording/design of the "new design" notification or
@@ -213,6 +219,7 @@ with for recipients not yet processed.
 ## UC-U-07 — Create or rename Pinterest boards for albums
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-ADM-1.
 
 **Trigger:** A new album category is introduced, or existing board names need to become

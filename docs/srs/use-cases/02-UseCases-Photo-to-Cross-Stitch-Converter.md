@@ -1,7 +1,7 @@
 # Use Cases — Photo-to-Cross-Stitch Converter
 
 **Corresponds to:** `../02-SRS-Photo-to-Cross-Stitch-Converter.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 This document covers the key, non-trivial user journeys in the converter/editor — the
@@ -25,6 +25,7 @@ references the SRS requirement IDs it realizes.
 ## UC-C-01 — Convert a photo into a pattern
 
 **Primary actor:** Visitor or Registered user (no login required to start).
+
 **Related requirements:** FR-CVT-1 … FR-CVT-7.
 
 **Trigger:** Actor opens `/photo-to-cross-stitch` and uploads a photo (or, see UC-C-06, drags
@@ -50,6 +51,7 @@ for editing; no account or save action has occurred yet.
 ## UC-C-02 — Edit and refine a pattern
 
 **Primary actor:** Visitor or Registered user.
+
 **Related requirements:** FR-EDT-1 … FR-EDT-9.
 
 **Trigger:** Actor has a pattern open (from conversion, UC-C-01, or from opening a saved
@@ -81,6 +83,7 @@ updated to match.
 ## UC-C-03 — Save a pattern to an account
 
 **Primary actor:** Registered user.
+
 **Related requirements:** FR-SAV-1, FR-SAV-2, FR-SAV-3.
 
 **Trigger:** Actor clicks Save (or the Ctrl/Cmd+S shortcut) while editing a pattern.
@@ -108,6 +111,7 @@ account.
 ## UC-C-04 — Export a pattern as a print-ready PDF
 
 **Primary actor:** Registered user.
+
 **Related requirements:** FR-SAV-1, FR-SAV-4.
 
 **Trigger:** Actor clicks Download/Export PDF on a pattern.
@@ -133,6 +137,7 @@ downloaded PDF.
 ## UC-C-05 — Resume an interrupted editing session
 
 **Primary actor:** Visitor or Registered user.
+
 **Related requirements:** FR-EDT-9.
 
 **Trigger:** Actor closes the tab, loses connectivity, or navigates away mid-edit without
@@ -154,6 +159,7 @@ alone is not equivalent to a saved pattern.
 ## UC-C-06 — Import an image dragged from another website
 
 **Primary actor:** Visitor or Registered user.
+
 **Related requirements:** FR-CVT-2.
 
 **Trigger:** Actor drags an image from another browser tab/website directly onto the
@@ -176,6 +182,7 @@ silently falling back to a blank/placeholder pattern.
 ## UC-C-07 — Review editor usage analytics
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-ANL-1, FR-ANL-2, FR-ANL-3.
 
 **Trigger:** Operator opens `/admin/editor-analytics`, or receives the daily editor-usage

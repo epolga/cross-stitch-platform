@@ -1,6 +1,7 @@
 # Test Cases — Photo-to-Cross-Stitch Converter
 
 **Derived from:** `../use-cases/02-UseCases-Photo-to-Cross-Stitch-Converter.md`
+
 **Status:** Draft. "Automated?" column verified against `../09-Test-Plan.md` §2.1.
 
 ## TC set for UC-C-01 — Convert a photo into a pattern

@@ -2,7 +2,9 @@
 
 **Status:** Draft, current-state assessment verified against the actual test suites (not
 assumed) plus a risk-based plan for closing the gap
+
 **Date:** 2026-07-11
+
 **Related:** `use-cases/*.md` (source for `test-cases/*.md`), `05-SAD.md` §10 (risk summary
 this plan prioritizes against)
 

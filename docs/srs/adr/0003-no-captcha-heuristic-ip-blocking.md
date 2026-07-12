@@ -1,7 +1,9 @@
 # ADR-0003: No CAPTCHA; heuristic detection + human-reviewed IP blocking instead
 
 **Status:** Accepted (reflects current implementation)
+
 **Date recorded:** 2026-07-11 (reverse-engineered — no contemporaneous record found)
+
 **Related:** `../05-SAD.md` §8.1, `../01-SRS-Website.md` NFR-4, `../03-SRS-Pinterest-Automation.md`
 FR-IP-1…FR-IP-7, `../lld/03-LLD-Pinterest-Automation.md` §4
 

@@ -1,7 +1,9 @@
 # ADR-0002: Desktop application (WPF), not a web admin panel, for publishing
 
 **Status:** Accepted (reflects current implementation)
+
 **Date recorded:** 2026-07-11 (reverse-engineered — no contemporaneous record found)
+
 **Related:** `../05-SAD.md` §4.3, §7, `../04-SRS-Uploader.md`, `../lld/04-LLD-Uploader.md`
 
 ## Context

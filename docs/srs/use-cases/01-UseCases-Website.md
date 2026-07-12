@@ -1,7 +1,7 @@
 # Use Cases — Website (cross-stitch.com)
 
 **Corresponds to:** `../01-SRS-Website.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 This document covers the key, non-trivial user journeys on the website — the scenarios
@@ -27,6 +27,7 @@ references the SRS requirement IDs it realizes.
 
 **Primary actor:** Visitor (unauthenticated), Registered user, or Subscriber, depending on
 site-wide download mode.
+
 **Related requirements:** FR-DL-1 … FR-DL-9.
 
 **Trigger:** The actor clicks the download button on a design page.
@@ -76,6 +77,7 @@ access is granted.
 ## UC-W-02 — Discover a design via AI-powered search
 
 **Primary actor:** Visitor.
+
 **Related requirements:** FR-SRCH-1 … FR-SRCH-6.
 
 **Trigger:** The actor enters a free-text query or uploads a photo into the homepage search
@@ -108,6 +110,7 @@ recent browsing, with no account required at any point in this use case.
 ## UC-W-03 — Register and verify a new account
 
 **Primary actor:** Visitor.
+
 **Related requirements:** FR-AUTH-1, FR-AUTH-2, FR-AUTH-3, FR-AUTH-7, FR-AUTH-8.
 
 **Trigger:** The actor opens the registration form (directly, or as part of UC-W-01
@@ -142,6 +145,7 @@ the Uploader.
 ## UC-W-04 — Subscribe to a paid plan
 
 **Primary actor:** Registered user (site in `paid` download mode).
+
 **Related requirements:** FR-MON-3, FR-MON-4, FR-MON-5, FR-MON-6, FR-DL-4.
 
 **Trigger:** The actor reaches the plan-selection step (directly, or via UC-W-01 alternate
@@ -172,6 +176,7 @@ which flow was taken.
 ## UC-W-05 — Vote on a design
 
 **Primary actor:** Registered user.
+
 **Related requirements:** FR-ENG-1, FR-ENG-2, NFR-3 (rate limiting).
 
 **Main flow:**
@@ -192,6 +197,7 @@ replaces it).
 
 **Primary actor:** Visitor or Registered user, anywhere on the site (most commonly from the
 pattern editor).
+
 **Related requirements:** FR-ENG-6 (site-wide); FR-FBK-1 (editor-specific fields — see
 `02-UseCases-Photo-to-Cross-Stitch-Converter.md`).
 
@@ -210,6 +216,7 @@ operator.
 ## UC-W-07 — Reset a forgotten password
 
 **Primary actor:** Registered user.
+
 **Related requirements:** FR-AUTH-4.
 
 **Main flow:**
@@ -229,6 +236,7 @@ replayed.
 ## UC-W-08 — Triage feature requests
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-ADM-1.
 
 **Trigger:** Operator opens `/admin/feature-requests`.

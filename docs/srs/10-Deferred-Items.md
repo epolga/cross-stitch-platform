@@ -2,6 +2,7 @@
 
 **Status:** Living document — append to this, don't let deferred decisions get lost across
 sessions.
+
 **Date started:** 2026-07-11
 
 This tracks documentation/decisions explicitly deferred during the `docs/srs/` effort —

@@ -6,7 +6,9 @@
 inferred. The Uploader/autopinner lists are carried over from the config-key inventories
 already established in `04-SRS-Uploader.md` §2.3 and `03-LLD-Pinterest-Automation.md` §3,
 not independently re-grepped for this document.
+
 **Date:** 2026-07-11
+
 **Purpose:** Closes the gap flagged in `11-Deployment-Guide.md` §3.3 — no single file in the
 repo lists every configuration variable a component needs. This is that file. Values are
 **not** included (secrets); only names, purpose, and default/fallback behavior where known

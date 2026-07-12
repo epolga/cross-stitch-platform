@@ -3,8 +3,9 @@
 **Component:** `web/src/app/photo-to-cross-stitch/*` and its supporting `/api/convert*`,
 `/api/analyze`, `/api/converter/*`, `/api/import-image-url`, `/api/analytics/editor-*` routes
 (same Next.js codebase as the website, distinct product surface)
+
 **Part of:** cross-stitch-platform — see `00-Overview.md` for cross-component context
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Introduction

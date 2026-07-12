@@ -1,7 +1,9 @@
 # Software Requirements Specification — Website (cross-stitch.com)
 
 **Component:** `web/` (Next.js App Router)
+
 **Part of:** cross-stitch-platform — see `00-Overview.md` for cross-component context
+
 **Date:** 2026-07-11
 
 ## 1. Introduction

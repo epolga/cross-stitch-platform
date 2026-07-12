@@ -1,7 +1,9 @@
 # ADR-0001: Split Pinterest pin-creation (autopinner) from analytics/defense (pinterest-agent)
 
 **Status:** Accepted (reflects current implementation)
+
 **Date recorded:** 2026-07-11 (reverse-engineered — no contemporaneous record found)
+
 **Related:** `../05-SAD.md` §4.2, `../03-SRS-Pinterest-Automation.md`, `../lld/03-LLD-Pinterest-Automation.md`
 
 ## Context

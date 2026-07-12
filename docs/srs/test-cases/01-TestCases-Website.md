@@ -1,6 +1,7 @@
 # Test Cases — Website (cross-stitch.com)
 
 **Derived from:** `../use-cases/01-UseCases-Website.md`
+
 **Status:** Draft. "Automated?" column verified against `../09-Test-Plan.md` §2.1 — marked
 `Yes` only where an existing Vitest file was confirmed to cover it, `No` otherwise (not
 inferred, not assumed).

@@ -2,7 +2,7 @@
 
 **Corresponds to:** `../02-SRS-Photo-to-Cross-Stitch-Converter.md`,
 `../use-cases/02-UseCases-Photo-to-Cross-Stitch-Converter.md`, `../05-SAD.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Scope

@@ -1,8 +1,11 @@
 # Software Requirements Specification — Overview
 
 **Product:** cross-stitch.com platform
+
 **Document set:** This overview plus four component SRS documents (see §3)
+
 **Status:** Draft, derived from the current implementation (reverse-engineered SRS)
+
 **Date:** 2026-07-11
 
 ## 1. Purpose

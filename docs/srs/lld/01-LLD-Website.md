@@ -1,7 +1,7 @@
 # Low-Level Design — Website (cross-stitch.com)
 
 **Corresponds to:** `../01-SRS-Website.md`, `../use-cases/01-UseCases-Website.md`, `../05-SAD.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Scope

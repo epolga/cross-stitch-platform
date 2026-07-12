@@ -2,7 +2,7 @@
 
 **Corresponds to:** `../03-SRS-Pinterest-Automation.md`,
 `../use-cases/03-UseCases-Pinterest-Automation.md`, `../05-SAD.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Scope

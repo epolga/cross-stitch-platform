@@ -1,6 +1,7 @@
 # Test Cases — Uploader
 
 **Derived from:** `../use-cases/04-UseCases-Uploader.md`
+
 **Status:** Draft. Per `../09-Test-Plan.md` §2, no .NET test project exists for the Uploader
 — every test case below is currently manual-only (verified by the operator clicking through
 the UI) or unexercised. Several rows note the operator's own existing manual-verification

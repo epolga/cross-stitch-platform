@@ -1,7 +1,7 @@
 # Use Cases — Pinterest Automation
 
 **Corresponds to:** `../03-SRS-Pinterest-Automation.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 This document covers the key, non-trivial workflows in the Pinterest-automation
@@ -25,6 +25,7 @@ use case references the SRS requirement IDs it realizes.
 ## UC-P-01 — Run the daily business-and-defense pipeline
 
 **Primary actor:** Scheduler (Lambda cron trigger).
+
 **Related requirements:** FR-PIPE-1, FR-PIPE-2, NFR-4.
 
 **Trigger:** The daily scheduled invocation fires.
@@ -62,6 +63,7 @@ current block list; the operator has received (or will shortly receive) the dail
 ## UC-P-02 — Post a newly published design to Pinterest
 
 **Primary actor:** Scheduler (autopinner, one-shot or hourly daemon).
+
 **Related requirements:** FR-PIN-1 … FR-PIN-9.
 
 **Trigger:** A scheduled run of autopinner fires (or the Uploader publishes a design
@@ -103,6 +105,7 @@ marked `FAILED`/`EXHAUSTED` with a recorded error for later investigation.
 
 **Primary actor:** Scheduler (detection), AI agent (investigation/recommendation), Site
 operator (decision).
+
 **Related requirements:** FR-IP-1 … FR-IP-5.
 
 **Trigger:** The daily suspicious-IP scan (UC-P-01 step 3) finds one or more IPs whose
@@ -143,6 +146,7 @@ confirmation (per FR-IP-3, this is a hard requirement, not a default).
 ## UC-P-04 — Recognize and escalate a repeat-offender IP
 
 **Primary actor:** AI agent, Site operator.
+
 **Related requirements:** FR-IP-6, FR-IP-7.
 
 **Trigger:** An IP reappears in a new suspicious-activity alert after its earlier block or
@@ -169,6 +173,7 @@ process.
 ## UC-P-05 — Act on an AI budget-recommendation change
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-AI-1, FR-AI-2, FR-NOTIF-1.
 
 **Trigger:** The daily pipeline's AI trend analysis step (UC-P-01 step 8) produces a
@@ -195,6 +200,7 @@ this subsystem (e.g., directly in Pinterest Ads Manager); this use case is advis
 ## UC-P-06 — Investigate a metric anomaly
 
 **Primary actor:** Site operator.
+
 **Related requirements:** FR-ANOM-1, FR-ANOM-2.
 
 **Trigger:** The daily pipeline's anomaly-detection step (UC-P-01 step 7) flags a metric
@@ -220,6 +226,7 @@ itself does not have a resolution/root-cause field).
 ## UC-P-07 — Auto-refresh the Pinterest OAuth token
 
 **Primary actor:** Scheduler.
+
 **Related requirements:** FR-TOK-1, FR-TOK-2.
 
 **Trigger:** Every pipeline run, as its first step (UC-P-01 step 1).

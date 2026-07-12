@@ -2,7 +2,9 @@
 
 **Status:** Draft, verified against `.claude/commands/deploy-web.md`, `lambda/deploy.ps1`,
 and the root `README.md` — not inferred.
+
 **Date:** 2026-07-11
+
 **Related:** `05-SAD.md` §7 (deployment view), `10-Deferred-Items.md` (no CI/CD exists —
 everything here is a manual procedure)
 
@@ -59,8 +61,10 @@ Four components deploy independently, on four different mechanisms:
 
 **Function name:** `cross-stitch-daily-pipeline` | **Region:** `us-east-1` | **Runtime:**
 `nodejs22.x` | **Timeout:** 900s (Lambda's maximum) | **Memory:** 1024 MB
+
 **Trigger:** EventBridge rule `cross-stitch-daily-5am`, `cron(0 2 * * ? *)` — 02:00 UTC
 (05:00 local, UTC+3)
+
 **Execution role:** `cross-stitch-lambda-pipeline`
 
 ### 3.1 Procedure (`lambda\deploy.ps1`, run from `automation/pinterest-agent/`)

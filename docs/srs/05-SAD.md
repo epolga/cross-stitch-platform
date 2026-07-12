@@ -1,7 +1,7 @@
 # Software Architecture Document — cross-stitch-platform
 
-**Status:** Draft, reverse-engineered from the current implementation
 **Date:** 2026-07-11
+
 **Related documents:** `00-Overview.md` (requirements-level component map), `01`–`04`
 component SRS documents, `use-cases/` (scenario-level detail)
 
@@ -42,37 +42,37 @@ shared store directly.
 
 ```
                               ┌──────────────────────┐
-                              │   Site operator        │
-                              │   (Olga, sole admin)   │
-                              └──────────┬─────────────┘
+                              │   Site operator      │
+                              │   (Olga, sole admin) │
+                              └──────────┬───────────┘
                                          │ operates
                      ┌───────────────────┼───────────────────┐
                      ▼                   ▼                   ▼
-           ┌──────────────────┐ ┌────────────────┐ ┌──────────────────────┐
+           ┌───────────────────┐ ┌─────────────────┐ ┌───────────────────────┐
            │  Uploader (WPF)   │ │  /admin pages   │ │  /review-ip workflow  │
            │  desktop app      │ │  (Website)      │ │  (Claude Code + ops)  │
-           └────────┬──────────┘ └───────┬─────────┘ └──────────┬─────────────┘
-                    │ publish/email       │ triage/analytics      │ block/watch IP
-                    ▼                    ▼                       ▼
-    ┌───────────────────────────────────────────────────────────────────────┐
-    │                        AWS DynamoDB (shared data layer)                │
-    │   CrossStitchItems · CrossStitchUsers · PasswordResetTokens ·          │
-    │   SubscriptionEvents · CrossStitchBusinessHistory                      │
-    └───────┬───────────────────────┬───────────────────────┬───────────────┘
+           └────────┬──────────┘ └───────┬─────────┘ └──────────┬────────────┘
+                    │ publish/email      │ triage/analytics     │ block/watch IP
+                    ▼                    ▼                      ▼
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                        AWS DynamoDB (shared data layer)                 │
+    │   CrossStitchItems · CrossStitchUsers · PasswordResetTokens·            │
+    │   SubscriptionEvents · CrossStitchBusinessHistory                       │
+    └───────┬────────────────────────┬─────────────────────────┬──────────────┘
             │ read/write             │ read (pins) / write     │ read/write
-            ▼                        │ (pin status)             ▼
-  ┌──────────────────┐               ▼                ┌──────────────────────────┐
-  │  Website          │      ┌──────────────────┐      │  pinterest-agent (Lambda) │
-  │  (Next.js, EB)     │      │  autopinner (.NET) │      │  daily cron: analytics,   │
-  │  + converter        │      │  worker: creates    │      │  AI trend, IP defense,   │
-  └──────┬─────────────┘      │  Pinterest pins     │      │  notifications            │
-         │                    └──────────┬─────────┘      └──────────┬─────────────┘
-         │ AdSense, GA4, PayPal          │ Pinterest API v5           │ GA4, AdSense,
-         ▼                               ▼                            │ Pinterest Ads API,
-  ┌────────────────────┐      ┌──────────────────────┐               │ Anthropic API,
-  │ Visitors / Google /  │      │  Pinterest platform    │               │ Telegram, WAF
-  │ PayPal                │      │  (pins, boards)        │◀──────────────┘
-  └────────────────────┘      └──────────────────────┘
+            ▼                        │ (pin status)            ▼
+  ┌──────────────────┐               ▼                   ┌──────────────────────────┐
+  │  Website         │       ┌────────────────────┐      │  pinterest-agent (Lambda)│
+  │  (Next.js, EB)   │       │  autopinner (.NET) │      │  daily cron: analytics,  │
+  │  + converter     │       │  worker: creates   │      │  AI trend, IP defense,   │
+  └──────┬───────────┘       │  Pinterest pins    │      │  notifications           │
+         │                   └──────────┬─────────┘      └────────────┬─────────────┘
+         │ AdSense, GA4, PayPal         │ Pinterest API v5            │ GA4, AdSense,
+         ▼                              ▼                             │ Pinterest Ads API,
+  ┌────────────────────┐      ┌────────────────────────┐              │ Anthropic API,
+  │ Visitors / Google /│      │  Pinterest platform    │              │ Telegram, WAF
+  │ PayPal             │      │  (pins, boards)        │◀────────────┘
+  └────────────────────┘      └────────────────────────┘
 ```
 
 `CrossStitch.Shared` (.NET library) is not shown as a node — it is compiled into both

@@ -3,7 +3,9 @@
 **Status:** Draft, consolidating security-relevant findings already established across
 `01`–`14` into one risk-rated view — no new code was read specifically for this document;
 every threat below cites where it was originally found.
+
 **Date:** 2026-07-11
+
 **Severity scale (qualitative, not a formal CVSS score):** informed by impact if exploited
 × how exposed/likely the vector is, given what's already known about this platform's real
 traffic patterns (see `12-Runbook.md` — this site has active, ongoing scraping/abuse

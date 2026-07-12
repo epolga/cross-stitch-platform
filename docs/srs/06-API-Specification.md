@@ -5,8 +5,9 @@
 share the same auth/rate-limit infrastructure. No other component in the platform exposes
 an HTTP API of its own (Pinterest-automation and Uploader are consumers/schedulers, not API
 providers — see `00-Overview.md`).
-**Status:** Draft, verified against route source files (not inferred)
+
 **Date:** 2026-07-11
+
 **Base URL:** `https://cross-stitch.com/api`
 
 ## 1. Shared infrastructure

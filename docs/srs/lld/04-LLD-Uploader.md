@@ -2,7 +2,7 @@
 
 **Corresponds to:** `../04-SRS-Uploader.md`, `../use-cases/04-UseCases-Uploader.md`,
 `../05-SAD.md`
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Scope

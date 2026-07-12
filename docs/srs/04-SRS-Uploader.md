@@ -1,8 +1,9 @@
 # Software Requirements Specification — Uploader
 
 **Component:** `uploader/` (WPF desktop application)
+
 **Part of:** cross-stitch-platform — see `00-Overview.md` for cross-component context
-**Status:** Draft, reverse-engineered from the current implementation
+
 **Date:** 2026-07-11
 
 ## 1. Introduction

@@ -3,6 +3,7 @@
 **Status:** Draft, verified against `03-LLD-Pinterest-Automation.md`, `03-SRS-Pinterest-Automation.md`,
 and `05-SAD.md` §8.2 — consolidates what's already established elsewhere into one
 monitoring-focused reference; introduces no new claims.
+
 **Date:** 2026-07-11
 
 ## 1. Philosophy (as-built, not prescribed)

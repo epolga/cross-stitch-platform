@@ -1,7 +1,9 @@
 # ADR-0004: Shared-database integration (DynamoDB) instead of internal APIs between components
 
 **Status:** Accepted (reflects current implementation)
+
 **Date recorded:** 2026-07-11 (reverse-engineered — no contemporaneous record found)
+
 **Related:** `../05-SAD.md` §5.1, §6, `../00-Overview.md` §5
 
 ## Context

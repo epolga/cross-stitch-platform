@@ -3,7 +3,9 @@
 **Status:** Draft, built from procedures verified this session (the `/review-ip` skill, the
 AdSense-decline investigation walked live in this session's history, the deploy scripts) —
 not invented incident procedures.
+
 **Date:** 2026-07-11
+
 **Audience:** The site operator, or an AI agent (Claude Code) acting under the operator's
 direction. Single-operator platform (`00-Overview.md` §4) — there is no on-call rotation or
 escalation path beyond "the operator investigates."
