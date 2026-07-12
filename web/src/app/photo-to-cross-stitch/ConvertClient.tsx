@@ -11,6 +11,7 @@ import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
+import OpenPatternDialog from '@/app/components/OpenPatternDialog';
 import FeatureRequestDialog from '@/app/components/FeatureRequestDialog';
 import MirrorDialog, { type MirrorDirection, type MirrorAxis, type MirrorResize } from '@/app/components/MirrorDialog';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
@@ -20,6 +21,16 @@ import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
 
 import { trackEvent, postEditorEvent } from '@/lib/track-event';
+
+const DRAFT_KEY = 'converterDraft';
+
+interface ConverterDraft {
+  name: string;
+  grid: number[][];
+  palette: PatternPalette[];
+  hiddenColors: number[];
+  savedAt: number;
+}
 
 const DEFAULT_PALETTE_NUMBERS = [
   'blanc', '310', '3371', '321', '666', '3716', '208',
@@ -240,6 +251,7 @@ export default function ConvertPage() {
   const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [afterSaveAction, setAfterSaveAction] = useState<'copyLink' | null>(null);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(() => isUserLoggedIn());
@@ -253,6 +265,8 @@ export default function ConvertPage() {
   const [pendingPdfTitle, setPendingPdfTitle] = useState('');
   const [patternLoadError, setPatternLoadError] = useState('');
   const [patternLoading, setPatternLoading] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState<ConverterDraft | null>(null);
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hiddenColors, setHiddenColors] = useState<Set<number>>(new Set());
   const [blinkSwatch, setBlinkSwatch] = useState<number | null>(null);
   const [blinkCells, setBlinkCells] = useState<number | null>(null);
@@ -499,6 +513,7 @@ export default function ConvertPage() {
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
         setCellSize(12);
+        window.history.replaceState(null, '', `?pattern=${id}`);
         trackEvent('project_reopened', {
           patternId: id,
           patternWidth: data.width,
@@ -551,6 +566,59 @@ export default function ConvertPage() {
     const id = new URLSearchParams(window.location.search).get('pattern');
     if (id) loadPatternById(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Offer to resume an unsaved local draft — only when landing fresh (no
+  // ?pattern= id, which loads its own saved/shared state instead)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('pattern')) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as ConverterDraft;
+      const hasContent = Array.isArray(draft.grid) && draft.grid.some(row => row.some(c => c !== -1));
+      if (hasContent) setResumeDraft(draft);
+    } catch {
+      // corrupt draft — ignore
+    }
+  }, []);
+
+  // Debounced local autosave — independent of login, so work survives a
+  // closed tab / a mail app's in-app browser exiting on "back". Stops once
+  // the pattern is tied to an account save (savedPatternId set).
+  useEffect(() => {
+    if (!hasDesign || savedPatternId) return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      try {
+        const draft: ConverterDraft = {
+          name: patternName,
+          grid: gridRef.current,
+          palette: paletteRef.current,
+          hiddenColors: Array.from(hiddenColors),
+          savedAt: Date.now(),
+        };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {
+        // storage full/unavailable — best-effort only
+      }
+    }, 800);
+    return () => { if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current); };
+  }, [grid, palette, patternName, hiddenColors, hasDesign, savedPatternId]);
+
+  function applyResumeDraft() {
+    if (!resumeDraft) return;
+    updateGrid(resumeDraft.grid);
+    updatePalette(resumeDraft.palette);
+    setPatternName(resumeDraft.name ?? '');
+    setHiddenColors(new Set(resumeDraft.hiddenColors ?? []));
+    setCellSize(12);
+    setResumeDraft(null);
+  }
+
+  function discardResumeDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+    setResumeDraft(null);
+  }
 
   // Retry loading when user logs in and pattern URL is present but not yet loaded
   useEffect(() => {
@@ -622,6 +690,7 @@ export default function ConvertPage() {
     setSavedPatternId(id);
     const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${id}`;
     window.history.replaceState(null, '', `?pattern=${id}`);
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     trackEvent('project_saved', { patternId: id });
     return url;
   }
@@ -1211,6 +1280,7 @@ export default function ConvertPage() {
     setEditingName(true);
     setSavedPatternId(null);
     window.history.replaceState(null, '', window.location.pathname);
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
   }
 
   function handleResize(newW: number, newH: number, mode: ResizeMode, anchor: ResizeAnchor) {
@@ -1372,17 +1442,7 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Download PDF', shortcut: '', onClick: downloadPdf, disabled: downloading || !hasDesign },
                   { type: 'separator' },
                   { type: 'item', label: 'New Pattern', onClick: newPattern },
-                  { type: 'item', label: 'Open from link…', onClick: () => {
-                    const raw = prompt('Paste a pattern link or ID:');
-                    if (!raw) return;
-                    const match = raw.match(/pattern=([0-9a-f-]{36})/i) ?? raw.match(/^([0-9a-f-]{36})$/i);
-                    const id = match?.[1];
-                    if (!id) { alert('Could not find a pattern ID in that link.'); return; }
-                    fetch(`/api/converter/patterns/${id}`)
-                      .then(r => r.ok ? r.json() : Promise.reject())
-                      .then(data => { updateGrid(data.grid); updatePalette(data.palette); setPatternName(data.name ?? ''); setSavedPatternId(id); window.history.replaceState(null, '', `?pattern=${id}`); })
-                      .catch(() => alert('Pattern not found or link has expired.'));
-                  }},
+                  { type: 'item', label: 'Open…', onClick: () => setOpenDialogOpen(true) },
                   { type: 'item', label: 'Save', shortcut: 'Ctrl+S', onClick: handleSave },
                   { type: 'item', label: 'Copy link', shortcut: '', onClick: handleCopyLink },
                 ],
@@ -1906,9 +1966,39 @@ export default function ConvertPage() {
         onClose={() => { setSaveDialogOpen(false); setAfterSaveAction(null); }}
       />
 
+      <OpenPatternDialog
+        open={openDialogOpen}
+        onPick={(id) => { setOpenDialogOpen(false); loadPatternById(id); }}
+        onClose={() => setOpenDialogOpen(false)}
+      />
+
       {saveToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg pointer-events-none">
           {saveToast}
+        </div>
+      )}
+
+      {resumeDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[380px] max-w-[90vw] text-center">
+            <div className="text-3xl mb-2">💾</div>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">Unsaved work from last time</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              We found a pattern{resumeDraft.name ? ` — "${resumeDraft.name}"` : ''} you didn&apos;t save. Want to pick up where you left off?
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={discardResumeDraft}
+                className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Discard
+              </button>
+              <button type="button" onClick={applyResumeDraft}
+                className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600"
+              >
+                Resume
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

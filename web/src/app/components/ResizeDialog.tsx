@@ -15,28 +15,42 @@ interface Props {
 export default function ResizeDialog({ open, currentW, currentH, onConfirm, onClose }: Props) {
   const [w, setW] = useState(currentW);
   const [h, setH] = useState(currentH);
+  const [wText, setWText] = useState(String(currentW));
+  const [hText, setHText] = useState(String(currentH));
   const [mode, setMode] = useState<ResizeMode>('canvas');
   const [anchor, setAnchor] = useState<ResizeAnchor>('top-left');
   const [lock, setLock] = useState(false);
 
   useEffect(() => {
-    if (open) { setW(currentW); setH(currentH); }
+    if (open) {
+      setW(currentW); setH(currentH);
+      setWText(String(currentW)); setHText(String(currentH));
+    }
   }, [open, currentW, currentH]);
 
   if (!open) return null;
 
   const ratio = currentW / currentH;
+  const clamp = (v: number) => Math.max(10, Math.min(500, v));
 
-  function changeW(val: number) {
-    const v = Math.max(10, Math.min(500, val || 10));
+  function changeWText(text: string) {
+    setWText(text);
+    const parsed = parseInt(text, 10);
+    if (Number.isNaN(parsed)) return;
+    const v = clamp(parsed);
     setW(v);
-    if (lock) setH(Math.max(10, Math.min(500, Math.round(v / ratio))));
+    if (lock) { const hv = clamp(Math.round(v / ratio)); setH(hv); setHText(String(hv)); }
   }
-  function changeH(val: number) {
-    const v = Math.max(10, Math.min(500, val || 10));
+  function changeHText(text: string) {
+    setHText(text);
+    const parsed = parseInt(text, 10);
+    if (Number.isNaN(parsed)) return;
+    const v = clamp(parsed);
     setH(v);
-    if (lock) setW(Math.max(10, Math.min(500, Math.round(v * ratio))));
+    if (lock) { const wv = clamp(Math.round(v * ratio)); setW(wv); setWText(String(wv)); }
   }
+  function blurW() { const v = clamp(w); setW(v); setWText(String(v)); }
+  function blurH() { const v = clamp(h); setH(v); setHText(String(v)); }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
@@ -47,8 +61,9 @@ export default function ResizeDialog({ open, currentW, currentH, onConfirm, onCl
         <div className="flex items-end gap-2 mb-4">
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Width</label>
-            <input type="number" min={10} max={500} value={w}
-              onChange={e => changeW(parseInt(e.target.value))}
+            <input type="number" min={10} max={500} value={wText}
+              onChange={e => changeWText(e.target.value)}
+              onBlur={blurW}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
@@ -60,8 +75,9 @@ export default function ResizeDialog({ open, currentW, currentH, onConfirm, onCl
           </button>
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Height</label>
-            <input type="number" min={10} max={500} value={h}
-              onChange={e => changeH(parseInt(e.target.value))}
+            <input type="number" min={10} max={500} value={hText}
+              onChange={e => changeHText(e.target.value)}
+              onBlur={blurH}
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
             />
           </div>
