@@ -437,7 +437,7 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await pdf.save();
-    return new NextResponse(bytes, {
+    return new NextResponse(Buffer.from(bytes), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename="cross-stitch-pattern.pdf"',
