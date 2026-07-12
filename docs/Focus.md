@@ -118,6 +118,42 @@ live) to actually explain the revenue/traffic dip.
     `pin-ab-stats.json`) into the monorepo's `uploader/` folder while
     touching this, so nothing depends on paths outside
     `cross-stitch-platform` at all.
+11. **DynamoDB schema doc gap — 6 entities not yet in the formal contract
+    (found 2026-07-12).** `docs/srs/01-SRS-Website.md` §5 flags that
+    `docs/integration/dynamodb-schema.md` only formally covers
+    `CrossStitchItems`, `CrossStitchUsers`, `PasswordResetTokens`,
+    `SubscriptionEvents` — six newer entities exist in code but aren't
+    confirmed against the live DynamoDB console or documented as an
+    authoritative contract. Identified via code (table names are env-var
+    overridable, so these are defaults, not confirmed-live):
+    - Saved editor patterns — `ConverterPatterns` (`pattern-storage.ts`),
+      PK `patternId`, GSI `ownerID-index`. **Self-provisions** (creates
+      table + TTL on first use).
+    - Design likes/votes — `CrossStitchLikes` (`design-likes.ts`), PK
+      `PK`=`DESIGN#<id>` / SK `SK`=`USER#<email>`, GSI `GSI1`. **Does
+      NOT self-provision** — must already exist manually in AWS.
+    - Feature requests — `FeatureRequests` (`feature-requests.ts`), PK
+      `id`. Self-provisions.
+    - Blog reactions — `CrossStitchBlogReactions` (`blog-reactions.ts`),
+      PK `slug`. Self-provisions.
+    - Editor analytics events — `EditorEvents` (`editor-events.ts`), PK
+      `id`, GSI `date-eventType-index`. Self-provisions.
+    - Search query logs — `SearchQueries` (`search-log.ts`), PK `date` /
+      SK `ts`, 90-day TTL. **Does NOT self-provision** and silently
+      swallows write errors if the table is missing.
+
+    **Risk:** the two non-self-provisioning tables (`CrossStitchLikes`,
+    `SearchQueries`) can silently drift from what the code assumes —
+    same class of problem as the already-documented six-spelling
+    `PinID` drift on `CrossStitchItems`.
+
+    **Follow-up (not yet done):** run `aws dynamodb describe-table` (or
+    check the Console) for all six to confirm real table names (env-var
+    overrides may differ from the code defaults) and key schema match
+    the code; check EB env vars for overrides; then add a §4.x section
+    for each to `docs/integration/dynamodb-schema.md`, following the
+    existing `PasswordResetTokens`/`SubscriptionEvents` pattern.
+    Prioritize the two non-self-provisioning tables first.
 
 ## Done when
 
