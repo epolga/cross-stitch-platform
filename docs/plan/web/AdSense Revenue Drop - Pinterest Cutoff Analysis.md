@@ -75,3 +75,12 @@ Pinterest spend is already at $0, so it can no longer be the lever — continued
 2. **AdSense account** — check for policy warnings, ad-serving restrictions, or ads.txt issues that could suppress fill/RPM regardless of traffic.
 3. **Per-channel trend** — determine whether Direct, Referral, and Email sessions are also declining, or only Organic Search/Social, to distinguish a site-wide problem from a channel-specific one.
 4. **Technical/site regressions** — rule out a recent deploy affecting page load speed or ad placement rendering.
+
+## Update 2026-07-13: first day back at $5/day (campaign 626757628727)
+
+Olga restarted Pinterest spend at $5/day on 2026-07-12 (see Focus.md Pending #9). Checked same-day (partial data) on 07-12 and again 07-13 once GA4 finished processing 07-12:
+
+- **Same-day check (07-12, partial GA4 data) was misleading — flagged and re-checked, not acted on.** Pinterest reported 21 clicks/$2.89 spend, but GA4 showed only 1 Paid Social session site-wide. Looked like a tracking break; turned out to be GA4's same-day processing lag.
+- **07-13 re-check (07-12 data now final):** Pinterest 22 clicks/$2.89 spend → GA4 11 Paid Social sessions (10 US, 1 Turkmenistan) = 50% click-to-session ratio, in line with the pre-cutoff 07-07..07-10 baseline (50-70%). **No tracking problem — same-day GA4 numbers are not reliable and shouldn't be used for same-day conclusions again.**
+- **US share of total sessions, one day in:** 29.6% (07-11, $0) → 33.1% (07-12, first day at $5). Pre-cutoff baseline was 35-41%. US Organic Search: 43 (07-11) → 43 (07-12) — flat, not yet recovering.
+- **Conclusion: too early to call.** One day of restored spend shows a small US-share uptick but no Organic Search recovery yet. Holding the original plan — re-check `_check_channel_country.ts` / `_check_pinterest_roi.ts` around 2026-07-16/17 (4-5 days post-restart) before drawing conclusions.

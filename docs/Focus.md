@@ -105,6 +105,15 @@ live) to actually explain the revenue/traffic dip.
      Next: re-check `_check_channel_country.ts` and `_check_pinterest_roi.ts`
      around 2026-07-16/17 (4-5 days after restart) for US Organic Search
      recovery and site profit.
+
+   **Update 2026-07-13 (day 1 post-restart, full writeup in the analysis
+   doc):** same-day (07-12) check looked alarming — 21 Pinterest clicks vs.
+   1 GA4 Paid Social session — but that was just GA4's same-day processing
+   lag, not a real problem: re-checked 07-13 with 07-12 data final, ratio
+   is 22 clicks → 11 sessions (50%, normal). US share of total sessions
+   ticked up 29.6% → 33.1%, but US Organic Search is still flat at 43
+   (no recovery yet). **Too early to call — stick to the 2026-07-16/17
+   re-check**, don't draw conclusions from single-day data again.
 10. **AutoPinner config-path fix is a stopgap, not durable (2026-07-12).**
     Fixed the ~48h organic-pinning outage (2026-07-10 08:17 → 07-12) by
     recreating `D:\ann\Git\cross-stitch-platform-docs` as a directory
