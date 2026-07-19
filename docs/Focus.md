@@ -195,6 +195,75 @@ live) to actually explain the revenue/traffic dip.
     least on `/subscription/status` (info-disclosure of subscription
     state by email), or accept the trade-off as-is. Not yet actioned.
 
+13. **SEO uniqueness gaps found 2026-07-19 (during GSC indexed-rate
+    investigation) — not yet actioned.** Context: Google's June 24 2026 spam
+    update (targets "scaled content abuse") likely explains the indexed-page
+    dip Olga saw in GSC (1249 on 06-12 → 729 on 06-30 → 989 on 07-19,
+    recovering post the 2026-07-09 visual-SEO fix). Three concrete follow-up
+    gaps identified in `web/src/app/designs/[designId]/page.tsx`:
+    - **Gap 1 — image `alt` text still templated.** Line ~345:
+      `alt={`${design.Caption} free cross-stitch pattern`}` uses the raw
+      `Caption`, which 65% of designs share (e.g. "Cushion Cover" ×160) —
+      the same duplication the visual-SEO backfill fixed for title/meta but
+      never touched here. Fix: swap to `design.SeoTitle` (already populated
+      for 99.8% of the catalog).
+    - **Gap 2 — JSON-LD schema is thin — downgraded to minor/optional
+      2026-07-19.** Line ~213-223: only `name`, `description`, `creator`.
+      Originally proposed adding `image` + `additionalProperty`
+      (`Width`×`Height`, `NColors`) for uniqueness — Olga correctly pushed
+      back: those numeric fields are low-entropy (many unrelated designs
+      collide on the same width/height/color-count) and, more importantly,
+      structured data isn't the channel Google's scaled-content-abuse
+      classifier reads anyway — that operates on crawled visible/rendered
+      text (title, headings, alt text), not schema.org properties. The
+      JSON-LD `description` field already carries the real uniqueness
+      signal (`design.SeoDescription`, line ~212). Adding `image`/dimension
+      properties is at most a minor rich-results nicety — not a fix for the
+      indexing problem. Deprioritized below Gap 1 and Gap 3.
+    - **Gap 3 — near-duplicate designs, fix by canonicalizing.** Ties to the
+      previously-deferred near-duplicate-design-images issue (e.g. two
+      near-identical Tiger designs, deferred as "not a script bug, just
+      cleanup"). Decided approach: rather than just cleanup/removal, set a
+      canonical tag on the duplicate(s) pointing to the primary design so
+      Google's domain-level quality classifier doesn't count them as
+      counter-evidence against the rest of the catalog's genuine
+      uniqueness.
+
+14. **GSC indexed-rate tracking deployed to the daily Lambda pipeline —
+    2026-07-19, awaiting first scheduled-run verification.** Fixed
+    `automation/pinterest-agent/scripts/gsc-report.ts`: the old "indexed"
+    number came from the Sitemaps API's `contents[].indexed` field, which
+    reads 0 for this property in every stored snapshot — not usable.
+    Replaced with a real, dated indexed-rate estimate (random sample of
+    live sitemap.xml URLs classified via the URL Inspection API's
+    `coverageState`, the same signal the GSC UI's Page Indexing report
+    uses), persisted to DynamoDB (`CrossStitchBusinessHistory`,
+    `EntityType=GSC_INDEX_SAMPLE`, `SortKey=date`) since Lambda's `/tmp`
+    doesn't survive between invocations. Also fixed a second, unrelated
+    stale-dependency bug found along the way: the script read
+    `reports/design-pin-map.json`, a file the current `pinmap` script
+    (`export-design-pin-map.ts`) no longer writes (it writes to DDB now) —
+    switched to a live DDB query (`getAllDesignPinMap` in
+    `historyStore.ts`). Wired into `lambda/handler.ts` as steps 13-14
+    (pin-map export re-enabled, then the GSC report), both non-fatal so a
+    hiccup can't break the critical daily emails. Deployed via
+    `lambda/deploy.ps1` (function code + EventBridge rule both updated,
+    no new IAM policy needed). **Not yet verified in the real Lambda
+    environment** — Olga chose to let it run on the normal 02:00 UTC
+    schedule rather than a manual invoke (which would have re-sent
+    today's daily/editor summary emails). **Next session: check
+    CloudWatch Logs for `cross-stitch-daily-pipeline`** for the
+    2026-07-19/20 run — confirm steps 13-14 completed without error and a
+    `GSC_INDEX_SAMPLE` row landed in DDB.
+    Also caught during testing: the URL Inspection API is ~6.5s/call — a
+    naive sequential loop at the original 300-sample default would have
+    taken ~33 minutes and blown Lambda's 900s timeout. Fixed with 5-way
+    concurrency (`GSC_INSPECT_CONCURRENCY`, default 5) and a lower default
+    sample size (150) — full run now completes in ~4m43s. Validated
+    against real GSC UI numbers: sample gave 16% ± 5.9pp indexed vs. the
+    UI's actual 18.3% (989/5,393) — within margin of error, confirms the
+    method works.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -222,3 +291,6 @@ live) to actually explain the revenue/traffic dip.
 - [ ] Automated tests built for at least the priority-1 area in `09-Test-Plan.md` §4.2 (PayPal webhook)
 - [x] Pinterest ad spend stopped ($0 confirmed 2026-07-11)
 - [ ] AdSense/traffic follow-up after Pinterest cutoff resolved (see Pending #9, due 2026-07-14)
+- [x] GSC indexed-rate tracking (gsc-report.ts fix) built, tested against real APIs, deployed to Lambda pipeline — 2026-07-19
+- [ ] First scheduled Lambda run (tonight, 02:00 UTC) verified in CloudWatch Logs (see Pending #14)
+- [ ] SEO Gap 1 (alt text) and Gap 3 (canonicalize near-duplicates) actioned (see Pending #13)

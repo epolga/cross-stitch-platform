@@ -15,6 +15,7 @@ import { run as runLandingPages } from "../scripts/build-landing-page-report";
 import { run as runPinAttribution } from "../scripts/build-pin-attribution-report";
 import { run as runPinMap } from "../scripts/export-design-pin-map";
 import { run as runPerf } from "../scripts/build-design-performance";
+import { run as runGscReport } from "../scripts/gsc-report";
 import { run as runAiTrend } from "../scripts/test-ai-trend-analysis";
 import { run as runAiDesign } from "../scripts/test-ai-design-analysis";
 import { runAnomalyDetection } from "../src/services/anomalyDetector";
@@ -135,12 +136,26 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     console.log(`  sent → SES MessageId=${editorResult.messageId} (sessions=${c.editor_opened}, pdfs=${c.pdf_exported})`);
   }
 
-  // Steps 13-14 (design pin map, design performance, AI design analysis) are
-  // disabled — output is not surfaced anywhere yet. Re-enable when the email
-  // or a separate report includes the design analysis. See Milestones doc.
-  // console.log("[13/14] design pin map export");
-  // await runPinMap();
-  // console.log("[14/14] design performance build");
+  // Re-enabled: the GSC indexed-rate sample (step 14) reads this DDB table
+  // live, so it needs to be refreshed daily to stay current.
+  console.log("[13/15] design pin map export");
+  try {
+    await runPinMap();
+  } catch (err) {
+    console.error("  design pin map export failed:", err instanceof Error ? err.message : err);
+  }
+
+  console.log("[14/15] GSC sitemap indexed-rate sample");
+  try {
+    await runGscReport();
+  } catch (err) {
+    console.error("  GSC report failed:", err instanceof Error ? err.message : err);
+  }
+
+  // Step 15 (design performance, AI design analysis) is disabled — output is
+  // not surfaced anywhere yet. Re-enable when the email or a separate report
+  // includes the design analysis. See Milestones doc.
+  // console.log("[15/15] design performance build");
   // await runPerf();
 
   console.log(`[pipeline] complete for date=${dateStr}`);

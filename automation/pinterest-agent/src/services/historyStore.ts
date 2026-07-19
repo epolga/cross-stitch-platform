@@ -31,7 +31,8 @@ export type EntityType =
   | "PINTEREST_TOKEN"
   | "BLOCKED_IP"
   | "WATCHED_IP"
-  | "IP_HISTORY";
+  | "IP_HISTORY"
+  | "GSC_INDEX_SAMPLE";
 
 export type AnalysisType = "trend" | "design";
 
@@ -62,6 +63,7 @@ export const sortKey = {
   blockedIp: (ip: string) => ip,
   watchedIp: (ip: string) => ip,
   ipHistory: (ip: string, at: string) => `${ip}#${at}`,
+  gscIndexSample: (date: string) => date,
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -114,6 +116,16 @@ export interface DesignPinMapInput {
   designCaption: string;
   designUrl: string;
   pinLinkType?: string;
+}
+
+export interface GscIndexSampleInput {
+  date: string;
+  sitemapTotalUrls: number;
+  sampleSize: number;
+  indexedInSample: number;
+  estimatedIndexedPercent: number;
+  marginOfErrorPercent: number;
+  coverageStateBreakdown: Record<string, number>;
 }
 
 export interface DesignPerformanceInput {
@@ -192,6 +204,25 @@ export async function putDesignPinMap(input: DesignPinMapInput): Promise<void> {
         EntityType: "DESIGN_PIN_MAP",
         SortKey: sortKey.designPinMap(input.designId),
         ...input,
+        writtenAt: new Date().toISOString(),
+      },
+    })
+  );
+}
+
+// Dated snapshot of the sitemap indexed-rate estimate (see gsc-report.ts).
+// Durable counterpart to the JSON report file, which lives in Lambda's
+// ephemeral /tmp and doesn't survive between invocations.
+export async function putGscIndexSample(input: GscIndexSampleInput): Promise<void> {
+  const { date, ...rest } = input;
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: {
+        EntityType: "GSC_INDEX_SAMPLE",
+        SortKey: sortKey.gscIndexSample(date),
+        date,
+        ...rest,
         writtenAt: new Date().toISOString(),
       },
     })
@@ -285,6 +316,30 @@ async function batchPutRows(items: Record<string, unknown>[]): Promise<void> {
           : undefined;
     }
   }
+}
+
+// All DESIGN_PIN_MAP rows — source of truth for design URLs, refreshed daily
+// by the pinmap pipeline step. Paginated (Query caps at 1MB per page).
+export async function getAllDesignPinMap(): Promise<(DesignPinMapInput & { writtenAt: string })[]> {
+  const items: (DesignPinMapInput & { writtenAt: string })[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+
+  do {
+    const resp = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: "EntityType = :et",
+        ExpressionAttributeValues: { ":et": "DESIGN_PIN_MAP" },
+        ExclusiveStartKey: exclusiveStartKey as Record<string, import("@aws-sdk/client-dynamodb").AttributeValue> | undefined,
+      }),
+    );
+    for (const item of resp.Items ?? []) {
+      items.push(item as DesignPinMapInput & { writtenAt: string });
+    }
+    exclusiveStartKey = resp.LastEvaluatedKey as Record<string, unknown> | undefined;
+  } while (exclusiveStartKey);
+
+  return items;
 }
 
 export async function batchPutDesignPinMap(
