@@ -71,6 +71,15 @@ function AutoLogin({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   useEffect(() => {
     const eid = searchParams?.get('eid') || '';
     const cid = searchParams?.get('cid') || '';
+
+    // Mark this browser session as newsletter-originated regardless of prior
+    // login state, so download attribution works even for users who were
+    // already logged in before clicking the email link (the auto-login
+    // fetch below only runs when not already logged in).
+    if (eid && cid && typeof window !== 'undefined') {
+      sessionStorage.setItem('cameFromNewsletter', 'true');
+    }
+
     const loggedIn = isUserLoggedIn();
 
     if (eid && cid && !loggedIn) {

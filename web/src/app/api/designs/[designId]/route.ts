@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDesignById, incrementDesignDownloadCount } from '@/lib/data-access';
+import { incrementUserDownloadCount } from '@/lib/users';
 import { createRateLimiter, getClientIp } from '@/lib/rateLimit';
 
 // Rate limit: 20 increments per IP per minute. NDownloaded is unauthenticated
@@ -50,7 +51,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ des
       return NextResponse.json({ error: 'Invalid designId' }, { status: 400 });
     }
 
+    const body = (await request.json().catch(() => null)) as
+      | { email?: string; fromNewsletter?: boolean }
+      | null;
+    const email = body?.email?.trim();
+    const fromNewsletter = body?.fromNewsletter === true;
+
     await incrementDesignDownloadCount(id);
+    if (email) {
+      await incrementUserDownloadCount(email, fromNewsletter);
+    }
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
     console.error('Error updating download count:', error);

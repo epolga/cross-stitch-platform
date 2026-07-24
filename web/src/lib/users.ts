@@ -778,6 +778,75 @@ export async function updateLastSeenAtByEmail(email: string): Promise<void> {
   );
 }
 
+/**
+ * Increments a logged-in user's lifetime download count. Fire-and-forget
+ * from the download button — used to measure how many downloads a typical
+ * (non-paying) user actually makes, to calibrate a future free-tier limit.
+ * When fromNewsletter is true (session arrived via an eid/cid email link),
+ * also bumps a separate newsletter-specific counter so newsletter-driven
+ * downloads can be measured independent of the lifetime total.
+ */
+export async function incrementUserDownloadCount(
+  email: string,
+  fromNewsletter = false,
+): Promise<void> {
+  const tableName = USERS_TABLE_NAME;
+  if (!tableName) {
+    console.warn('DDB_USERS_TABLE not set; skipping download count update');
+    return;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return;
+
+  const nowIso = new Date().toISOString();
+  const primaryId = `USR#${normalizedEmail}`;
+
+  const setClauses = [
+    '#lastDownloadAt = :now',
+    '#totalDownloads = if_not_exists(#totalDownloads, :zero) + :inc',
+  ];
+  const names: Record<string, string> = {
+    '#lastDownloadAt': 'LastDownloadAt',
+    '#totalDownloads': 'TotalDownloadsCount',
+  };
+  if (fromNewsletter) {
+    setClauses.push(
+      '#lastNewsletterDownloadAt = :now',
+      '#totalNewsletterDownloads = if_not_exists(#totalNewsletterDownloads, :zero) + :inc',
+    );
+    names['#lastNewsletterDownloadAt'] = 'LastNewsletterDownloadAt';
+    names['#totalNewsletterDownloads'] = 'TotalNewsletterDownloadsCount';
+  }
+
+  try {
+    await client.send(
+      new UpdateItemCommand({
+        TableName: tableName,
+        Key: { ID: { S: primaryId } },
+        UpdateExpression: `SET ${setClauses.join(', ')}`,
+        ExpressionAttributeNames: names,
+        ExpressionAttributeValues: {
+          ':now': { S: nowIso },
+          ':zero': { N: '0' },
+          ':inc': { N: '1' },
+        },
+        ConditionExpression: 'attribute_exists(ID)',
+      }),
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const errorName = error instanceof Error ? error.name : '';
+    if (
+      errorName !== 'ConditionalCheckFailedException' &&
+      !message.includes('ConditionalCheckFailed') &&
+      !message.includes('The conditional request failed')
+    ) {
+      console.error('Error updating TotalDownloadsCount in users table:', error);
+    }
+  }
+}
+
 export async function getUserSubscriptionStatusByEmail(
   email: string,
 ): Promise<UserSubscriptionStatus | null> {

@@ -69,9 +69,20 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
   }, []);
 
   const recordDownload = useCallback(() => {
-    void fetch(`/api/designs/${design.DesignID}`, { method: 'POST' }).catch((error) =>
-      console.error('Failed to increment download count', error),
-    );
+    const email =
+      typeof window !== 'undefined'
+        ? (localStorage.getItem('userEmail') || '').trim().toLowerCase()
+        : '';
+    const fromNewsletter =
+      typeof window !== 'undefined' && sessionStorage.getItem('cameFromNewsletter') === 'true';
+    void fetch(`/api/designs/${design.DesignID}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(email ? { email } : {}),
+        ...(fromNewsletter ? { fromNewsletter: true } : {}),
+      }),
+    }).catch((error) => console.error('Failed to increment download count', error));
   }, [design.DesignID]);
 
   const fallbackPdfUrl = useMemo(() => {
