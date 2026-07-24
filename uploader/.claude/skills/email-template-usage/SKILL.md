@@ -5,6 +5,14 @@ description: Invoke this skill whenever the user asks to change, edit, modify, u
 
 # Email template usage
 
+**Scope note:** this skill is about the recurring **design-spotlight newsletter**
+(one featured cross-stitch design per send, `HtmlEmailTemplate.txt` /
+`TextEmailTemplate.txt`) — not the Announcement/changelog email
+(`AnnouncementEmailHtml.txt` / `AnnouncementEmailText.txt`, used for "You
+spoke, I listened"-style site-update announcements). Different templates,
+different `App.config` keys, different section sets — don't conflate the two
+when the user says "newsletter."
+
 Operational rules for editing the Uploader's outbound email template. The template is a flat text file with section-header markers; the WPF Uploader loads it, substitutes tokens, and hands the rendered HTML to SES for delivery.
 
 ## Files

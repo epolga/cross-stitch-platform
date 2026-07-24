@@ -5,18 +5,28 @@
 // them, so this stays faithful to the actual app instead of a copy that can
 // drift out of sync.
 //
-// Usage: UploaderCli <batchFolderPath> [--yes]
-//   --yes   skip the confirmation prompt before the irreversible steps
-//           (Pinterest pin creation + DynamoDB insert). Without it, the tool
-//           prints exactly what it's about to do and waits for "yes".
+// Usage:
+//   UploaderCli <batchFolderPath> [--yes]
+//     --yes   skip the confirmation prompt before the irreversible steps
+//             (Pinterest pin creation + DynamoDB insert). Without it, the
+//             tool prints exactly what it's about to do and waits for "yes".
+//   UploaderCli send-admin-test
+//     Sends the design-spotlight newsletter (HtmlEmailTemplate.txt), rendered
+//     for the latest design in DynamoDB, to AdminEmail only. Equivalent to
+//     MainWindow.xaml.cs's SendAdminUserStyleEmailAsync (the
+//     "SendAdminUserEmail" button) - not the Announcement email.
 
 using System.Configuration;
 using System.Diagnostics;
+using System.Globalization;
+using System.Net;
 using Amazon;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
 using Amazon.S3;
 using Amazon.S3.Transfer;
+using Amazon.SimpleEmail;
+using CrossStitch.Shared.Email;
 using CrossStitch.Shared.Pinterest;
 using UploadPatterns;
 using Uploader.Helpers;
@@ -28,7 +38,14 @@ const string PinterestPhotoFileName = "4_pinterest.jpg";
 if (args.Length < 1)
 {
     Console.Error.WriteLine("Usage: UploaderCli <batchFolderPath> [--yes]");
+    Console.Error.WriteLine("       UploaderCli send-admin-test");
     return 2;
+}
+
+if (string.Equals(args[0], "send-admin-test", StringComparison.OrdinalIgnoreCase))
+{
+    await SendAdminTestAsync();
+    return 0;
 }
 
 string batchFolderPath = args[0];
@@ -435,3 +452,315 @@ static async Task InsertItemIntoDynamoDbAsync(
 
     await client.PutItemAsync(new PutItemRequest { TableName = "CrossStitchItems", Item = item });
 }
+
+// ---------------- send-admin-test (mirrors MainWindow.xaml.cs's SendAdminUserStyleEmailAsync) ----------------
+
+static async Task SendAdminTestAsync()
+{
+    string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+    string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+    if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
+        throw new InvalidOperationException("SenderEmail/AdminEmail must be configured.");
+
+    var dynamoDbClient = new AmazonDynamoDBClient();
+    var sesClient = new AmazonSimpleEmailServiceClient();
+    var emailHelper = new EmailHelper();
+    var linkHelper = HelperFactory.CreatePatternLinkHelper();
+    string? sesConfigurationSetName = ConfigurationManager.AppSettings["SesConfigurationSetName"];
+
+    var latestDesign = await GetLatestDesignEmailInfoAsync(dynamoDbClient);
+    Console.WriteLine($"Latest design: DesignID {latestDesign.DesignId}, AlbumID {latestDesign.AlbumId}, \"{latestDesign.Title}\"");
+
+    var template = LoadHtmlEmailTemplate();
+    string patternUrl = BuildPatternUrl(linkHelper, latestDesign);
+    string imageUrl = linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
+    string altText = string.IsNullOrWhiteSpace(latestDesign.Title) ? "New cross stitch pattern" : latestDesign.Title;
+    string patternUrlWithTracking = AppendTrackingParameters(patternUrl, "admin", DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+    string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+    string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
+
+    var content = RenderHtmlEmailContent(template, "admin", patternUrlWithTracking, siteUrlWithTracking, imageUrl, altText, unsubscribeUrl);
+
+    Console.WriteLine($"Subject: {content.Subject}");
+    Console.WriteLine("Sending to admin...");
+    await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, content.Subject, content.TextBody, content.HtmlBody, configurationSetName: sesConfigurationSetName);
+    Console.WriteLine("Sent.");
+}
+
+static async Task<LatestDesignEmailInfo> GetLatestDesignEmailInfoAsync(AmazonDynamoDBClient client)
+{
+    var response = await client.QueryAsync(new QueryRequest
+    {
+        TableName = "CrossStitchItems",
+        IndexName = "DesignsByID-index",
+        KeyConditionExpression = "EntityType = :et",
+        ExpressionAttributeValues = new Dictionary<string, AttributeValue> { { ":et", new AttributeValue { S = "DESIGN" } } },
+        ScanIndexForward = false,
+        Limit = 1,
+        ProjectionExpression = "DesignID, AlbumID, NPage, Caption, PinID",
+    });
+    if (response.Items.Count == 0)
+        throw new InvalidOperationException("No design records were found in DynamoDB.");
+
+    var item = response.Items[0];
+    int designId = int.Parse(item["DesignID"].N);
+    int albumId = int.Parse(item["AlbumID"].N);
+    string nPage = item.TryGetValue("NPage", out var np) ? np.S : "";
+    string title = item.TryGetValue("Caption", out var cap) && !string.IsNullOrWhiteSpace(cap.S) ? cap.S : $"Design {designId}";
+    string pinId = item.TryGetValue("PinID", out var pid) ? pid.S ?? "" : "";
+    return new LatestDesignEmailInfo(designId, albumId, nPage, title, pinId);
+}
+
+static string BuildPatternUrl(PatternLinkHelper linkHelper, LatestDesignEmailInfo latestDesign)
+{
+    string caption = (latestDesign.Title ?? "Cross-stitch-pattern").Replace(' ', '-');
+    int.TryParse(latestDesign.NPage, out int nPage);
+    return $"{linkHelper.SiteBaseUrl}/{caption}-{latestDesign.AlbumId}-{nPage - 1}-Free-Design.aspx";
+}
+
+static string BuildUnsubscribeUrl(PatternLinkHelper linkHelper, string token)
+{
+    string? configuredBaseUrl = ConfigurationManager.AppSettings["UnsubscribeBaseUrl"];
+    string baseUrl = !string.IsNullOrWhiteSpace(configuredBaseUrl) ? configuredBaseUrl.TrimEnd('/') : $"{linkHelper.SiteBaseUrl}/unsubscribe";
+    return $"{baseUrl}?token={Uri.EscapeDataString(token)}";
+}
+
+static EmailTemplateDefinition LoadHtmlEmailTemplate()
+{
+    const string HtmlEmailTemplatePathDefault = "Templates\\HtmlEmailTemplate.txt";
+    string[] requiredSections = { "Subject", "Greeting", "BeforeImage", "ImageWithLink", "AfterImage", "Unsubscribe", "Closing", "Signature" };
+    string configuredPath = ConfigurationManager.AppSettings["HtmlEmailTemplatePath"] ?? HtmlEmailTemplatePathDefault;
+    string resolvedPath = ResolveTemplatePath(configuredPath);
+    if (!File.Exists(resolvedPath))
+        throw new FileNotFoundException($"Email template file was not found: {resolvedPath}", resolvedPath);
+
+    var sections = ParseTemplateSections(File.ReadAllText(resolvedPath), resolvedPath);
+    foreach (var required in requiredSections)
+    {
+        if (!sections.TryGetValue(required, out var value) || string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Email template section '{required}' is missing or empty in {resolvedPath}.");
+    }
+    return new EmailTemplateDefinition(resolvedPath, sections);
+}
+
+static string ResolveTemplatePath(string templatePath)
+{
+    templatePath = ExpandCrossStitchToken(templatePath);
+    return Path.IsPathRooted(templatePath) ? templatePath : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, templatePath);
+}
+
+static string ExpandCrossStitchToken(string path)
+{
+    const string token = "%CROSS_STITCH%";
+    if (string.IsNullOrEmpty(path) || path.IndexOf(token, StringComparison.OrdinalIgnoreCase) < 0)
+        return path;
+    string? root = Environment.GetEnvironmentVariable("CROSS_STITCH");
+    if (string.IsNullOrWhiteSpace(root)) root = @"D:\ann\Git";
+    return path.Replace(token, root, StringComparison.OrdinalIgnoreCase);
+}
+
+static Dictionary<string, string> ParseTemplateSections(string content, string sourcePath)
+{
+    var sections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    string? currentSection = null;
+    var buffer = new System.Text.StringBuilder();
+
+    using var reader = new StringReader(content);
+    string? line;
+    while ((line = reader.ReadLine()) != null)
+    {
+        string trimmed = line.Trim();
+        if (trimmed.Length >= 3 && trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.EndsWith("]", StringComparison.Ordinal))
+        {
+            string sectionName = trimmed.Substring(1, trimmed.Length - 2).Trim();
+            if (sectionName.Length > 0)
+            {
+                CommitSection(sections, currentSection, buffer, sourcePath);
+                currentSection = sectionName;
+                buffer.Clear();
+                continue;
+            }
+        }
+        if (currentSection == null) continue;
+        if (buffer.Length > 0) buffer.AppendLine();
+        buffer.Append(line);
+    }
+    CommitSection(sections, currentSection, buffer, sourcePath);
+
+    if (sections.Count == 0)
+        throw new InvalidOperationException($"Email template file {sourcePath} does not contain any sections.");
+    return sections;
+}
+
+static void CommitSection(IDictionary<string, string> sections, string? sectionName, System.Text.StringBuilder buffer, string sourcePath)
+{
+    if (string.IsNullOrWhiteSpace(sectionName)) return;
+    if (sections.ContainsKey(sectionName))
+        throw new InvalidOperationException($"Email template file {sourcePath} contains duplicate section '{sectionName}'.");
+    sections[sectionName] = buffer.ToString().Trim();
+}
+
+static Dictionary<string, string> CreateCommonTemplateReplacements(string? firstName)
+{
+    string userName = string.IsNullOrWhiteSpace(firstName) ? "Friend" : firstName.Trim();
+    return new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["<username>"] = userName,
+        ["[FName]"] = userName,
+        ["[Fname]"] = userName,
+        ["[fname]"] = userName,
+        ["[Recipient's Name]"] = userName,
+        ["[Recipient\u2019s Name]"] = userName,
+    };
+}
+
+static string ReplaceTemplateTokens(string templateValue, IReadOnlyDictionary<string, string> replacements)
+{
+    string rendered = templateValue;
+    foreach (var pair in replacements)
+        rendered = rendered.Replace(pair.Key, pair.Value, StringComparison.Ordinal);
+    return rendered;
+}
+
+static string RenderOptionalTemplateSection(string templateValue, IReadOnlyDictionary<string, string> replacements, string? requiredPlaceholderValue)
+{
+    if (string.IsNullOrWhiteSpace(requiredPlaceholderValue)) return string.Empty;
+    return ReplaceTemplateTokens(templateValue, replacements);
+}
+
+static string JoinTextSections(params string[] sections) =>
+    string.Join("\r\n\r\n", sections.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+static string JoinHtmlSections(params string[] sections) =>
+    string.Concat(sections.Where(s => !string.IsNullOrWhiteSpace(s)).Select(ConvertPlainTextToHtml));
+
+static string ConvertPlainTextToHtml(string text)
+{
+    if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+    var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+    var paragraphs = normalized.Split(new[] { "\n\n" }, StringSplitOptions.None);
+    var htmlParagraphs = paragraphs
+        .Select(p => WebUtility.HtmlEncode(p).Replace("\n", "<br/>"))
+        .Where(p => !string.IsNullOrWhiteSpace(p));
+    return string.Join(string.Empty, htmlParagraphs.Select(p => $"<p>{p}</p>"));
+}
+
+static string RenderHtmlSignature(string signature, string? siteUrl)
+{
+    if (string.IsNullOrWhiteSpace(signature)) return string.Empty;
+    if (string.IsNullOrWhiteSpace(siteUrl)) return ConvertPlainTextToHtml(signature);
+    return $"<p><a href=\"{WebUtility.HtmlEncode(siteUrl)}\">{WebUtility.HtmlEncode(signature)}</a></p>";
+}
+
+static RenderedEmailContent RenderHtmlEmailContent(
+    EmailTemplateDefinition template, string? firstName, string patternUrl, string? siteUrl, string imageUrl, string altText, string? unsubscribeUrl)
+{
+    var replacements = CreateCommonTemplateReplacements(firstName);
+    replacements["<pattern_url>"] = patternUrl ?? string.Empty;
+    replacements["<image_url>"] = imageUrl ?? string.Empty;
+    replacements["<alt_text>"] = altText ?? string.Empty;
+    replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+    string subject = ReplaceTemplateTokens(template.GetRequiredSection("Subject"), replacements);
+    string greeting = ReplaceTemplateTokens(template.GetRequiredSection("Greeting"), replacements);
+    string beforeImage = ReplaceTemplateTokens(template.GetRequiredSection("BeforeImage"), replacements);
+    string imageWithLink = RenderOptionalTemplateSection(template.GetRequiredSection("ImageWithLink"), replacements, imageUrl);
+    string afterImage = ReplaceTemplateTokens(template.GetRequiredSection("AfterImage"), replacements);
+    string unsubscribe = RenderOptionalTemplateSection(template.GetRequiredSection("Unsubscribe"), replacements, unsubscribeUrl);
+    string closing = ReplaceTemplateTokens(template.GetRequiredSection("Closing"), replacements);
+    string signature = ReplaceTemplateTokens(template.GetRequiredSection("Signature"), replacements);
+    string signatureHtml = RenderHtmlSignature(signature, siteUrl);
+
+    string textBody = JoinTextSections(
+        greeting, beforeImage,
+        string.IsNullOrWhiteSpace(patternUrl) ? string.Empty : $"View the design: {patternUrl}",
+        afterImage, unsubscribe, closing, signature);
+    string htmlBody = JoinHtmlSections(greeting, beforeImage) + imageWithLink + JoinHtmlSections(afterImage, unsubscribe, closing) + signatureHtml;
+
+    return new RenderedEmailContent(subject, textBody, htmlBody);
+}
+
+static string AppendTrackingParameters(string url, string? cid, string? eid)
+{
+    if (string.IsNullOrWhiteSpace(url)) return url;
+    var queryParts = new List<string>();
+    if (!string.IsNullOrWhiteSpace(cid)) queryParts.Add($"cid={Uri.EscapeDataString(cid)}");
+    if (!string.IsNullOrWhiteSpace(eid)) queryParts.Add($"eid={Uri.EscapeDataString(eid)}");
+    string trackedUrl = queryParts.Count == 0 ? url : AppendQueryParameters(url, queryParts);
+    return AppendUtmParameters(trackedUrl);
+}
+
+static string AppendUtmParameters(string url)
+{
+    if (string.IsNullOrWhiteSpace(url)) return url;
+    var queryParts = new List<string>();
+    if (!HasQueryParameter(url, "utm_source")) queryParts.Add("utm_source=newsletter");
+    if (!HasQueryParameter(url, "utm_medium")) queryParts.Add("utm_medium=email");
+    if (!HasQueryParameter(url, "utm_campaign"))
+        queryParts.Add($"utm_campaign={Uri.EscapeDataString(DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}");
+    return queryParts.Count == 0 ? url : AppendQueryParameters(url, queryParts);
+}
+
+static bool HasQueryParameter(string url, string parameterName)
+{
+    if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(parameterName)) return false;
+    int queryIndex = url.IndexOf('?');
+    if (queryIndex < 0) return false;
+    string query = url.Substring(queryIndex + 1);
+    int hashIndex = query.IndexOf('#');
+    if (hashIndex >= 0) query = query.Substring(0, hashIndex);
+    foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+    {
+        int eqIndex = part.IndexOf('=');
+        string name = eqIndex >= 0 ? part.Substring(0, eqIndex) : part;
+        if (string.Equals(name, parameterName, StringComparison.OrdinalIgnoreCase)) return true;
+    }
+    return false;
+}
+
+static string AppendQueryParameters(string url, IReadOnlyList<string> parameters)
+{
+    if (string.IsNullOrWhiteSpace(url) || parameters == null || parameters.Count == 0) return url;
+    string fragment = string.Empty;
+    string baseUrl = url;
+    int hashIndex = url.IndexOf('#');
+    if (hashIndex >= 0)
+    {
+        fragment = url.Substring(hashIndex);
+        baseUrl = url.Substring(0, hashIndex);
+    }
+    string separator = baseUrl.Contains("?") ? "&" : "?";
+    return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
+}
+
+sealed class EmailTemplateDefinition
+{
+    public EmailTemplateDefinition(string sourcePath, Dictionary<string, string> sections)
+    {
+        SourcePath = sourcePath;
+        Sections = sections;
+    }
+    public string SourcePath { get; }
+    public Dictionary<string, string> Sections { get; }
+    public string GetRequiredSection(string sectionName)
+    {
+        if (!Sections.TryGetValue(sectionName, out var value) || string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Template section '{sectionName}' is missing or empty in {SourcePath}.");
+        return value;
+    }
+}
+
+sealed class RenderedEmailContent
+{
+    public RenderedEmailContent(string subject, string textBody, string? htmlBody)
+    {
+        Subject = subject;
+        TextBody = textBody;
+        HtmlBody = htmlBody;
+    }
+    public string Subject { get; }
+    public string TextBody { get; }
+    public string? HtmlBody { get; }
+}
+
+sealed record LatestDesignEmailInfo(int DesignId, int AlbumId, string NPage, string Title, string PinId);

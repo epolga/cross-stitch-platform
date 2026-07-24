@@ -1,22 +1,22 @@
 [Subject]
-New free pattern: Wedding Rings 💍
+New free pattern: Lady of Perpetual Love 🙏
 
 [Greeting]
 Hi [FName],
 
 [BeforeImage]
-June is wedding season — and I have a new free pattern to celebrate.
+Some patterns are made for a season. This one is made for always.
 
-Wedding Rings Cross-Stitch Pattern
+Lady of Perpetual Love
 
-Two interlocked rings, one with a sparkling diamond. Simple, elegant, and stitchable in a weekend.
+A quiet icon of a mother cradling her child, stitched in deep navy and warm gold, with a touch of red and a single guiding star. Just 76 × 128 stitches and 6 DMC colors — small enough for a weekend, meaningful enough to keep.
 
-Whether you're making a gift for a bride, commemorating an anniversary, or just love the design — this one is for you.
+Whether it's for your own wall, a christening gift, or someone who could use something gentle to hold onto right now — this one is for them.
 
 [ImageWithLink]
 <p>
 	<a href="<pattern_url>">
-		<img src="<image_url>" alt="Wedding Rings cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+		<img src="<image_url>" alt="Lady of Perpetual Love cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
 	</a>
 </p>
 <p>
@@ -25,12 +25,12 @@ Whether you're making a gift for a bride, commemorating an anniversary, or just 
 
 
 [AfterImage]
-I designed this to work both as a standalone framed piece and as a card insert — slip it into a wedding card for something truly handmade.
+I designed this one to sit quietly on a shelf or in a small frame — it doesn't need a big wall, just a corner that could use a little calm.
 
 A question for you:
 
-– Have you ever stitched a gift for a wedding or anniversary?
-– Did the recipient know what it was worth in hours? 😊
+– Do you stitch pieces with personal or spiritual meaning, or do you keep mostly to florals and animals?
+– Is there a religious or family design you wish existed as a pattern? 😊
 
 Just hit Reply and tell me.
 

@@ -5,6 +5,12 @@ description: Invoke this skill whenever the user asks to update the newsletter t
 
 # Update Newsletter Template from Design Image
 
+**Scope note:** this is the recurring **design-spotlight newsletter**
+(`HtmlEmailTemplate.txt` / `TextEmailTemplate.txt`, one featured design per
+send) — not the Announcement/changelog email (`AnnouncementEmailHtml.txt` /
+`AnnouncementEmailText.txt`). If the user says "update the announcement" or
+means a site-changes email, this is the wrong skill.
+
 Rewrites the Uploader's outbound newsletter templates based on a new cross-stitch design image.
 
 ## Step 1 — Ask for the image path
