@@ -7,7 +7,10 @@ to recently-active subscribers, then follow up with the Ann-persona blog teaser.
 
 ## Active work
 
-Nothing in flight. Everything below is built, built and deployed, or drafted and
+Olga plans to send the Announcement email tonight (2026-07-24). Download-count
+tracking (3 tiers, see Pending #17) shipped and verified live specifically so
+this send's newsletter-attributed downloads get captured — check the numbers
+afterward. Everything else below is built, built and deployed, or drafted and
 waiting on Olga to trigger the actual send from the Uploader (Claude does not
 send mass emails without an explicit go-ahead per send).
 
@@ -39,13 +42,15 @@ live) to actually explain the revenue/traffic dip.
 4. **Distributed scraping mitigation** — decision 2026-07-10: keep
    monitoring, not building WAF Challenge/Bot Control yet (full reasoning,
    cost/risk analysis, and confirmed-legitimate-crawler exceptions in
-   `docs/session-log/2026-07.md`). 6 IPs were watched/blocked 2026-07-10
-   (`45.127.44.48`, `199.38.125.98`, `74.7.227.179`, `99.107.137.100`,
-   `5.29.18.71`, `186.151.100.235` watched; `62.60.130.210` blocked) —
-   **re-review via `/review-ip` around 2026-07-13** (watch TTL expiry) and
-   decide block vs. release. Also reconsider whether "keep monitoring"
-   still holds given the pattern was growing (755 IPs/25min vs. 563/30min
-   baseline) as of 2026-07-10.
+   `docs/session-log/2026-07.md`). **Status confirmed current as of
+   2026-07-24: 0 watched, 25 blocked** — `/review-ip` has been running
+   routinely since 07-10 (see session-log for the full current list and the
+   original 6 IPs' resolution). Several current blocks are download-counter
+   inflation bots, direct evidence the email-in-body-no-auth pattern
+   (Pending #12) is already being abused — worth weighing when that
+   decision gets made. Volume (25 active blocks) is worth revisiting against
+   the "keep monitoring, don't build WAF Bot Control" call whenever that
+   decision comes up again — not re-opened here, just flagged.
 5. Bianca's fabric-merge idea and Céline's PDF-quarter-overlap idea remain
    `nice-to-have`, unscheduled.
 6. **Singapore GA4 traffic anomaly — confirmed bot traffic 2026-07-10** (0.7%
@@ -69,64 +74,41 @@ live) to actually explain the revenue/traffic dip.
    would replace ~30 one-off `_check_*.ts` scratch scripts with typed
    tools. Revisit only if the scratch-script pattern keeps recurring
    session after session.
-9. **AdSense revenue drop after Pinterest cutoff — check back 2026-07-14.**
-   Pinterest ad spend hit $0 on 2026-07-11 (Olga's deliberate decision,
-   confirmed executed). Revenue/traffic dropped sharply the same day; full
-   analysis and the two-branch action plan (stabilizes vs. keeps
-   declining) is in `docs/plan/web/AdSense Revenue Drop - Pinterest Cutoff
-   Analysis.md`. **Note the confound below (#10) overlaps this window.**
-
-   **Update 2026-07-12 (2 days of post-cutoff data + corrected ROI window):**
-   - US Organic Search (unpaid) still suppressed both days: ~52/day
-     pre-cutoff baseline → 43 (07-11) → ~40 full-day-equivalent pace
-     (07-12, partial day). Not recovering yet.
-   - AdSense revenue still trending down, not flattening: $16.93 (07-10)
-     → $10.65 (07-11) → ~$4-5 full-day-equivalent pace (07-12, partial).
-   - **ROI figure correction:** the -₪315/29-day estimate in the analysis
-     doc mixed the pre-06-19 higher-spend period (~$11-12/day) with the
-     reduced-spend period. Re-run over the correct 21-day window
-     (2026-06-20 → 2026-07-11, matching when spend actually dropped to
-     ~$5/day) via `_check_pinterest_roi.ts` (edited in place, day offset
-     29→21, untracked scratch file) shows: **total site profit was
-     +₪91.36** over those 21 days (spend already netted out), while the
-     rough Pinterest-only attribution estimate was -₪149.62 — a real but
-     much smaller loss than -₪315 implied, and a conservative estimate
-     (assumes Pinterest sessions monetize at the average rate, gives no
-     credit for any halo effect).
-   - **Recommendation: restart Pinterest ads at ~$5/day (the already-
-     tested reduced rate, not the original ~$11-12/day), run 4-5 days,
-     then re-check** `_check_channel_country.ts` (did US Organic Search
-     recover to ~52/day?) and `_check_pinterest_roi.ts` 21-day window (is
-     total site profit still positive?). Cheap to test (~$20-25) and
-     fully reversible. If both hold, keep it running; if not, this
-     confirms the cutoff was right and the dip needs a different
-     explanation (GSC/technical, per the analysis doc's fallback branch).
-     **Actioned 2026-07-12: Olga restarted the Pinterest campaign.**
-     Next: re-check `_check_channel_country.ts` and `_check_pinterest_roi.ts`
-     around 2026-07-16/17 (4-5 days after restart) for US Organic Search
-     recovery and site profit.
-
-   **Update 2026-07-13 (day 1 post-restart, full writeup in the analysis
-   doc):** same-day (07-12) check looked alarming — 21 Pinterest clicks vs.
-   1 GA4 Paid Social session — but that was just GA4's same-day processing
-   lag, not a real problem: re-checked 07-13 with 07-12 data final, ratio
-   is 22 clicks → 11 sessions (50%, normal). US share of total sessions
-   ticked up 29.6% → 33.1%, but US Organic Search is still flat at 43
-   (no recovery yet). **Too early to call — stick to the 2026-07-16/17
-   re-check**, don't draw conclusions from single-day data again.
-10. **AutoPinner config-path fix is a stopgap, not durable (2026-07-12).**
-    Fixed the ~48h organic-pinning outage (2026-07-10 08:17 → 07-12) by
-    recreating `D:\ann\Git\cross-stitch-platform-docs` as a directory
-    junction to `docs/`. This works but is fragile (lost on a fresh
-    clone/machine). Durable fix: update
-    `shared/src/CrossStitch.Shared/PlatformConfig.cs`
-    (`LocateConfigFile()`) to look for `docs/platform-config.json` inside
-    the monorepo directly instead of a sibling `cross-stitch-platform-docs`
-    repo. Also worth migrating the still-external secrets
-    (`D:\ann\Git\Uploader\secrets\pinterest_tokens.json`,
-    `pin-ab-stats.json`) into the monorepo's `uploader/` folder while
-    touching this, so nothing depends on paths outside
-    `cross-stitch-platform` at all.
+9. **AdSense revenue drop after Pinterest cutoff — RESOLVED 2026-07-24.**
+   Pinterest ad spend hit $0 on 2026-07-11, restarted at ~$5/day on
+   2026-07-12. The planned 2026-07-16/17 re-check was overdue and never
+   recorded — caught while auditing Focus.md for stale items. Fresh check
+   confirms it worked: US Organic Search fully recovered (49-62/day vs.
+   ~52/day baseline), 22-day Pinterest ROI window shows total site profit
+   **+₪103.17** (Pinterest-only rough attribution -₪144.53, same
+   conservative-estimate caveat as the original check, not worse). Decision
+   confirmed: keep running at ~$5/day, no further action. Full numbers and
+   arc in `docs/session-log/2026-07.md` ("AdSense/Pinterest cutoff —
+   resolved 2026-07-24") and `docs/plan/web/AdSense Revenue Drop - Pinterest
+   Cutoff Analysis.md`.
+10. **AutoPinner config-path fix — DONE, durable, 2026-07-24.** Originally
+    fixed the ~48h organic-pinning outage (2026-07-10 08:17 → 07-12) with a
+    fragile stopgap (a `D:\ann\Git\cross-stitch-platform-docs` directory
+    junction to `docs/`, lost on a fresh clone/machine — and in fact found
+    missing again 2026-07-24). Durable fix landed while building
+    `UploaderCli` (see #17): `PlatformConfig.LocateConfigFile()` in
+    `shared/src/CrossStitch.Shared/PlatformConfig.cs` now walks up looking
+    for a `docs/platform-config.json` **inside this monorepo** instead of a
+    sibling `cross-stitch-platform-docs` repo — verified working with no
+    env var or junction needed, for any of the three real consumers
+    (`Uploader.exe`, `UploaderCli`, `AutoPinner`, all of which call this via
+    `HelperFactory`/`PinterestUploader`). `docs/platform-config.json`'s
+    three paths updated to their real current locations, both confirmed
+    correct by Olga: `pinterestTokenPath` → `automation/pinterest-agent/
+    pinterest_tokens.json` (was already inside the monorepo, just not under
+    `uploader/` as originally guessed), `albumBoardsCsvPath` →
+    `docs/data/AlbumBoards.csv`. `pinAbStatsPath` →
+    `automation/pinterest-agent/pin-ab-stats.json` — this one didn't exist
+    yet at the new location (only at the old external
+    `D:\ann\Git\Uploader_remove\secrets\pin-ab-stats.json`), so copied it
+    over and added `pin-ab-stats.json` to the root `.gitignore` (wasn't
+    covered by any existing pattern, unlike `*_tokens.json`). Nothing left
+    depends on paths outside `cross-stitch-platform`.
 11. **DynamoDB schema doc gap — 6 entities not yet in the formal contract
     (found 2026-07-12).** `docs/srs/01-SRS-Website.md` §5 flags that
     `docs/integration/dynamodb-schema.md` only formally covers
@@ -201,31 +183,14 @@ live) to actually explain the revenue/traffic dip.
     in GSC (1249 on 06-12 → 729 on 06-30 → 989 on 07-19, recovering post
     the 2026-07-09 visual-SEO fix). Three concrete follow-up gaps
     identified in `web/src/app/designs/[designId]/page.tsx`:
-    - **Gap 1 — image `alt` text still templated — FIXED and deployed
-      2026-07-19.** Was `alt={`${design.Caption} free cross-stitch
-      pattern`}` (line ~345, plus the "You may also like" thumbnails at
-      line ~418) using the raw `Caption`, which 65% of designs share
-      (e.g. "Cushion Cover" ×160) — the same duplication the visual-SEO
-      backfill fixed for title/meta but never touched here. Both spots
-      now use `design.SeoTitle || design.Caption` (`d.SeoTitle ||
-      d.Caption` for the thumbnails). Built, smoke-tested (`/`, `/albums`,
-      `/designs/4217` all 200, buildId verified), deployed via `eb deploy
-      cross-stitch-com-env-clone` (Health: Green), and confirmed live —
-      `/designs/4217` now serves `alt="Brown Horse with Golden Horseshoe
-      Border free cross-stitch pattern"` instead of the generic "Horse".
-    - **Gap 2 — JSON-LD schema is thin — downgraded to minor/optional
-      2026-07-19.** Line ~213-223: only `name`, `description`, `creator`.
-      Originally proposed adding `image` + `additionalProperty`
-      (`Width`×`Height`, `NColors`) for uniqueness — Olga correctly pushed
-      back: those numeric fields are low-entropy (many unrelated designs
-      collide on the same width/height/color-count) and, more importantly,
-      structured data isn't the channel Google's scaled-content-abuse
-      classifier reads anyway — that operates on crawled visible/rendered
-      text (title, headings, alt text), not schema.org properties. The
-      JSON-LD `description` field already carries the real uniqueness
-      signal (`design.SeoDescription`, line ~212). Adding `image`/dimension
-      properties is at most a minor rich-results nicety — not a fix for the
-      indexing problem. Deprioritized below Gap 1 and Gap 3.
+    - **Gap 1 — image `alt` text still templated — FIXED, deployed, and
+      committed** (was raw `Caption`, 65% of designs share one, e.g.
+      "Cushion Cover" ×160 — now `SeoTitle || Caption`; confirmed live on
+      `/designs/4217`). Full detail: `docs/session-log/2026-07.md`
+      ("2026-07-19 session").
+    - **Gap 2 — JSON-LD schema thinness — downgraded to minor/optional**,
+      not a real fix for the indexing problem (Olga correctly pushed back
+      on the original proposal). Full detail: `docs/session-log/2026-07.md`.
     - **Gap 3 — near-duplicate designs, fix by canonicalizing.** Ties to the
       previously-deferred near-duplicate-design-images issue (e.g. two
       near-identical Tiger designs, deferred as "not a script bug, just
@@ -236,70 +201,18 @@ live) to actually explain the revenue/traffic dip.
       uniqueness.
 
 14. **GSC indexed-rate tracking deployed to the daily Lambda pipeline —
-    2026-07-19, verified working.** Fixed
-    `automation/pinterest-agent/scripts/gsc-report.ts`: the old "indexed"
-    number came from the Sitemaps API's `contents[].indexed` field, which
-    reads 0 for this property in every stored snapshot — not usable.
-    Replaced with a real, dated indexed-rate estimate (random sample of
-    live sitemap.xml URLs classified via the URL Inspection API's
-    `coverageState`, the same signal the GSC UI's Page Indexing report
-    uses), persisted to DynamoDB (`CrossStitchBusinessHistory`,
-    `EntityType=GSC_INDEX_SAMPLE`, `SortKey=date`) since Lambda's `/tmp`
-    doesn't survive between invocations. Also fixed a second, unrelated
-    stale-dependency bug found along the way: the script read
-    `reports/design-pin-map.json`, a file the current `pinmap` script
-    (`export-design-pin-map.ts`) no longer writes (it writes to DDB now) —
-    switched to a live DDB query (`getAllDesignPinMap` in
-    `historyStore.ts`). Wired into `lambda/handler.ts` as steps 13-14
-    (pin-map export re-enabled, then the GSC report), both non-fatal so a
-    hiccup can't break the critical daily emails. Deployed via
-    `lambda/deploy.ps1` (function code + EventBridge rule both updated,
-    no new IAM policy needed).
-    Also caught during testing: the URL Inspection API is ~6.5s/call — a
-    naive sequential loop at the original 300-sample default would have
-    taken ~33 minutes and blown Lambda's 900s timeout. Fixed with 5-way
-    concurrency (`GSC_INSPECT_CONCURRENCY`, default 5) and a lower default
-    sample size (150) — full run now completes in ~4m43s. Validated
-    against real GSC UI numbers: sample gave 16% ± 5.9pp indexed vs. the
-    UI's actual 18.3% (989/5,393) — within margin of error, confirms the
-    method works.
-    **Verified 2026-07-19:** first scheduled 02:00 UTC run completed
-    cleanly (checked CloudWatch Logs directly) — steps 13-14 ran with no
-    errors, `GSC_INDEX_SAMPLE#2026-07-18` landed in DDB: 29/150 sampled
-    URLs indexed → **19.3% ± 6.3pp**, consistent with the two manual test
-    runs (16%, 19.3%) and the GSC UI's own 18.3% reading. Only one dated
-    row exists so far (tracking only started 2026-07-18) — check back in
-    a few days once more daily points have accumulated to see a real
-    trend rather than a single snapshot.
+    2026-07-19, verified working.** Fixed `gsc-report.ts`'s indexed-rate
+    calculation (old Sitemaps API field always read 0) with a real sampled
+    estimate via the URL Inspection API, persisted to DDB, wired into the
+    Lambda pipeline. First scheduled run verified clean in CloudWatch Logs:
+    19.3% ± 6.3pp indexed, consistent with the GSC UI's 18.3%. Only one
+    dated row existed as of 07-19 (tracking just started) — **check back
+    for a real multi-point trend** (now checkable via `gsc-explore.ts`).
+    Full detail: `docs/session-log/2026-07.md`.
 
 15. **Editor report added to Telegram; anomaly-alert "missing email"
-    concern resolved as a non-issue — 2026-07-19.** Olga noticed the
-    editor report (with PDF conversion data) arrives by email but not
-    Telegram, while anomaly alerts arrive by Telegram but she thought she
-    wasn't getting them by email. Investigated: the editor-report gap was
-    real (by original design — `editorDailySummary.ts` only ever called
-    `sendEmail`, no Telegram integration existed) — **fixed**: added
-    `sendTelegramMessage` after the email send (same non-fatal
-    `.catch()` pattern as `anomalyNotifier.ts`), deployed. The anomaly
-    side turned out not to be a bug at all: DDB (`ANOMALY_EVENT` rows)
-    confirms the last anomaly actually detected/notified was for
-    2026-07-15 (sent 2026-07-16) — Olga confirmed she *did* receive that
-    one by email. Nothing has fired since (every run through 2026-07-18
-    logged "no unnotified anomalies"), so there was nothing missing —
-    both channels are working, there's just been no new anomaly to alert
-    on. (Along the way, confirmed via SES send statistics that there have
-    been zero bounces/complaints account-wide recently, and noted that
-    `anomalyNotifier.ts` never logs its SES `messageId` unlike the
-    daily/editor emails — a minor debugging gap, not yet fixed, low
-    priority now that the "missing email" theory turned out to be moot.)
-    Also noted separately: `lambda/deploy.ps1` doesn't check the exit
-    code after `update-function-configuration` (only after
-    `update-function-code`), so a real config-update failure could get
-    masked as "Deployment complete." — hit a benign instance of this
-    exact gap during the Telegram deploy (config call raced the code
-    call and threw `ResourceConflictException`; verified manually
-    afterward that the code deployed fine and config was unchanged/still
-    correct). Not yet fixed, low priority.
+    concern resolved as a non-issue — 2026-07-19, deployed.** Full detail:
+    `docs/session-log/2026-07.md`.
 
 16. **GSC average position softened ~11-12 → 16-17 starting 2026-07-22/23 —
     check back ~2026-08-07.** Olga flagged it from watching GSC directly
@@ -327,6 +240,53 @@ live) to actually explain the revenue/traffic dip.
     ranking/revenue dip). AdSense has no hour-level API dimension — don't
     try to build that again, see the README's "Not built" section.
 
+17. **Download-count tracking (3 tiers) — built and deployed 2026-07-24,
+    ahead of tonight's Announcement-email send.** Goal: measure how many
+    downloads come specifically from tonight's newsletter click-throughs, to
+    calibrate a future free-tier download limit. Found the first tier
+    (per-design public `NDownloaded`) and a second tier (per-logged-in-user
+    lifetime total, `TotalDownloadsCount`/`LastDownloadAt` in `users.ts`)
+    already written but sitting **uncommitted and undeployed** from an
+    earlier, undocumented session — verified the code was sound, then added
+    the third tier and shipped all of it:
+    - **Verified first:** newsletter links carry `eid`/`cid` query params,
+      and `AuthControl.tsx`'s `AutoLogin` already auto-logs-in on page load
+      via `/api/auth/login-from-email` (checks `cid` against
+      `getVerifiedUserByCid`) — confirmed this is genuinely automatic, no
+      user action needed, before relying on it.
+    - **Gap found:** the existing lifetime counter (`incrementUserDownloadCount`)
+      had no way to isolate "downloads from tonight's send" — it's a
+      lifetime total that would mix in any logged-in user's download from
+      any day/source.
+    - **Built:** `AuthControl.tsx` now sets `sessionStorage.cameFromNewsletter
+      = 'true'` whenever `eid`+`cid` are present in the URL, regardless of
+      prior login state (the auto-login network call itself only fires when
+      not already logged in, but the newsletter-origin marker needs to apply
+      either way). `DownloadPdfLink.tsx` reads that flag and sends
+      `fromNewsletter: true` in the download POST body.
+      `/api/designs/[designId]` route passes it through to
+      `incrementUserDownloadCount(email, fromNewsletter)`, which now also
+      bumps `TotalNewsletterDownloadsCount`/`LastNewsletterDownloadAt` on the
+      user record when true — a separate counter from the lifetime total,
+      not a replacement.
+    - **Shipped:** typecheck clean on the 4 changed files, full
+      `npm run build`, manifest verified clean (no `static/development/`
+      contamination), local smoke test on port 3001 (`/`, `/albums`,
+      `/designs/4217` all 200, buildId matched), `eb deploy
+      cross-stitch-com-env-clone` — **Health: Green**, confirmed live before
+      tonight's send.
+    - **Deliberately deferred (Olga's call):** the "email in body, no auth"
+      pattern (see #12 below) that this feature's endpoint now also uses —
+      decide after seeing tonight's numbers, not before.
+    - **Not yet done:** commit the 4 changed files
+      (`web/src/lib/users.ts`, `web/src/app/api/designs/[designId]/route.ts`,
+      `web/src/app/components/DownloadPdfLink.tsx`,
+      `web/src/app/components/AuthControl.tsx`) — deployed via `eb deploy`
+      straight from the working copy, same as SEO Gap 1 was before it got
+      committed retroactively (see #13 above). Asked Olga 2026-07-24
+      whether to commit now that it's deployed and verified — awaiting her
+      answer.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -353,9 +313,12 @@ live) to actually explain the revenue/traffic dip.
 - [x] CI workflow built for `web/` (build + Vitest) — 2026-07-12
 - [ ] Automated tests built for at least the priority-1 area in `09-Test-Plan.md` §4.2 (PayPal webhook)
 - [x] Pinterest ad spend stopped ($0 confirmed 2026-07-11)
-- [ ] AdSense/traffic follow-up after Pinterest cutoff resolved (see Pending #9, due 2026-07-14)
+- [x] AdSense/traffic follow-up after Pinterest cutoff resolved (see Pending #9) — 2026-07-24
 - [x] GSC indexed-rate tracking (gsc-report.ts fix) built, tested against real APIs, deployed to Lambda pipeline — 2026-07-19
 - [x] First scheduled Lambda run verified in CloudWatch Logs (see Pending #14) — 2026-07-19
 - [x] Editor report added to Telegram, deployed — 2026-07-19
 - [x] SEO Gap 1 (alt text → SeoTitle) fixed, deployed, verified live — 2026-07-19
 - [ ] SEO Gap 3 (canonicalize near-duplicate designs) actioned (see Pending #13)
+- [x] 3-tier download-count tracking (total/logged-in/newsletter) built, deployed, Health Green — 2026-07-24
+- [ ] Download-count feature's 4 changed files committed (see Pending #17)
+- [ ] Tonight's Announcement-email numbers checked (newsletter-attributed downloads + email-in-body auth decision, see Pending #17)

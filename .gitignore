@@ -17,6 +17,7 @@ secrets/
 *_tokens.json
 *-tokens.json
 google-oauth-client.json
+pin-ab-stats.json
 
 # Generated / runtime data
 reports/

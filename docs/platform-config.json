@@ -1,7 +1,7 @@
 {
-  "pinterestTokenPath": "Uploader/secrets/pinterest_tokens.json",
-  "albumBoardsCsvPath": "cross-stitch-platform-docs/data/AlbumBoards.csv",
-  "pinAbStatsPath": "Uploader/secrets/pin-ab-stats.json"
+  "pinterestTokenPath": "automation/pinterest-agent/pinterest_tokens.json",
+  "albumBoardsCsvPath": "docs/data/AlbumBoards.csv",
+  "pinAbStatsPath": "automation/pinterest-agent/pin-ab-stats.json"
   // Paths are resolved relative to the workspace root (the parent of this repo).
   // Add other shared variables here as needed.
 }

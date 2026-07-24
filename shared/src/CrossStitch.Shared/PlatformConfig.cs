@@ -7,18 +7,18 @@ namespace CrossStitch.Shared;
 
 /// <summary>
 /// Reads cross-project shared settings from
-/// <c>cross-stitch-platform-docs/platform-config.json</c>. Location resolution:
-/// <c>PLATFORM_CONFIG_PATH</c> env var wins, otherwise we walk up from the
-/// running assembly looking for a sibling <c>cross-stitch-platform-docs</c>
-/// repo.
+/// <c>cross-stitch-platform/docs/platform-config.json</c> (inside this same
+/// monorepo). Location resolution: <c>PLATFORM_CONFIG_PATH</c> env var wins,
+/// otherwise we walk up from the running assembly looking for a <c>docs</c>
+/// subfolder containing <c>platform-config.json</c>.
 ///
 /// Path-valued keys in <c>platform-config.json</c> are resolved relative to the
-/// workspace root (the parent of the platform-docs repo), unless they are
-/// absolute.
+/// workspace root (the parent of the <c>docs</c> folder, i.e. the
+/// cross-stitch-platform repo root), unless they are absolute.
 /// </summary>
 public static class PlatformConfig
 {
-    private const string PlatformDocsRepoName = "cross-stitch-platform-docs";
+    private const string DocsFolderName = "docs";
     private const string ConfigFileName = "platform-config.json";
 
     public static string ResolvePinterestTokenPath() =>
@@ -78,14 +78,15 @@ public static class PlatformConfig
         var current = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
         while (current != null)
         {
-            var candidate = Path.Combine(current.FullName, PlatformDocsRepoName, ConfigFileName);
+            var candidate = Path.Combine(current.FullName, DocsFolderName, ConfigFileName);
             if (File.Exists(candidate))
                 return Path.GetFullPath(candidate);
             current = current.Parent;
         }
 
         throw new FileNotFoundException(
-            $"Could not locate {ConfigFileName}. Set PLATFORM_CONFIG_PATH or place the " +
-            $"{PlatformDocsRepoName} repo alongside the calling project.");
+            $"Could not locate {ConfigFileName}. Set PLATFORM_CONFIG_PATH or run from " +
+            $"somewhere inside the cross-stitch-platform monorepo (looks for " +
+            $"{DocsFolderName}/{ConfigFileName} walking up from the executable).");
     }
 }
