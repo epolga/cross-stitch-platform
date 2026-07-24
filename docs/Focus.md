@@ -7,12 +7,20 @@ to recently-active subscribers, then follow up with the Ann-persona blog teaser.
 
 ## Active work
 
-Olga plans to send the Announcement email tonight (2026-07-24). Download-count
-tracking (3 tiers, see Pending #17) shipped and verified live specifically so
-this send's newsletter-attributed downloads get captured — check the numbers
-afterward. Everything else below is built, built and deployed, or drafted and
-waiting on Olga to trigger the actual send from the Uploader (Claude does not
-send mass emails without an explicit go-ahead per send).
+**First thing this session: pick up Pending #16** (GSC position softening +
+GA4 organic-traffic drop on 2026-07-24) — escalated overnight from "wait
+until 08-07" to "investigate now" after a real GA4 traffic drop showed up
+(not just a lagged metric). Olga went to sleep right after flagging it, so
+this wasn't started yet — start there before anything else.
+
+Design-spotlight newsletter ("Lady of Perpetual Love") sent 2026-07-24 —
+841/841, see Pending #18 (one complaint handled, SES suppression added,
+message-id logging added for next time). The **Announcement email**
+("You spoke, I listened") is still separately pending (#1) — not sent yet,
+waiting on Olga to trigger it from the Uploader (Claude does not send mass
+emails without an explicit go-ahead per send). Download-count tracking (3
+tiers, Pending #17) is live so whenever the Announcement send happens, its
+newsletter-attributed downloads will be captured.
 
 ## Session history
 
@@ -229,10 +237,35 @@ live) to actually explain the revenue/traffic dip.
     hypothesis (not confirmed): Google announced 2026-07-09 that small core
     updates now roll continuously without public announcement, and 3rd-party
     SERP trackers show elevated volatility most weeks since Jan 2026 —
-    fits, but isn't proven specific to this site. **Plan: don't react with
-    content/structural changes; check back ~2026-08-07 — reverted to 11-13
-    means it was noise, still 16+ means treat as a real sustained loss and
-    investigate content/E-E-A-T/competitors next.** The one-off `_check_*.ts`
+    fits, but isn't proven specific to this site. Original plan was to wait
+    until ~2026-08-07 before treating it as real.
+
+    **Update 2026-07-25 (early morning): escalating, check this morning
+    instead of waiting for 08-07.** 24 July broke the "just noise" read —
+    for the first time, a real (non-lag-explained) traffic drop showed up
+    alongside the softened position, not just the position number alone:
+    - **AdSense:** $11.17 for the day — lowest full day of July except
+      2026-07-11 (the deliberate Pinterest-spend-to-$0 day, a known/
+      explained anomaly, not comparable). RPM ≈$8.35, low but not a record
+      low on its own (07-16 was $8.68) — so revenue alone wasn't the
+      smoking gun.
+    - **GA4 (not subject to GSC's processing lag, so this one's real):**
+      Organic Search sessions **85** vs. 121–131 on each of the 4 prior
+      days (07-20 through 07-23) — a genuine ~30-35% drop in actual
+      visits, not just a metric. Total sessions 239 vs. 279-310.
+    - **GSC:** only 512 impressions / 19 clicks for 07-24 vs. 1475-2192 on
+      recent days — but treat this one skeptically, it's very likely still
+      the known last-1-2-days processing-lag artifact, not a real number
+      yet (re-pull with `gsc-explore.ts --dataState all` in a day or two
+      once it's settled before reading anything into it).
+    **Plan: pick this up this morning (2026-07-25), not 08-07** — the
+    GA4 organic-session drop is the one finding here that isn't
+    lag-explainable, so it's worth digging into properly now (content/
+    E-E-A-T/competitors per the original plan) rather than waiting out the
+    full two-week window. Don't re-litigate the already-ruled-out causes
+    (deploys, Manual Actions, Security Issues, AdSense-side RPM) — those
+    are still ruled out; this is specifically about the new GA4 traffic
+    signal.** The one-off `_check_*.ts`
     scripts from this investigation were generalized into three committed,
     parameterized tools — `gsc-explore.ts`, `gsc-compare.ts`, `ga4-explore.ts`
     in `automation/pinterest-agent/scripts/`, documented in that folder's new
