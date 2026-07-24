@@ -196,17 +196,23 @@ live) to actually explain the revenue/traffic dip.
     state by email), or accept the trade-off as-is. Not yet actioned.
 
 13. **SEO uniqueness gaps found 2026-07-19 (during GSC indexed-rate
-    investigation) — not yet actioned.** Context: Google's June 24 2026 spam
-    update (targets "scaled content abuse") likely explains the indexed-page
-    dip Olga saw in GSC (1249 on 06-12 → 729 on 06-30 → 989 on 07-19,
-    recovering post the 2026-07-09 visual-SEO fix). Three concrete follow-up
-    gaps identified in `web/src/app/designs/[designId]/page.tsx`:
-    - **Gap 1 — image `alt` text still templated.** Line ~345:
-      `alt={`${design.Caption} free cross-stitch pattern`}` uses the raw
-      `Caption`, which 65% of designs share (e.g. "Cushion Cover" ×160) —
-      the same duplication the visual-SEO backfill fixed for title/meta but
-      never touched here. Fix: swap to `design.SeoTitle` (already populated
-      for 99.8% of the catalog).
+    investigation).** Context: Google's June 24 2026 spam update (targets
+    "scaled content abuse") likely explains the indexed-page dip Olga saw
+    in GSC (1249 on 06-12 → 729 on 06-30 → 989 on 07-19, recovering post
+    the 2026-07-09 visual-SEO fix). Three concrete follow-up gaps
+    identified in `web/src/app/designs/[designId]/page.tsx`:
+    - **Gap 1 — image `alt` text still templated — FIXED and deployed
+      2026-07-19.** Was `alt={`${design.Caption} free cross-stitch
+      pattern`}` (line ~345, plus the "You may also like" thumbnails at
+      line ~418) using the raw `Caption`, which 65% of designs share
+      (e.g. "Cushion Cover" ×160) — the same duplication the visual-SEO
+      backfill fixed for title/meta but never touched here. Both spots
+      now use `design.SeoTitle || design.Caption` (`d.SeoTitle ||
+      d.Caption` for the thumbnails). Built, smoke-tested (`/`, `/albums`,
+      `/designs/4217` all 200, buildId verified), deployed via `eb deploy
+      cross-stitch-com-env-clone` (Health: Green), and confirmed live —
+      `/designs/4217` now serves `alt="Brown Horse with Golden Horseshoe
+      Border free cross-stitch pattern"` instead of the generic "Horse".
     - **Gap 2 — JSON-LD schema is thin — downgraded to minor/optional
       2026-07-19.** Line ~213-223: only `name`, `description`, `creator`.
       Originally proposed adding `image` + `additionalProperty`
@@ -230,7 +236,7 @@ live) to actually explain the revenue/traffic dip.
       uniqueness.
 
 14. **GSC indexed-rate tracking deployed to the daily Lambda pipeline —
-    2026-07-19, awaiting first scheduled-run verification.** Fixed
+    2026-07-19, verified working.** Fixed
     `automation/pinterest-agent/scripts/gsc-report.ts`: the old "indexed"
     number came from the Sitemaps API's `contents[].indexed` field, which
     reads 0 for this property in every stored snapshot — not usable.
@@ -248,13 +254,7 @@ live) to actually explain the revenue/traffic dip.
     (pin-map export re-enabled, then the GSC report), both non-fatal so a
     hiccup can't break the critical daily emails. Deployed via
     `lambda/deploy.ps1` (function code + EventBridge rule both updated,
-    no new IAM policy needed). **Not yet verified in the real Lambda
-    environment** — Olga chose to let it run on the normal 02:00 UTC
-    schedule rather than a manual invoke (which would have re-sent
-    today's daily/editor summary emails). **Next session: check
-    CloudWatch Logs for `cross-stitch-daily-pipeline`** for the
-    2026-07-19/20 run — confirm steps 13-14 completed without error and a
-    `GSC_INDEX_SAMPLE` row landed in DDB.
+    no new IAM policy needed).
     Also caught during testing: the URL Inspection API is ~6.5s/call — a
     naive sequential loop at the original 300-sample default would have
     taken ~33 minutes and blown Lambda's 900s timeout. Fixed with 5-way
@@ -263,6 +263,69 @@ live) to actually explain the revenue/traffic dip.
     against real GSC UI numbers: sample gave 16% ± 5.9pp indexed vs. the
     UI's actual 18.3% (989/5,393) — within margin of error, confirms the
     method works.
+    **Verified 2026-07-19:** first scheduled 02:00 UTC run completed
+    cleanly (checked CloudWatch Logs directly) — steps 13-14 ran with no
+    errors, `GSC_INDEX_SAMPLE#2026-07-18` landed in DDB: 29/150 sampled
+    URLs indexed → **19.3% ± 6.3pp**, consistent with the two manual test
+    runs (16%, 19.3%) and the GSC UI's own 18.3% reading. Only one dated
+    row exists so far (tracking only started 2026-07-18) — check back in
+    a few days once more daily points have accumulated to see a real
+    trend rather than a single snapshot.
+
+15. **Editor report added to Telegram; anomaly-alert "missing email"
+    concern resolved as a non-issue — 2026-07-19.** Olga noticed the
+    editor report (with PDF conversion data) arrives by email but not
+    Telegram, while anomaly alerts arrive by Telegram but she thought she
+    wasn't getting them by email. Investigated: the editor-report gap was
+    real (by original design — `editorDailySummary.ts` only ever called
+    `sendEmail`, no Telegram integration existed) — **fixed**: added
+    `sendTelegramMessage` after the email send (same non-fatal
+    `.catch()` pattern as `anomalyNotifier.ts`), deployed. The anomaly
+    side turned out not to be a bug at all: DDB (`ANOMALY_EVENT` rows)
+    confirms the last anomaly actually detected/notified was for
+    2026-07-15 (sent 2026-07-16) — Olga confirmed she *did* receive that
+    one by email. Nothing has fired since (every run through 2026-07-18
+    logged "no unnotified anomalies"), so there was nothing missing —
+    both channels are working, there's just been no new anomaly to alert
+    on. (Along the way, confirmed via SES send statistics that there have
+    been zero bounces/complaints account-wide recently, and noted that
+    `anomalyNotifier.ts` never logs its SES `messageId` unlike the
+    daily/editor emails — a minor debugging gap, not yet fixed, low
+    priority now that the "missing email" theory turned out to be moot.)
+    Also noted separately: `lambda/deploy.ps1` doesn't check the exit
+    code after `update-function-configuration` (only after
+    `update-function-code`), so a real config-update failure could get
+    masked as "Deployment complete." — hit a benign instance of this
+    exact gap during the Telegram deploy (config call raced the code
+    call and threw `ResourceConflictException`; verified manually
+    afterward that the code deployed fine and config was unchanged/still
+    correct). Not yet fixed, low priority.
+
+16. **GSC average position softened ~11-12 → 16-17 starting 2026-07-22/23 —
+    check back ~2026-08-07.** Olga flagged it from watching GSC directly
+    multiple times/day; confirmed via API this isn't just the usual
+    last-2-days processing-lag artifact (07-23 held at 17.3 even as more
+    data arrived, didn't correct back down). Ruled out as causes: web/
+    deploys (none in the window), GA4 traffic (flat 07-21/22/23: 286/315/308
+    sessions), AdSense impressions/clicks (normal on 07-23), Manual Actions
+    and Security Issues (both clean, checked in GSC UI directly). The
+    same-day AdSense revenue dip (07-23, $14.36 vs typical $15-25) was
+    RPM/CPC-driven ($10.75/$0.44), not traffic-driven — treated as a
+    separate, likely unrelated phenomenon (see the mid-June position-jump
+    memory: RPM and position are independent on this site). Leading
+    hypothesis (not confirmed): Google announced 2026-07-09 that small core
+    updates now roll continuously without public announcement, and 3rd-party
+    SERP trackers show elevated volatility most weeks since Jan 2026 —
+    fits, but isn't proven specific to this site. **Plan: don't react with
+    content/structural changes; check back ~2026-08-07 — reverted to 11-13
+    means it was noise, still 16+ means treat as a real sustained loss and
+    investigate content/E-E-A-T/competitors next.** The one-off `_check_*.ts`
+    scripts from this investigation were generalized into three committed,
+    parameterized tools — `gsc-explore.ts`, `gsc-compare.ts`, `ga4-explore.ts`
+    in `automation/pinterest-agent/scripts/`, documented in that folder's new
+    `README.md` (includes the recommended investigation order for a future
+    ranking/revenue dip). AdSense has no hour-level API dimension — don't
+    try to build that again, see the README's "Not built" section.
 
 ## Done when
 
@@ -292,5 +355,7 @@ live) to actually explain the revenue/traffic dip.
 - [x] Pinterest ad spend stopped ($0 confirmed 2026-07-11)
 - [ ] AdSense/traffic follow-up after Pinterest cutoff resolved (see Pending #9, due 2026-07-14)
 - [x] GSC indexed-rate tracking (gsc-report.ts fix) built, tested against real APIs, deployed to Lambda pipeline — 2026-07-19
-- [ ] First scheduled Lambda run (tonight, 02:00 UTC) verified in CloudWatch Logs (see Pending #14)
-- [ ] SEO Gap 1 (alt text) and Gap 3 (canonicalize near-duplicates) actioned (see Pending #13)
+- [x] First scheduled Lambda run verified in CloudWatch Logs (see Pending #14) — 2026-07-19
+- [x] Editor report added to Telegram, deployed — 2026-07-19
+- [x] SEO Gap 1 (alt text → SeoTitle) fixed, deployed, verified live — 2026-07-19
+- [ ] SEO Gap 3 (canonicalize near-duplicate designs) actioned (see Pending #13)
