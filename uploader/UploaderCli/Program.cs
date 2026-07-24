@@ -39,12 +39,26 @@ if (args.Length < 1)
 {
     Console.Error.WriteLine("Usage: UploaderCli <batchFolderPath> [--yes]");
     Console.Error.WriteLine("       UploaderCli send-admin-test");
+    Console.Error.WriteLine("       UploaderCli send-newsletter --months <N> [--yes]");
     return 2;
 }
 
 if (string.Equals(args[0], "send-admin-test", StringComparison.OrdinalIgnoreCase))
 {
     await SendAdminTestAsync();
+    return 0;
+}
+
+if (string.Equals(args[0], "send-newsletter", StringComparison.OrdinalIgnoreCase))
+{
+    int monthsIdx = Array.IndexOf(args, "--months");
+    if (monthsIdx < 0 || monthsIdx + 1 >= args.Length || !int.TryParse(args[monthsIdx + 1], out int months))
+    {
+        Console.Error.WriteLine("Usage: UploaderCli send-newsletter --months <N> [--yes]");
+        return 2;
+    }
+    bool newsletterAutoYes = args.Contains("--yes");
+    await SendNewsletterAsync(months, newsletterAutoYes);
     return 0;
 }
 
@@ -732,6 +746,217 @@ static string AppendQueryParameters(string url, IReadOnlyList<string> parameters
     string separator = baseUrl.Contains("?") ? "&" : "?";
     return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
 }
+
+// ---------------- send-newsletter (mirrors MainWindow.xaml.cs's SendNotificationEmailsAsync /
+// FetchAllUserEmailsAsync / SendNotificationMailToUsersAsync / SendEmailsWithProgressAsync) ----------------
+
+static async Task SendNewsletterAsync(int months, bool autoYes)
+{
+    string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+    string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+    if (string.IsNullOrEmpty(sender))
+        throw new InvalidOperationException("SenderEmail must be configured.");
+
+    var dynamoDbClient = new AmazonDynamoDBClient();
+    var sesClient = new AmazonSimpleEmailServiceClient();
+    var emailHelper = new EmailHelper();
+    var linkHelper = HelperFactory.CreatePatternLinkHelper();
+    string? sesConfigurationSetName = ConfigurationManager.AppSettings["SesConfigurationSetName"];
+    string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+    string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+    string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+
+    var latestDesign = await GetLatestDesignEmailInfoAsync(dynamoDbClient);
+    Console.WriteLine($"Latest design: DesignID {latestDesign.DesignId}, AlbumID {latestDesign.AlbumId}, \"{latestDesign.Title}\"");
+
+    DateTime cutoffUtc = DateTime.UtcNow.AddMonths(-months);
+    Console.WriteLine($"Filter: verified + subscribed + visited (LastSeenAt) since {cutoffUtc:yyyy-MM-dd}");
+
+    var allRecipients = await FetchAllUserEmailsAsync(dynamoDbClient, onlyVerified: true, onlySubscribed: true, minLastSeenAtUtc: cutoffUtc);
+    var eligibleRecipients = allRecipients.Where(r => !string.IsNullOrWhiteSpace(r.UnsubscribeToken)).ToList();
+    int skippedNoToken = allRecipients.Count - eligibleRecipients.Count;
+
+    var toSend = admin == null
+        ? eligibleRecipients
+        : eligibleRecipients.Where(r => !string.Equals(r.Email, admin, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    Console.WriteLine($"Matched: {allRecipients.Count} (verified+subscribed+recently-visited)");
+    Console.WriteLine($"Skipped (no unsubscribe token): {skippedNoToken}");
+    Console.WriteLine($"Will send to: {toSend.Count} recipient(s), plus 1 admin copy to {admin}");
+
+    if (!autoYes)
+    {
+        Console.Write($"Type 'yes' to send this to {toSend.Count} real recipients: ");
+        string? answer = Console.ReadLine();
+        if (!string.Equals(answer?.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Aborted. Nothing was sent.");
+            return;
+        }
+    }
+
+    var template = LoadHtmlEmailTemplate();
+    string patternUrl = BuildPatternUrl(linkHelper, latestDesign);
+    string imageUrl = linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
+    string altText = string.IsNullOrWhiteSpace(latestDesign.Title) ? "New cross stitch pattern" : latestDesign.Title;
+    string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+
+    if (!string.IsNullOrEmpty(admin))
+    {
+        string adminSiteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid);
+        var adminContent = RenderHtmlEmailContent(template, "admin", AppendUtmParameters(patternUrl), adminSiteUrl, imageUrl, altText, null);
+        await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, adminContent.Subject, adminContent.TextBody, adminContent.HtmlBody, configurationSetName: sesConfigurationSetName);
+        Console.WriteLine($"Sent admin copy to {admin}.");
+    }
+
+    var stopwatch = Stopwatch.StartNew();
+    int sent = 0;
+    foreach (var recipient in toSend)
+    {
+        string cid = recipient.Cid ?? string.Empty;
+        string patternUrlWithTracking = AppendTrackingParameters(patternUrl, cid, eid);
+        string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, cid, eid);
+        string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, recipient.UnsubscribeToken!);
+        var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+
+        var content = RenderHtmlEmailContent(LoadHtmlEmailTemplate(), recipient.FirstName, patternUrlWithTracking, siteUrlWithTracking, imageUrl, altText, unsubscribeUrl);
+        await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
+
+        try
+        {
+            await UpdateLastEmailDateAsync(dynamoDbClient, recipient, usersTable, emailAttribute, userIdAttribute);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to update LastEmailDate for {recipient.Email}: {ex.Message}");
+        }
+
+        sent++;
+        if (sent % 50 == 0 || sent == toSend.Count)
+            Console.WriteLine($"Sent {sent}/{toSend.Count} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}");
+    }
+
+    Console.WriteLine($"Done. Sent {sent}/{toSend.Count} in {stopwatch.Elapsed:hh\\:mm\\:ss}.");
+}
+
+static Dictionary<string, string> BuildUnsubscribeHeaders(string unsubscribeUrl, string sender)
+{
+    string mailto = $"mailto:{sender}";
+    return new Dictionary<string, string>
+    {
+        { "List-Unsubscribe", $"<{mailto}>, <{unsubscribeUrl}>" },
+        { "List-Unsubscribe-Post", "List-Unsubscribe=One-Click" },
+    };
+}
+
+static async Task UpdateLastEmailDateAsync(AmazonDynamoDBClient client, UserRecipient recipient, string usersTable, string emailAttribute, string userIdAttribute)
+{
+    var key = new Dictionary<string, AttributeValue>();
+    if (recipient.IdAttribute != null)
+        key[userIdAttribute] = recipient.IdAttribute;
+    else
+        key[emailAttribute] = new AttributeValue { S = recipient.Email };
+
+    await client.UpdateItemAsync(new UpdateItemRequest
+    {
+        TableName = usersTable,
+        Key = key,
+        UpdateExpression = "SET LastEmailDate = :now",
+        ExpressionAttributeValues = new Dictionary<string, AttributeValue> { [":now"] = new AttributeValue { S = DateTime.UtcNow.ToString("o") } },
+    });
+}
+
+static async Task<List<UserRecipient>> FetchAllUserEmailsAsync(
+    AmazonDynamoDBClient client, bool onlyVerified = false, bool onlySubscribed = false, DateTime? minLastSeenAtUtc = null)
+{
+    string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
+    string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
+    string firstNameAttribute = ConfigurationManager.AppSettings["UserFirstNameAttribute"] ?? "FirstName";
+    string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+    string userCidAttribute = ConfigurationManager.AppSettings["UserCidAttribute"] ?? "cid";
+    string verifiedAttribute = ConfigurationManager.AppSettings["UserVerifiedAttribute"] ?? "Verified";
+    string unsubscribedAttribute = ConfigurationManager.AppSettings["UserUnsubscribedAttribute"] ?? "Unsubscribed";
+    string botSuspectAttribute = ConfigurationManager.AppSettings["UserBotSuspectAttribute"] ?? "BotSuspect";
+    const string unsubscribeTokenAttribute = "UnsubscribeToken";
+    const string lastSeenAtAttribute = "LastSeenAt";
+
+    var emails = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var recipients = new List<UserRecipient>();
+
+    var projectionParts = new List<string> { emailAttribute, firstNameAttribute, userIdAttribute, userCidAttribute, unsubscribeTokenAttribute, botSuspectAttribute };
+    if (onlyVerified) projectionParts.Add(verifiedAttribute);
+    if (onlySubscribed) projectionParts.Add(unsubscribedAttribute);
+    if (minLastSeenAtUtc.HasValue) projectionParts.Add(lastSeenAtAttribute);
+
+    var scanRequest = new ScanRequest { TableName = usersTable, ProjectionExpression = string.Join(", ", projectionParts.Distinct()) };
+    Dictionary<string, AttributeValue>? lastEvaluatedKey = null;
+
+    do
+    {
+        scanRequest.ExclusiveStartKey = lastEvaluatedKey;
+        var response = await client.ScanAsync(scanRequest);
+
+        foreach (var item in response.Items)
+        {
+            if (!item.TryGetValue(emailAttribute, out var emailAttr)) continue;
+            string? email = !string.IsNullOrWhiteSpace(emailAttr.S) ? emailAttr.S.Trim() : null;
+            if (string.IsNullOrWhiteSpace(email)) continue;
+            if (!emails.Add(email)) continue;
+
+            string? firstName = item.TryGetValue(firstNameAttribute, out var fn) && !string.IsNullOrWhiteSpace(fn.S) ? fn.S.Trim() : null;
+            AttributeValue? idAttr = item.TryGetValue(userIdAttribute, out var idValue) ? idValue : null;
+            string? cid = item.TryGetValue(userCidAttribute, out var cidAttr) && !string.IsNullOrWhiteSpace(cidAttr.S) ? cidAttr.S.Trim() : null;
+
+            bool isBotSuspect = item.TryGetValue(botSuspectAttribute, out var botAttr) && botAttr.BOOL;
+            if (isBotSuspect) continue;
+
+            if (onlyVerified)
+            {
+                bool isVerified = item.TryGetValue(verifiedAttribute, out var verifiedAttr) && verifiedAttr.BOOL;
+                if (!isVerified) continue;
+            }
+            if (onlySubscribed)
+            {
+                bool unsubscribed = item.TryGetValue(unsubscribedAttribute, out var unsubAttr) && unsubAttr.BOOL;
+                if (unsubscribed) continue;
+            }
+            if (minLastSeenAtUtc.HasValue &&
+                !(TryGetDateTimeAttributeUtc(item, lastSeenAtAttribute, out DateTime lastSeenAtUtc) && lastSeenAtUtc >= minLastSeenAtUtc.Value))
+            {
+                continue;
+            }
+
+            string? unsubscribeToken = item.TryGetValue(unsubscribeTokenAttribute, out var tokenAttr) && !string.IsNullOrWhiteSpace(tokenAttr.S) ? tokenAttr.S.Trim() : null;
+            recipients.Add(new UserRecipient(email, firstName, idAttr, cid, unsubscribeToken));
+        }
+
+        lastEvaluatedKey = response.LastEvaluatedKey;
+    } while (lastEvaluatedKey != null && lastEvaluatedKey.Count > 0);
+
+    return recipients;
+}
+
+static bool TryGetDateTimeAttributeUtc(IReadOnlyDictionary<string, AttributeValue> item, string attributeName, out DateTime valueUtc)
+{
+    valueUtc = default;
+    if (!item.TryGetValue(attributeName, out var attributeValue) || string.IsNullOrWhiteSpace(attributeValue?.S))
+        return false;
+
+    string rawValue = attributeValue.S.Trim();
+    if (DateTimeOffset.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTimeOffset dto))
+    {
+        valueUtc = dto.UtcDateTime;
+        return true;
+    }
+    if (DateTime.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime parsed))
+    {
+        valueUtc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+        return true;
+    }
+    return false;
+}
+
+sealed record UserRecipient(string Email, string? FirstName, AttributeValue? IdAttribute, string? Cid, string? UnsubscribeToken);
 
 sealed class EmailTemplateDefinition
 {

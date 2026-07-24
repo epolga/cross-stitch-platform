@@ -278,14 +278,34 @@ live) to actually explain the revenue/traffic dip.
     - **Deliberately deferred (Olga's call):** the "email in body, no auth"
       pattern (see #12 below) that this feature's endpoint now also uses —
       decide after seeing tonight's numbers, not before.
-    - **Not yet done:** commit the 4 changed files
+    - **Committed 2026-07-24** (`f64bf7c`) — the 4 changed files
       (`web/src/lib/users.ts`, `web/src/app/api/designs/[designId]/route.ts`,
       `web/src/app/components/DownloadPdfLink.tsx`,
-      `web/src/app/components/AuthControl.tsx`) — deployed via `eb deploy`
-      straight from the working copy, same as SEO Gap 1 was before it got
-      committed retroactively (see #13 above). Asked Olga 2026-07-24
-      whether to commit now that it's deployed and verified — awaiting her
-      answer.
+      `web/src/app/components/AuthControl.tsx`) are in git, matching what's
+      deployed.
+
+18. **First real design-spotlight newsletter send via `UploaderCli` —
+    2026-07-24, needs follow-up monitoring.** Built end-to-end: the
+    `publish-design` skill (folder validation → upload/Pinterest/DDB →
+    newsletter template update → admin test), then a new `UploaderCli
+    send-newsletter --months N [--yes]` mode (mirrors MainWindow.xaml.cs's
+    `SendNotificationEmailsAsync`/`FetchAllUserEmailsAsync`/
+    `SendNotificationMailToUsersAsync` faithfully — same DDB scan/filter
+    logic, same per-recipient cid/eid tracking, unsubscribe headers,
+    `LastEmailDate` update). Olga asked for recipients filtered to
+    verified + subscribed + **visited (`LastSeenAt`) in the last 4
+    months** specifically (not the code's other default filter,
+    `LastEmailEntry`/`VerifiedAt` recency, which is a different criterion —
+    don't conflate the two if asked to repeat this).
+    **Sent:** "Lady of Perpetual Love" (DesignID 5459) to **841/841**
+    real recipients + 1 admin copy, zero failures, ~6 minutes total.
+    **Check back in a few days:** GA4 `src=newsletter medium=email` clicks
+    for this `eid`, `LastEmailEntry` updates on recipient records, and SES
+    bounce/complaint rate (no baseline established yet for this specific
+    send path since it's the first time `send-newsletter` has run) — if
+    complaint rate looks unusually high compared to the existing
+    Announcement-email precedent (memory: zero bounces/complaints
+    account-wide as of 2026-07-19), investigate before the next send.
 
 ## Done when
 
@@ -320,5 +340,7 @@ live) to actually explain the revenue/traffic dip.
 - [x] SEO Gap 1 (alt text → SeoTitle) fixed, deployed, verified live — 2026-07-19
 - [ ] SEO Gap 3 (canonicalize near-duplicate designs) actioned (see Pending #13)
 - [x] 3-tier download-count tracking (total/logged-in/newsletter) built, deployed, Health Green — 2026-07-24
-- [ ] Download-count feature's 4 changed files committed (see Pending #17)
+- [x] Download-count feature's 4 changed files committed — 2026-07-24 (`f64bf7c`)
 - [ ] Tonight's Announcement-email numbers checked (newsletter-attributed downloads + email-in-body auth decision, see Pending #17)
+- [x] First design-spotlight newsletter sent via `send-newsletter` — 841/841, 2026-07-24 (see Pending #18)
+- [ ] Follow-up check on that send (GA4 clicks, LastEmailEntry, SES bounce/complaint rate — see Pending #18)
