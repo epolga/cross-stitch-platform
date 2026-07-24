@@ -342,7 +342,7 @@ export default async function DesignPage({ params }: Props) {
                 <div className="relative w-full" style={{ aspectRatio }}>
                   <Image
                     src={design.ImageUrl}
-                    alt={`${design.Caption} free cross-stitch pattern`}
+                    alt={`${design.SeoTitle || design.Caption} free cross-stitch pattern`}
                     fill
                     priority
                     className="object-contain rounded"
@@ -415,7 +415,7 @@ export default async function DesignPage({ params }: Props) {
                   {d.ImageUrl ? (
                     <Image
                       src={d.ImageUrl}
-                      alt={`${d.Caption} cross-stitch pattern`}
+                      alt={`${d.SeoTitle || d.Caption} cross-stitch pattern`}
                       fill
                       className="object-contain p-1"
                       sizes="(max-width: 640px) 30vw, (max-width: 768px) 22vw, 15vw"
