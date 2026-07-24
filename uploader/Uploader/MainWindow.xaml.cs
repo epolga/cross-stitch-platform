@@ -616,7 +616,8 @@ namespace Uploader
                     PatternInfo.Width,
                     PatternInfo.Height,
                     PatternInfo.NColors,
-                    Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty
+                    Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty,
+                    _imageFilePath
                 ).ConfigureAwait(false);
 
                 if (string.IsNullOrWhiteSpace(seoDescription))
@@ -850,7 +851,8 @@ namespace Uploader
                 PatternInfo.Width,
                 PatternInfo.Height,
                 PatternInfo.NColors,
-                Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty
+                Uploader.Helpers.HelperFactory.GetAnthropicApiKey() ?? string.Empty,
+                _imageFilePath
             ).ConfigureAwait(false);
 
             Dispatcher.BeginInvoke(new Action(() =>
