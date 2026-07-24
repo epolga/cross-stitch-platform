@@ -10,6 +10,22 @@ Practical/trust-building content before personal/vulnerable content. Established
 2026-07-08: a "we listened and fixed things" email should land before a personal
 backstory post, so trust is built first. Don't reorder without a reason.
 
+## Other email systems (not tracked in detail here)
+
+- **Weekly design-spotlight newsletter** — a separate, pre-existing recurring
+  send (one featured design per email, `src=newsletter medium=email` in GA4
+  with a per-campaign `eid`), running at least since May 2026, roughly
+  weekly. Not built/managed via the plan below — discovered 2026-07-13 while
+  investigating email-channel GA4 traffic. Generates ~5-15 click-throughs per
+  send. Out of scope for this doc until it needs a content decision.
+
+## Sent (mass sends via the Announcement template)
+
+| Date | What | Evidence |
+|---|---|---|
+| 2026-06-29/30 | "Test the new editor" announcement (original template, pre-2026-07-08 rewrite) — sent to the user list around the `photo-to-cross-stitch` site-integration launch (`1a906dc`, 2026-06-28) and the "Uploader: announcement email blast" commit (`d88e8cb`, 2026-06-29 17:35). | GA4: 25 sessions on 2026-06-30 from `src=newsletter medium=email`, 19 landing directly on `/photo-to-cross-stitch`, plus a trailing tail of clicks through 07-09. This is the send Jacky/Leisa/Sarah/Bianca/Céline replied to (logged below, 07-08). |
+| 2026-07-08/09 | "You spoke, I listened" rewrite — **test send only**, not the full list. | GA4: only 2 sessions on 07-09 landing on `/short-stories/editor-updates-july-2026` (the rewrite's `<changelog_url>`) — volume consistent with an admin-only "Test Announcement Email" send, not a blast to the full ~672-person recipient list. |
+
 ## Sent (individual replies, not the periodic newsletter)
 
 These were one-off replies to specific users who wrote in, not part of the

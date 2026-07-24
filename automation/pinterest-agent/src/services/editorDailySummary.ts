@@ -10,6 +10,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import Anthropic from "@anthropic-ai/sdk";
 import { sendEmail } from "./sesClient";
+import { sendTelegramMessage } from "./telegramClient";
 
 const REGION = process.env.AWS_REGION || "us-east-1";
 const EDITOR_EVENTS_TABLE = process.env.DDB_EDITOR_EVENTS_TABLE || "EditorEvents";
@@ -176,6 +177,19 @@ ${observationBlock}
 </body></html>`;
 }
 
+function buildTelegramText(date: string, counts: EventCounts, observation: string): string {
+  const lines = [
+    `🧵 <b>Cross-stitch editor report</b> — ${date}`,
+    `Sessions: ${counts.editor_opened}`,
+    `Generated: ${counts.pattern_generated} (${pct(counts.pattern_generated, counts.editor_opened)} of sessions)`,
+    `PDF export: ${counts.pdf_exported} (${pct(counts.pdf_exported, counts.pattern_generated)} of generated)`,
+    `Feedback: ${counts.feedback_submitted}`,
+  ];
+  if (counts.editor_error > 0) lines.push(`Errors: ${counts.editor_error}`);
+  if (observation) lines.push("", observation);
+  return lines.join("\n");
+}
+
 export interface EditorDailySummaryResult {
   skipped: boolean;
   reason?: string;
@@ -201,6 +215,8 @@ export async function sendEditorDailySummary(date: string): Promise<EditorDailyS
     textBody,
     htmlBody,
   });
+
+  await sendTelegramMessage(buildTelegramText(date, counts, observation)).catch(() => {/* non-fatal */});
 
   return { skipped: false, messageId, counts };
 }

@@ -24,11 +24,12 @@ All commands below run from the `automation/pinterest-agent/` directory.
    - **Scanner/exploit-probe pattern** — hits paths that don't exist on this site (e.g. `/graphql`, `/wp-login.php`, `/products.json`, `/.env`, `/admin`), especially combined with high 404/502 rates and a large number of *distinct* paths relative to total requests (breadth-first probing, not repeat visits to the same few pages). → **Recommend block.**
    - **Heavy but plausible real user** — residential ISP PTR (cable/DSL/fiber provider — `*.cox.net`, `*.comcast.net`, `*.verizon.net`, UK/EU consumer ISPs, etc.), requests concentrated on real content pages and legitimate API routes the site's own frontend calls (e.g. `/api/personalized`, `/api/config/download-mode`), reasonable path diversity. → **No action.**
    - **Ambiguous** — residential/no-PTR, volume is elevated but the path pattern doesn't clearly look like scanning (e.g. suspiciously uniform repeat counts across a handful of pages, which could be a monitoring bot or a residential-proxy scraper) and there isn't enough signal to call it either way. → **Recommend watch**, not block.
+   - **Repeat offender** — `IP_HISTORY` shows this IP was already blocked or watched before (regardless of whether that row has since expired) and the current evidence again supports block. → **Recommend block with `ttlDays=90`** instead of the default 30. Not a permanent block — IPs get reassigned to new owners over time (dynamic residential leases, recycled datacenter/VPS addresses), so an indefinite block eventually just penalizes whoever inherits the address. `IP_HISTORY` itself never expires, so a further repeat after the 90 days will still be recognized and can be escalated again at that point.
 
 4. **Present the recommendation per IP** with the specific evidence that drove it (PTR result, method mix, notable status codes, the paths that matter) — don't just assert a verdict. Wait for the user to confirm before doing anything.
 
 5. **Act only after confirmation:**
-   - Block: `npm run block-ip -- <ip> "<reason>" [ttlDays=30]`
+   - Block: `npm run block-ip -- <ip> "<reason>" [ttlDays=30, or 90 for a repeat offender per step 3]`
    - Watch: `npm run watch-ip -- <ip> "<reason>" [ttlDays=3]`
    - No action: nothing to run.
 
