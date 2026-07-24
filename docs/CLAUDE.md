@@ -30,6 +30,20 @@ Documents under `plan/cross-stitch/` and `docs/web/` describe the cross-stitch w
 
 When a planning doc references a file path, treat unprefixed paths as relative to the relevant sibling project, not this repo.
 
+## Focus.md size management
+
+`Focus.md` (session-start guide, read at the start of every session) should
+stay lean — it's re-read in full every session, so completed-work narrative
+left sitting in it dilutes the signal (current goal, active work, genuinely
+open items). When reading it at session start, check its size: **if it
+exceeds ~300 lines, proactively propose archiving** before other work.
+Archiving means: for Pending items that are fully resolved/deployed/verified,
+collapse them to a one-line pointer and move the full narrative to
+`docs/session-log/<year-month>.md` (create a new month file when the current
+one doesn't fit, following the existing `2026-07.md` pattern). Leave
+genuinely open items untouched. Confirm the specific items with Olga before
+archiving — don't do it silently.
+
 ## AI workflow and documentation usage
 
 This repository is the orchestration and knowledge hub for the entire Cross-Stitch platform ecosystem.
