@@ -15,7 +15,12 @@ namespace CrossStitch.Shared.Email;
 /// </summary>
 public class EmailHelper
 {
-    public async Task SendEmailAsync(
+    /// <summary>
+    /// Sends an email and returns the SES-assigned MessageId, so callers can
+    /// log which message went to which recipient — the only way to later
+    /// correlate an abuse-report/bounce notification back to a specific send.
+    /// </summary>
+    public async Task<string?> SendEmailAsync(
         AmazonSimpleEmailServiceClient sesClient,
         string sender,
         IEnumerable<string> recipients,
@@ -28,7 +33,7 @@ public class EmailHelper
     {
         if (headers != null && headers.Count > 0)
         {
-            await SendRawEmailAsync(
+            return await SendRawEmailAsync(
                     sesClient,
                     sender,
                     recipients,
@@ -39,7 +44,6 @@ public class EmailHelper
                     configurationSetName,
                     cancellationToken)
                 .ConfigureAwait(false);
-            return;
         }
 
         var destination = new Destination { ToAddresses = recipients.ToList() };
@@ -60,10 +64,11 @@ public class EmailHelper
             },
         };
 
-        await sesClient.SendEmailAsync(request, cancellationToken).ConfigureAwait(false);
+        var response = await sesClient.SendEmailAsync(request, cancellationToken).ConfigureAwait(false);
+        return response.MessageId;
     }
 
-    private static async Task SendRawEmailAsync(
+    private static async Task<string?> SendRawEmailAsync(
         AmazonSimpleEmailServiceClient sesClient,
         string sender,
         IEnumerable<string> recipients,
@@ -116,7 +121,8 @@ public class EmailHelper
             RawMessage = rawMessage,
         };
 
-        await sesClient.SendRawEmailAsync(request, cancellationToken).ConfigureAwait(false);
+        var response = await sesClient.SendRawEmailAsync(request, cancellationToken).ConfigureAwait(false);
+        return response.MessageId;
     }
 
     // RFC 2047 base64 encode for non-ASCII subjects (emoji, Hebrew, etc.)

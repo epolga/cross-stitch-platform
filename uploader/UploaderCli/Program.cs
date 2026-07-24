@@ -801,12 +801,17 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
     string altText = string.IsNullOrWhiteSpace(latestDesign.Title) ? "New cross stitch pattern" : latestDesign.Title;
     string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
 
+    string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "send-log.jsonl");
+    logPath = Path.GetFullPath(logPath);
+    Console.WriteLine($"Logging each send (email + SES MessageId) to {logPath}");
+
     if (!string.IsNullOrEmpty(admin))
     {
         string adminSiteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid);
         var adminContent = RenderHtmlEmailContent(template, "admin", AppendUtmParameters(patternUrl), adminSiteUrl, imageUrl, altText, null);
-        await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, adminContent.Subject, adminContent.TextBody, adminContent.HtmlBody, configurationSetName: sesConfigurationSetName);
-        Console.WriteLine($"Sent admin copy to {admin}.");
+        string? adminMessageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, adminContent.Subject, adminContent.TextBody, adminContent.HtmlBody, configurationSetName: sesConfigurationSetName);
+        AppendSendLog(logPath, admin, adminMessageId, "admin", latestDesign.DesignId, eid);
+        Console.WriteLine($"Sent admin copy to {admin} (MessageId: {adminMessageId}).");
     }
 
     var stopwatch = Stopwatch.StartNew();
@@ -820,7 +825,8 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
         var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
 
         var content = RenderHtmlEmailContent(LoadHtmlEmailTemplate(), recipient.FirstName, patternUrlWithTracking, siteUrlWithTracking, imageUrl, altText, unsubscribeUrl);
-        await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
+        string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
+        AppendSendLog(logPath, recipient.Email, messageId, "user", latestDesign.DesignId, eid);
 
         try
         {
@@ -837,6 +843,25 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
     }
 
     Console.WriteLine($"Done. Sent {sent}/{toSend.Count} in {stopwatch.Elapsed:hh\\:mm\\:ss}.");
+}
+
+// Appends one JSON line per send: {"sentAtUtc","email","messageId","recipientType","designId","eid"}.
+// This is the only way to later correlate an SES abuse/bounce notification
+// (which references a MessageId or a timestamp, not always the recipient
+// email) back to who actually received that specific message.
+static void AppendSendLog(string logPath, string email, string? messageId, string recipientType, int designId, string eid)
+{
+    var entry = new
+    {
+        sentAtUtc = DateTime.UtcNow.ToString("o"),
+        email,
+        messageId,
+        recipientType,
+        designId,
+        eid,
+    };
+    string json = System.Text.Json.JsonSerializer.Serialize(entry);
+    File.AppendAllText(logPath, json + Environment.NewLine);
 }
 
 static Dictionary<string, string> BuildUnsubscribeHeaders(string unsubscribeUrl, string sender)
