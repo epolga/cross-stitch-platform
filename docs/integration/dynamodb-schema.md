@@ -28,8 +28,9 @@ In scope:
 
 Out of scope:
 
-- The two auxiliary tables referenced by `cross-stitch` but **not described in `TableDescription.txt`**: `PasswordResetTokens` (`d:/ann/Git/cross-stitch/src/lib/password-reset.ts:16`) and `SubscriptionEvents` (`d:/ann/Git/cross-stitch/src/lib/subscription-events.ts:9-10`). They are listed in §8 Dependencies for completeness.
 - Stripe/PayPal payloads or any non-DynamoDB stores.
+
+Also covered (added 2026-07-25, live-verified against AWS — see §4.9-4.14): six further tables that exist in code but weren't previously in this contract — `ConverterPatterns`, `CrossStitchLikes`, `FeatureRequests`, `CrossStitchBlogReactions`, `EditorEvents`, `SearchQueries` — plus the two originally out-of-scope auxiliary tables `PasswordResetTokens` (§4.7) and `SubscriptionEvents` (§4.8).
 
 ## 4. Data Formats
 
@@ -74,6 +75,7 @@ The `EntityType` discriminator partitions the rows into logical entities. Three 
 | `PinID`       | S        | required (post-Pinterest integration) | `MainWindow.xaml.cs:1062-1063, 1080` (throws if missing) | `MainWindow.xaml.cs:872, 890`, `export-design-pin-map.ts:49` (defensive)                  | `PatternInfo.PinId`                    | **DRIFT** — see §4.4 below.                                                                                                      |
 | `Text`        | S        | optional (legacy; never written today) | none in current writer                                       | `data-access.ts:151` (`item.Text?.S \|\| ""`)                                                | n/a                                    | Reader tolerates absence.                                                                                                        |
 | `ImageUrl`    | S        | optional  | none — reader synthesizes from `AlbumID/DesignID`                              | `data-access.ts:153-155`                                                                      | n/a                                    | If absent, reader builds `https://d2o1uvvg91z7o4.cloudfront.net/photos/{AlbumID}/{DesignID}/4.jpg`.                              |
+| `CanonicalDesignId` | N  | optional (added 2026-07-25) | `automation/pinterest-agent/scripts/set-canonical-design.ts` / `apply-confirmed-canonicals.ts` (batch tool, not the web app) | `data-access.ts:204`, `web/src/app/designs/[designId]/page.tsx:93-98` | n/a | Points a near-duplicate design at the DesignID of the primary design it should canonicalize to for SEO (`<link rel="canonical">` target only — the page itself still renders/serves normally, `robots` unchanged). Set on 43 designs 2026-07-25 (39 confirmed-byte-identical duplicate clusters found via `find-duplicate-designs.ts` + `verify-duplicate-designs-visual.ts`) — see `docs/Focus.md` Pending #13, Gap 3. |
 
 The writer hard-codes the column list — there is no schema validation step. Any new attribute requires patching both `InsertItemIntoDynamoDbAsync` (`MainWindow.xaml.cs:1065-1081`) and the reader projection (`data-access.ts:141-173`).
 
@@ -180,6 +182,119 @@ Table name resolved from env `DDB_RESET_TOKENS_TABLE` (default `"PasswordResetTo
 ### 4.8 `SubscriptionEvents` (referenced, not in `TableDescription.txt`)
 
 Table name resolved from env `DDB_SUBSCRIPTION_EVENTS_TABLE` (default `"SubscriptionEvents"`) in `d:/ann/Git/cross-stitch/src/lib/subscription-events.ts:9-10`. PK = `ID` (S) = `SEVT#<iso-utc>#<uuid>` (`subscription-events.ts:68`). All other attributes are S (`Source`, `EventType`, `Status`, `PreviousStatus`, `SubscriptionId`, `UserId`, `Email`, `TrialStartedAt`, `PaypalEventId`, `RawStatus`, `Notes`) — see `subscription-events.ts:69-115`.
+
+### 4.9 `ConverterPatterns` (saved editor patterns)
+
+Table name resolved from env `DDB_PATTERNS_TABLE` (default `"ConverterPatterns"`) in `web/src/lib/pattern-storage.ts:15`. **Self-provisions** — `ensureTable()` (`pattern-storage.ts:52-92`) creates the table plus the GSI on first use, then attempts to enable TTL on `expiresAt` (`pattern-storage.ts:86-89`, see TTL note — currently non-functional). Live check 2026-07-25: `ACTIVE`, 23 items, created 2026-06-26.
+
+Key schema: PK `patternId` (S). GSI `ownerID-index`: PK `ownerID` (S).
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `patternId` | S | required | `pattern-storage.ts:127` (create, `randomUUID()`), `186` (update, key only) | `pattern-storage.ts:216, 233` | PK |
+| `name` | S | required | `pattern-storage.ts:128` (create), `164` (update, via `#n`) | `pattern-storage.ts:210,217` | Defaults to `'Untitled'` if blank |
+| `width` / `height` | N | required | `pattern-storage.ts:129-130,165-166` | `pattern-storage.ts:210,218-219` | |
+| `palette` | S (JSON) | required | `pattern-storage.ts:131,167` | consumer parses `PatternPalette[]` | DMC number/name/RGB/symbol/stitchCount |
+| `grid` | S (RLE) | required | `pattern-storage.ts:132,168` | consumer decodes RLE | Capped at 350KB compressed — throws before writing if exceeded (`pattern-storage.ts:122-123,156-157`) |
+| `createdAt` | S | required | `pattern-storage.ts:133` (create only) | `pattern-storage.ts:220,239` | **Fixed 2026-07-25** — previously `updatePattern()` overwrote this on every resave (a full `PutItemCommand`); now `updatePattern()` is a partial `UpdateItemCommand` that never mentions `createdAt`, so it's set once at creation and never touched again. Pre-fix rows keep whatever value they already had (their true creation date, since it hadn't been resaved with new code yet — but no way to tell from the data alone which old rows were resaved before this fix and had `createdAt` silently drift). |
+| `modifiedAt` | S | required | `pattern-storage.ts:134` (create, same value as `createdAt`), `170,172` (update, `SET modifiedAt = :m`) | `pattern-storage.ts:223,250` | **New 2026-07-25.** True "last saved" timestamp — this is what the UI actually shows/sorts by (`listPatternsByOwner`'s sort, `OpenPatternDialog.tsx`, `ProfilePatternsPageClient.tsx`), since that's the behavior users had already come to expect from the old (mislabeled) `createdAt`. Pre-migration rows have no `modifiedAt` — reader falls back to `createdAt` (`pattern-storage.ts:223,250`). |
+| `ownerID` | S | required | `pattern-storage.ts:135,169` | GSI PK (`pattern-storage.ts:208-209`) | Session userId |
+| `thumbnail` | S (data-URL) | optional | `pattern-storage.ts:137` (create), `175` (update, `SET`) / `176` (update, `REMOVE` if absent this save) | `pattern-storage.ts:210,224` | Client-generated JPEG data-URL |
+| `hiddenColors` | S (JSON `number[]`) | optional | `pattern-storage.ts:138` (create), `178` (update, `SET`) / `179` (update, `REMOVE` if absent/empty this save) | consumer parses | |
+| `expiresAt` | N (epoch) | **never written** | — | — | See TTL note below — unlike the `createdAt`/`modifiedAt` split, this gap is **not fixed** |
+
+**TTL gap (found 2026-07-25, live-verified) — still open, deliberately not fixed in this pass.** The code path that creates the table also calls `UpdateTimeToLiveCommand` to enable TTL on `expiresAt` (`pattern-storage.ts:86-89`) — but that call only runs inside the `CreateTableCommand` branch of `ensureTable()`, i.e. only the very first time the table is created. A live `aws dynamodb describe-time-to-live --table-name ConverterPatterns` check (2026-07-25) shows **`TimeToLiveStatus: DISABLED`** on the live table (most likely it already existed, from an earlier local/dev run, by the time this code shipped). Even if TTL were enabled, no code path anywhere in `pattern-storage.ts` ever *writes* an `expiresAt` value to an item — so saved drafts would not expire either way. Net effect: saved editor patterns never expire, full stop. Not urgent (23 items) — fixing it needs a code change (start writing `expiresAt` in `savePattern`/`updatePattern`) plus the same one-off `aws dynamodb update-time-to-live` call already used for `EditorEvents`/`SearchQueries` (§4.13/§4.14) — left as a separate, lower-priority follow-up.
+
+### 4.10 `CrossStitchLikes` (design likes/votes)
+
+Table name resolved from env `DDB_LIKES_TABLE` (default `"CrossStitchLikes"`) in `web/src/lib/design-likes.ts:11`; GSI name from `DDB_LIKES_USER_GSI_NAME` (default `"GSI1"`, line 12). **Does NOT self-provision** — no `CreateTableCommand` anywhere in `design-likes.ts`; must already exist in AWS. Live check 2026-07-25: `ACTIVE`, 62 items, no EB env override (uses code default table name).
+
+Key schema: PK `PK` (S) = `DESIGN#<designId>`, SK `SK` (S) = `USER#<email>`. GSI `GSI1`: PK `GSI1PK` (S) = `USER#<email>`, SK `GSI1SK` (S) = `DESIGN#<designId>`.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `PK` / `SK` | S | required | `design-likes.ts:211-212` | key reads throughout | One item per (design, user) vote |
+| `GSI1PK` / `GSI1SK` | S | required | `design-likes.ts:213-214` | `design-likes.ts:167` (query by user) | Lets "my votes" be queried without a table scan |
+| `EntityType` | S | required | `design-likes.ts:215` (`'VOTE'`) | `design-likes.ts:76` (legacy fallback: absence of `VoteDirection`/`VoteValue` + `EntityType==='LIKE'` reads as an up-vote) | `'LIKE'` is a legacy value the reader still tolerates — no current writer sets it |
+| `DesignID` | N | required | `design-likes.ts:216` | `design-likes.ts:84-89` | |
+| `UserEmail` | S | required | `design-likes.ts:217` | not read back (audit only) | Normalized lowercase |
+| `VoteDirection` | S (`'up'`\|`'down'`) | required | `design-likes.ts:218` | `design-likes.ts:63-66` | Canonical vote field |
+| `VoteValue` | N (`'1'`\|`'-1'`) | required | `design-likes.ts:219` | `design-likes.ts:68-74` (legacy fallback if `VoteDirection` missing) | |
+| `CreatedAt` / `UpdatedAt` | S | required | `design-likes.ts:220-221` | `design-likes.ts:187-188` | Both set to the same value on every write — no separate "first voted" timestamp survives an up→down flip, since a vote change deletes then re-creates the item (`design-likes.ts:227-259`) |
+
+**Risk (already flagged in Pending #11):** because this table doesn't self-provision, if it's ever missing in an environment the app has no code path to notice or recreate it — writes/reads would throw `ResourceNotFoundException` (the module does export `isResourceNotFound` as a helper, `design-likes.ts:272-276`, but nothing currently calls it to trigger a create).
+
+### 4.11 `FeatureRequests`
+
+Table name resolved from env `DDB_FEATURE_REQUESTS_TABLE` (default `"FeatureRequests"`) in `web/src/lib/feature-requests.ts:13`. **Self-provisions** (`ensureTable()`, lines 20-46). Live check 2026-07-25: `ACTIVE`, 4 items, no EB env override.
+
+Key schema: PK `id` (S), no SK, no GSI.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `id` | S | required | `feature-requests.ts:90` (`randomUUID()`) | key reads | PK |
+| `createdAt` | S | required | `feature-requests.ts:91` | `feature-requests.ts:115,145` | ISO-8601 |
+| `text` | S | required | `feature-requests.ts:92` | `feature-requests.ts:116` | |
+| `importance` | S (`'nice-to-have'`\|`'important'`\|`'need-this'`) | required | `feature-requests.ts:93` | `feature-requests.ts:117` | |
+| `status` | S (`'new'`\|`'reviewed'`\|`'planned'`\|`'done'`\|`'rejected'`) | required | `feature-requests.ts:94` (`'new'` on create), `feature-requests.ts:148-159` (`updateFeatureRequestStatus`) | `feature-requests.ts:118` | |
+| `email`, `pageUrl`, `userId`, `browserLanguage`, `userAgent` | S | optional | `feature-requests.ts:96-97,104-106` | `feature-requests.ts:119-120,127-129` | Only written if provided |
+| `patternWidth`, `patternHeight`, `colorsCount`, `editorTimeSeconds`, `userChangedStitchesCount` | N | optional | `feature-requests.ts:98-102` | `feature-requests.ts:121-125` | Editor-context metadata captured at submission time |
+| `exportedPdf` | BOOL | optional | `feature-requests.ts:103` | `feature-requests.ts:126` | |
+| `updatedAt` | S | optional | `feature-requests.ts:157` (set only on a status change) | not read back | |
+
+`listFeatureRequests` (`feature-requests.ts:133-146`) does a full table `ScanCommand` — fine at 4 items, would need a GSI (e.g. by `status`) if this table grows large.
+
+### 4.12 `CrossStitchBlogReactions`
+
+Table name resolved from env `DDB_BLOG_REACTIONS_TABLE` (default `"CrossStitchBlogReactions"`) in `web/src/lib/blog-reactions.ts:9`. **Self-provisions** (`ensureTable()`, lines 15-36). Live check 2026-07-25: `ACTIVE`, 0 items, no EB env override.
+
+Key schema: PK `slug` (S), no SK, no GSI.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `slug` | S | required | key on `UpdateItemCommand`/`GetItemCommand` (`blog-reactions.ts:40,49`) | `blog-reactions.ts:40` | PK; blog post slug |
+| `count` | N | required (defaults to 0 if item absent) | `blog-reactions.ts:44-56` (`ADD #c :one`, atomic increment) | `blog-reactions.ts:41,56` | One row per post, no per-user dedup — a reader can increment the same post's count more than once (no rate-limit or per-user tracking in this file) |
+
+Zero items live as of 2026-07-25 — no post has received a reaction yet (blog + reaction feature shipped 2026-07-08).
+
+### 4.13 `EditorEvents` (editor analytics)
+
+Table name resolved from env `DDB_EDITOR_EVENTS_TABLE` (default `"EditorEvents"`) in `web/src/lib/editor-events.ts:15`. **Self-provisions** (`ensureTable()`, lines 25-63). Live check 2026-07-25: `ACTIVE`, **8 221 items**, no EB env override.
+
+Key schema: PK `id` (S). GSI `date-eventType-index`: PK `date` (S), SK `eventType` (S).
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `id` | S | required | `editor-events.ts:197` (`randomUUID()`) | key reads | PK. Also reused as a fixed sentinel `'MILESTONES'` for a singleton row tracking first-ever editor/PDF/feedback milestones (`editor-events.ts:21,96-108`) — that row does **not** carry `eventType`/`date`/`ttl` and is a structurally different item shape sharing the same table. |
+| `eventType` | S | required (for real events) | `editor-events.ts:198` | GSI SK, `editor-events.ts:275-276` (scan filter) | e.g. `editor_opened`, `pdf_exported`, `feedback_submitted`, `editor_error` |
+| `ts` | S | required | `editor-events.ts:199` | `editor-events.ts:282` (sort) | ISO-8601, full timestamp |
+| `date` | S | required | `editor-events.ts:200` | GSI PK | ISO date only (`YYYY-MM-DD`) |
+| `sessionId` | S | required | `editor-events.ts:201` | audit only | |
+| `ttl` | N (epoch) | required | `editor-events.ts:194,202` | not read back (defaults to 0 if absent, `editor-events.ts:227`) | **Intended** 90-day expiry — see TTL note below |
+| `userId`, `patternId`, `source`, `errorCode`, `step`, `importance` | S | optional | `editor-events.ts:205-213` | `editor-events.ts:228-236` | Only written if present on the event |
+| `patternWidth`, `patternHeight`, `colorCount` | N | optional | `editor-events.ts:207-209` | `editor-events.ts:230-232` | |
+
+**TTL gap (found 2026-07-25, live-verified) — same class of bug as ConverterPatterns/SearchQueries, but on the largest of the three tables.** Every event writes a `ttl` epoch-seconds attribute 90 days out (`editor-events.ts:194`), intending automatic expiry — but `ensureTable()` (lines 25-63) never calls `UpdateTimeToLiveCommand` for this table, unlike `pattern-storage.ts`'s (non-functional) attempt. A live `aws dynamodb describe-time-to-live --table-name EditorEvents` check (2026-07-25) confirms **`TimeToLiveStatus: DISABLED`**. Net effect: 8 221 items and growing, unboundedly, with no cleanup — this is the table most worth fixing first (of the two/three affected) given its size and growth rate. Fix is a one-off `aws dynamodb update-time-to-live --table-name EditorEvents --time-to-live-specification "Enabled=true,AttributeName=ttl"` (no code change needed — the `ttl` attribute is already being written correctly on every item).
+
+### 4.14 `SearchQueries` (search query logs)
+
+Table name resolved from env `DDB_SEARCH_QUERIES_TABLE` (default `"SearchQueries"`, and explicitly pinned to the same value in the EB environment) in `web/src/lib/search-log.ts:4`. **Does NOT self-provision** — no `CreateTableCommand` anywhere in `search-log.ts`; must already exist in AWS. Live check 2026-07-25: `ACTIVE`, 2 084 items, no EB env override beyond the explicit same-value pin.
+
+Key schema: PK `date` (S), SK `ts` (S) = `<ISO-timestamp>#<6-char-random>`.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `date` | S | required | `search-log.ts:21` | PK | ISO date only |
+| `ts` | S | required | `search-log.ts:22` | SK | `<full ISO timestamp>#<random suffix>` — the random suffix exists purely to keep the SK unique when two searches land in the same millisecond |
+| `query` | S | required | `search-log.ts:23` | — | Truncated to 500 chars |
+| `source` | S (`'text'`\|`'image'`) | required | `search-log.ts:24` | — | |
+| `hasResults` | BOOL | required | `search-log.ts:25` | — | |
+| `ttl` | N (epoch) | required | `search-log.ts:18,26` | not read back | **Intended** 90-day expiry — see TTL note below |
+| `filters` | S (JSON) | optional | `search-log.ts:29-31` | — | Only written if provided |
+
+Writes are fire-and-forget (`search-log.ts:33-34`, `.catch(err => console.error(...))`) — a missing table or any write failure is logged but never surfaced to the caller or retried, matching the "silently swallows write errors" note in Focus.md Pending #11.
+
+**TTL gap (found 2026-07-25, live-verified) — same bug as `EditorEvents`.** `search-log.ts` computes and writes a correct 90-day `ttl` value on every row, but nothing in this codebase ever calls `UpdateTimeToLiveCommand` for `SearchQueries` (there's no bootstrap function here at all, self-provisioning or otherwise). Live check confirms **`TimeToLiveStatus: DISABLED`**. Net effect: 2 084 items and growing, no cleanup. Same one-off fix as `EditorEvents`: `aws dynamodb update-time-to-live --table-name SearchQueries --time-to-live-specification "Enabled=true,AttributeName=ttl"`.
 
 ## 5. API Endpoints / Interfaces
 
@@ -299,4 +414,5 @@ Because of the lack of schema versioning (§6), a new attribute added by the wri
 - **Reader code (Subscription events):** `d:/ann/Git/cross-stitch/src/lib/subscription-events.ts:1-130`.
 - **Pin-ID drift evidence:** `d:/ann/Git/cross-stitch/src/lib/data-access.ts:157-171`; `d:/ann/Git/cross-stitch/automation/pinterest-agent/scripts/export-design-pin-map.ts:42-52`; `d:/ann/Git/Uploader/Uploader/PatternInfo.cs:43-47, 100-104`; `d:/ann/Git/Uploader/Uploader/MainWindow.xaml.cs:1080`.
 - **Architecture seed:** `architectureFacts.dynamodb` block in `d:/ann/Git/Uploader/.a5c/runs/01KS7AGP936JGQ989X3GHEQV1T/tasks/01KS7ANCTTG1R1YDC1GVS6X5W5/task.json:91-130`.
+- **§4.9-4.14 tables — live-verified 2026-07-25:** `aws dynamodb describe-table` + `describe-time-to-live` for all six, checked against the EB environment (`cross-stitch-com-env-clone`)'s `aws:elasticbeanstalk:application:environment` option settings for name overrides (none found beyond `DDB_SEARCH_QUERIES_TABLE` pinned to its own default). Code: `web/src/lib/pattern-storage.ts`, `web/src/lib/design-likes.ts`, `web/src/lib/feature-requests.ts`, `web/src/lib/blog-reactions.ts`, `web/src/lib/editor-events.ts`, `web/src/lib/search-log.ts`.
 - **Repo guidance:** `d:/ann/Git/Uploader/CLAUDE.md` (`do-not-invent` list — this contract complies: every attribute above is grounded in cited code).

@@ -7,12 +7,6 @@ to recently-active subscribers, then follow up with the Ann-persona blog teaser.
 
 ## Active work
 
-**First thing this session: pick up Pending #16** (GSC position softening +
-GA4 organic-traffic drop on 2026-07-24) — escalated overnight from "wait
-until 08-07" to "investigate now" after a real GA4 traffic drop showed up
-(not just a lagged metric). Olga went to sleep right after flagging it, so
-this wasn't started yet — start there before anything else.
-
 Design-spotlight newsletter ("Lady of Perpetual Love") sent 2026-07-24 —
 841/841, see Pending #18 (one complaint handled, SES suppression added,
 message-id logging added for next time). The **Announcement email**
@@ -82,41 +76,16 @@ live) to actually explain the revenue/traffic dip.
    would replace ~30 one-off `_check_*.ts` scratch scripts with typed
    tools. Revisit only if the scratch-script pattern keeps recurring
    session after session.
-9. **AdSense revenue drop after Pinterest cutoff — RESOLVED 2026-07-24.**
-   Pinterest ad spend hit $0 on 2026-07-11, restarted at ~$5/day on
-   2026-07-12. The planned 2026-07-16/17 re-check was overdue and never
-   recorded — caught while auditing Focus.md for stale items. Fresh check
-   confirms it worked: US Organic Search fully recovered (49-62/day vs.
-   ~52/day baseline), 22-day Pinterest ROI window shows total site profit
-   **+₪103.17** (Pinterest-only rough attribution -₪144.53, same
-   conservative-estimate caveat as the original check, not worse). Decision
-   confirmed: keep running at ~$5/day, no further action. Full numbers and
-   arc in `docs/session-log/2026-07.md` ("AdSense/Pinterest cutoff —
-   resolved 2026-07-24") and `docs/plan/web/AdSense Revenue Drop - Pinterest
-   Cutoff Analysis.md`.
-10. **AutoPinner config-path fix — DONE, durable, 2026-07-24.** Originally
-    fixed the ~48h organic-pinning outage (2026-07-10 08:17 → 07-12) with a
-    fragile stopgap (a `D:\ann\Git\cross-stitch-platform-docs` directory
-    junction to `docs/`, lost on a fresh clone/machine — and in fact found
-    missing again 2026-07-24). Durable fix landed while building
-    `UploaderCli` (see #17): `PlatformConfig.LocateConfigFile()` in
-    `shared/src/CrossStitch.Shared/PlatformConfig.cs` now walks up looking
-    for a `docs/platform-config.json` **inside this monorepo** instead of a
-    sibling `cross-stitch-platform-docs` repo — verified working with no
-    env var or junction needed, for any of the three real consumers
-    (`Uploader.exe`, `UploaderCli`, `AutoPinner`, all of which call this via
-    `HelperFactory`/`PinterestUploader`). `docs/platform-config.json`'s
-    three paths updated to their real current locations, both confirmed
-    correct by Olga: `pinterestTokenPath` → `automation/pinterest-agent/
-    pinterest_tokens.json` (was already inside the monorepo, just not under
-    `uploader/` as originally guessed), `albumBoardsCsvPath` →
-    `docs/data/AlbumBoards.csv`. `pinAbStatsPath` →
-    `automation/pinterest-agent/pin-ab-stats.json` — this one didn't exist
-    yet at the new location (only at the old external
-    `D:\ann\Git\Uploader_remove\secrets\pin-ab-stats.json`), so copied it
-    over and added `pin-ab-stats.json` to the root `.gitignore` (wasn't
-    covered by any existing pattern, unlike `*_tokens.json`). Nothing left
-    depends on paths outside `cross-stitch-platform`.
+9. **AdSense revenue drop after Pinterest cutoff — RESOLVED 2026-07-24, no
+   further action.** Keep Pinterest ads running at ~$5/day. Full arc:
+   `docs/session-log/2026-07.md` ("AdSense/Pinterest cutoff — resolved
+   2026-07-24") and `docs/plan/web/AdSense Revenue Drop - Pinterest Cutoff
+   Analysis.md`.
+10. **AutoPinner config-path fix — DONE, durable, 2026-07-24.** Config
+    resolution now walks up for `docs/platform-config.json` inside this
+    monorepo instead of a sibling repo/junction; nothing left depends on
+    paths outside `cross-stitch-platform`. Full detail:
+    `docs/session-log/2026-07.md`.
 11. **DynamoDB schema doc gap — 6 entities not yet in the formal contract
     (found 2026-07-12).** `docs/srs/01-SRS-Website.md` §5 flags that
     `docs/integration/dynamodb-schema.md` only formally covers
@@ -132,18 +101,30 @@ live) to actually explain the revenue/traffic dip.
       number/name/RGB/symbol/stitchCount), `grid` (RLE-compressed, capped
       at 350KB compressed), `hiddenColors` (optional, JSON `number[]`),
       `thumbnail` (optional, client-generated JPEG data-URL), `createdAt`
-      (ISO-8601). **Notes for the future:**
-      - `createdAt` is misleading — `updatePattern()` overwrites it on
-        every resave, so the "Open" list's sort-by-`createdAt` is really
-        "last modified," not true creation date. No separate `updatedAt`
-        exists; if a real creation date is ever needed, nothing captures
-        it today.
+      and `modifiedAt` (ISO-8601). **`createdAt`/`modifiedAt` split — FIXED
+      2026-07-25:** `createdAt` was misleading — `updatePattern()` used to
+      overwrite it on every resave (full `PutItemCommand`), so the "Open"
+      list's sort was really "last modified," not true creation date.
+      `updatePattern()` now does a partial `UpdateItemCommand` that never
+      touches `createdAt`, plus a new `modifiedAt` field that *does* update
+      on every save and is what the UI actually sorts/displays by
+      (`OpenPatternDialog.tsx`, `ProfilePatternsPageClient.tsx`) — matches
+      the behavior users already expected, just under the correct field
+      now. Pre-fix rows fall back to `createdAt` for `modifiedAt` until
+      next resave. Vitest clean (10/10 files, 61/61 tests), typecheck clean
+      on every changed file, and full `npm run build` completed clean
+      (exit 0, `/photo-to-cross-stitch` and `/profile/patterns` both built
+      fine). **Deployed 2026-07-25** via `eb deploy cross-stitch-com-env-clone`
+      — deploy itself completed successfully, live smoke-checked (`/` and
+      `/api/health` both 200). **Notes for the future:**
       - The 350KB compressed-grid cap is the only overflow guard; large
         low-repetition patterns (poor RLE compression) can hit it sooner
         than the grid dimensions alone would suggest.
-      - `expiresAt` TTL is enabled on the table but no code path writes
-        that attribute — saved drafts never actually expire despite TTL
-        being configured.
+      - `expiresAt` TTL is **disabled** on the table and no code path
+        writes that attribute either — saved drafts never actually expire
+        (see Pending #11's dynamodb-schema.md §4.9 for the full TTL gap
+        writeup — deliberately not fixed yet, separate from the
+        createdAt/modifiedAt split above).
     - Design likes/votes — `CrossStitchLikes` (`design-likes.ts`), PK
       `PK`=`DESIGN#<id>` / SK `SK`=`USER#<email>`, GSI `GSI1`. **Does
       NOT self-provision** — must already exist manually in AWS.
@@ -162,13 +143,40 @@ live) to actually explain the revenue/traffic dip.
     same class of problem as the already-documented six-spelling
     `PinID` drift on `CrossStitchItems`.
 
-    **Follow-up (not yet done):** run `aws dynamodb describe-table` (or
-    check the Console) for all six to confirm real table names (env-var
-    overrides may differ from the code defaults) and key schema match
-    the code; check EB env vars for overrides; then add a §4.x section
-    for each to `docs/integration/dynamodb-schema.md`, following the
-    existing `PasswordResetTokens`/`SubscriptionEvents` pattern.
-    Prioritize the two non-self-provisioning tables first.
+    **Follow-up — DONE, 2026-07-25 (live-verified + documented, one real bug
+    found).** Ran `aws dynamodb describe-table`/`describe-time-to-live` for
+    all six and checked the EB environment's env vars for name overrides:
+    all six use their code-default names live (only `DDB_SEARCH_QUERIES_TABLE`
+    is explicitly set, to the same value as the default — not a real
+    override), all six `ACTIVE`, key schemas match code exactly. §4.9-4.14
+    added to `docs/integration/dynamodb-schema.md` with full attribute
+    tables, following the `PasswordResetTokens`/`SubscriptionEvents` pattern.
+
+    **Real bug found along the way, not just a doc gap:** three tables
+    (`ConverterPatterns`, `EditorEvents`, `SearchQueries`) write a
+    TTL-intended epoch attribute (`expiresAt`/`ttl`) on every item expecting
+    DynamoDB to auto-expire old rows — but **DynamoDB TTL is `DISABLED`** on
+    all three live tables today, so nothing ever actually expires.
+    `EditorEvents` is the most consequential: **8,221 items and growing**
+    (90-day TTL intended, never applied) — `SearchQueries` similarly
+    (2,084 items). `ConverterPatterns` (23 items) has a second, independent
+    gap on top: even where the code *tries* to enable TTL (only on
+    first-ever table creation), no code path ever writes the `expiresAt`
+    attribute at all. Root cause for `EditorEvents`/`SearchQueries`: no code
+    anywhere calls `UpdateTimeToLiveCommand` for either table. Fix is
+    infra-only, no code change needed — a one-off
+    `aws dynamodb update-time-to-live --table-name <T> --time-to-live-specification "Enabled=true,AttributeName=<attr>"`
+    per table. **Fixed 2026-07-25** — ran
+    `aws dynamodb update-time-to-live` for `EditorEvents` and `SearchQueries`
+    (attribute `ttl` on both), confirmed `TimeToLiveStatus: ENABLED` on
+    both immediately after. DynamoDB's TTL sweep isn't instant (expired
+    items typically clear within ~48h of the item's `ttl` timestamp
+    passing, per AWS docs) — no need to check back sooner than that.
+    `ConverterPatterns` is **not fixed** — its gap is different (code never
+    writes `expiresAt` at all, so there's no attribute for TTL to act on
+    yet); fixing it needs a code change (write `expiresAt` in `savePattern`/
+    `updatePattern`), not just an infra toggle — left as a separate,
+    lower-priority follow-up (only 23 items, not urgent).
 12. **Unauthenticated email-in-body endpoints — consider rate-limit or
     verification (found 2026-07-12, `docs/srs/06-API-Specification.md`
     §2).** `/api/trial/start`, `/api/subscription/status`, and
@@ -199,146 +207,166 @@ live) to actually explain the revenue/traffic dip.
     - **Gap 2 — JSON-LD schema thinness — downgraded to minor/optional**,
       not a real fix for the indexing problem (Olga correctly pushed back
       on the original proposal). Full detail: `docs/session-log/2026-07.md`.
-    - **Gap 3 — near-duplicate designs, fix by canonicalizing.** Ties to the
-      previously-deferred near-duplicate-design-images issue (e.g. two
-      near-identical Tiger designs, deferred as "not a script bug, just
-      cleanup"). Decided approach: rather than just cleanup/removal, set a
-      canonical tag on the duplicate(s) pointing to the primary design so
-      Google's domain-level quality classifier doesn't count them as
-      counter-evidence against the rest of the catalog's genuine
-      uniqueness.
+    - **Gap 3 — near-duplicate designs, fix by canonicalizing — BUILT AND
+      APPLIED 2026-07-25.** Ties to the previously-deferred near-duplicate-
+      design-images issue (e.g. two near-identical Tiger designs, deferred
+      as "not a script bug, just cleanup"). Decided approach: rather than
+      cleanup/removal, set a canonical tag on the duplicate(s) pointing to
+      the primary design so Google's domain-level quality classifier
+      doesn't count them as counter-evidence against the rest of the
+      catalog's genuine uniqueness.
+
+      **Mechanism built:** new `CanonicalDesignId` (N, optional) attribute
+      on the DESIGN row — `web/src/app/types/design.ts` (`Design` interface),
+      read in `web/src/lib/data-access.ts`'s cache-load mapping. `web/src/app/
+      designs/[designId]/page.tsx`'s `generateMetadata` now looks it up: if
+      set, fetches the target design via `getDesignById` and points
+      `alternates.canonical`/`openGraph.url` at *that* design's URL instead
+      of its own — `robots` stays `index, follow` (standard canonical
+      practice, not deindexing). The page's own Pinterest-share/JSON-LD
+      logic still references its own image/URL, unaffected — only the SEO
+      canonical target changes. Vitest (61/61) and full `npm run build`
+      both clean after the change.
+
+      **Duplicate detection, done in two passes because the first pass
+      alone wasn't trustworthy enough to act on:**
+      1. `find-duplicate-designs.ts` (built 2026-07-19, run then, not
+         previously surfaced here) — metadata-candidate pass, groups by
+         (Caption, AlbumID, Width, Height, NColors). Found **101 candidate
+         groups / 219 designs**. Documented in its own header as
+         producing false positives.
+      2. `verify-duplicate-designs-visual.ts` (built 2026-07-25) — visual
+         confirmation pass. Computes SHA-256 of each design's actual photo
+         (byte-identical = zero-false-positive-risk "confirmed-duplicate")
+         plus a dHash perceptual-hash Hamming distance (weaker signal,
+         "worth-a-look" only, never auto-applied). **Concretely confirmed
+         false positive during this pass:** the "99 Names of Allah" group
+         (8 designs, same border/font/layout template) — visually inspected
+         two of its images directly and confirmed they list *different*
+         Arabic names, a real series, not a duplicate — despite dHash
+         landing in the same distance range as true duplicates. This is
+         why dHash alone was deliberately never treated as sufficient to
+         act on.
+
+      **Result — byte-identical pass:** of the 101 candidate groups, **39
+      groups (43 designs)** were byte-identical confirmed duplicates,
+      applied via `apply-confirmed-canonicals.ts --apply`. **Result —
+      manual visual pass (2026-07-25, same session):** Olga reviewed the
+      remaining 22 "worth-a-look" groups design-by-design (real page
+      screenshots, not just dHash numbers) — **15 more groups (16 designs)
+      confirmed as genuine duplicates** (same photo, different crop/
+      compression — Peacock ×2, Soccer Ball, Pumpkin, Hummingbird, Pigeon,
+      Tulips, Lady, Mushrooms, Owl, Conwy Castle, Lips, Butterfly, Horse,
+      Pelican, Butterflies) and applied via `set-canonical-design.ts`.
+      **Total: 59 designs across 54 groups now canonicalized.**
+
+      **Explicitly deferred, not touched — a distinct case worth a separate
+      decision later, not a "we'll get to it":** "99 Names of Allah" (8
+      designs, confirmed genuinely different — same template, different
+      Arabic names each), "Cushion Cover" ×2 pairs, "Cat" ×2 pairs,
+      "Sunflower" — same-template/different-content false positives, plus
+      **Whale** and **Wolf** — a new pattern found this pass: same photo/
+      pose, deliberately different **color variant** (re-colored, not
+      re-cropped) — Olga wants to find a way to "explain to Google" these
+      are genuinely different pictures (not canonicalize them away) rather
+      than the same fix as the true duplicates. Full pair-level detail
+      (including exact page URLs) in `automation/pinterest-agent/
+      reports/duplicate-designs.json` / `reports/duplicate-designs-visual.json`
+      and `docs/session-log/2026-07.md`. New reusable tools (all in
+      `automation/pinterest-agent/scripts/`): `find-duplicate-designs.ts`,
+      `verify-duplicate-designs-visual.ts`, `apply-confirmed-canonicals.ts`
+      (batch, union-find clustering), `set-canonical-design.ts` (one-off,
+      also supports `--clear`).
+
+      **DEPLOYED 2026-07-25** (`eb deploy cross-stitch-com-env-clone`,
+      Health: Green) — confirmed live: `/designs/5422` serves
+      `<link rel="canonical" href=".../Tiger-37-309-Free-Design.aspx">`
+      (pointing at design 5421). **Not yet done:** decide + implement the
+      "explain to Google these are different" approach for the
+      Whale/Wolf-style color-variant case, and the template-series case
+      (99 Names of Allah etc.) — separate follow-up, not urgent.
 
 14. **GSC indexed-rate tracking deployed to the daily Lambda pipeline —
-    2026-07-19, verified working.** Fixed `gsc-report.ts`'s indexed-rate
-    calculation (old Sitemaps API field always read 0) with a real sampled
-    estimate via the URL Inspection API, persisted to DDB, wired into the
-    Lambda pipeline. First scheduled run verified clean in CloudWatch Logs:
-    19.3% ± 6.3pp indexed, consistent with the GSC UI's 18.3%. Only one
-    dated row existed as of 07-19 (tracking just started) — **check back
-    for a real multi-point trend** (now checkable via `gsc-explore.ts`).
-    Full detail: `docs/session-log/2026-07.md`.
+    2026-07-19, verified working.** Only one dated row existed as of 07-19 —
+    **check back for a real multi-point trend** (now checkable via
+    `gsc-explore.ts`). Full detail: `docs/session-log/2026-07.md`.
 
 15. **Editor report added to Telegram; anomaly-alert "missing email"
     concern resolved as a non-issue — 2026-07-19, deployed.** Full detail:
     `docs/session-log/2026-07.md`.
 
-16. **GSC average position softened ~11-12 → 16-17 starting 2026-07-22/23 —
-    check back ~2026-08-07.** Olga flagged it from watching GSC directly
-    multiple times/day; confirmed via API this isn't just the usual
-    last-2-days processing-lag artifact (07-23 held at 17.3 even as more
-    data arrived, didn't correct back down). Ruled out as causes: web/
-    deploys (none in the window), GA4 traffic (flat 07-21/22/23: 286/315/308
-    sessions), AdSense impressions/clicks (normal on 07-23), Manual Actions
-    and Security Issues (both clean, checked in GSC UI directly). The
-    same-day AdSense revenue dip (07-23, $14.36 vs typical $15-25) was
-    RPM/CPC-driven ($10.75/$0.44), not traffic-driven — treated as a
-    separate, likely unrelated phenomenon (see the mid-June position-jump
-    memory: RPM and position are independent on this site). Leading
-    hypothesis (not confirmed): Google announced 2026-07-09 that small core
-    updates now roll continuously without public announcement, and 3rd-party
-    SERP trackers show elevated volatility most weeks since Jan 2026 —
-    fits, but isn't proven specific to this site. Original plan was to wait
-    until ~2026-08-07 before treating it as real.
+16. **GSC average position softened ~11-12 → ~15-17 since 2026-07-22/23 —
+    monitoring, check back ~2026-08-07.** Overnight 07-24/25 a same-day GA4
+    snapshot (85 organic sessions) looked like a genuine traffic drop and
+    briefly escalated this to "investigate now" — resolved as a false alarm
+    the morning of 07-25: settled data showed 07-24 at 121 organic sessions
+    (normal band) and 337 total (highest of the window). De-escalated back
+    to the original 08-07 check-back plan; all other causes (deploys, Manual
+    Actions, Security Issues, AdSense RPM) already ruled out. Reusable tools
+    built out of this investigation: `gsc-explore.ts`, `gsc-compare.ts`,
+    `ga4-explore.ts` in `automation/pinterest-agent/scripts/` (see that
+    folder's `README.md`). Full detail: `docs/session-log/2026-07.md`.
 
-    **Update 2026-07-25 (early morning): escalating, check this morning
-    instead of waiting for 08-07.** 24 July broke the "just noise" read —
-    for the first time, a real (non-lag-explained) traffic drop showed up
-    alongside the softened position, not just the position number alone:
-    - **AdSense:** $11.17 for the day — lowest full day of July except
-      2026-07-11 (the deliberate Pinterest-spend-to-$0 day, a known/
-      explained anomaly, not comparable). RPM ≈$8.35, low but not a record
-      low on its own (07-16 was $8.68) — so revenue alone wasn't the
-      smoking gun.
-    - **GA4 (not subject to GSC's processing lag, so this one's real):**
-      Organic Search sessions **85** vs. 121–131 on each of the 4 prior
-      days (07-20 through 07-23) — a genuine ~30-35% drop in actual
-      visits, not just a metric. Total sessions 239 vs. 279-310.
-    - **GSC:** only 512 impressions / 19 clicks for 07-24 vs. 1475-2192 on
-      recent days — but treat this one skeptically, it's very likely still
-      the known last-1-2-days processing-lag artifact, not a real number
-      yet (re-pull with `gsc-explore.ts --dataState all` in a day or two
-      once it's settled before reading anything into it).
-    **Plan: pick this up this morning (2026-07-25), not 08-07** — the
-    GA4 organic-session drop is the one finding here that isn't
-    lag-explainable, so it's worth digging into properly now (content/
-    E-E-A-T/competitors per the original plan) rather than waiting out the
-    full two-week window. Don't re-litigate the already-ruled-out causes
-    (deploys, Manual Actions, Security Issues, AdSense-side RPM) — those
-    are still ruled out; this is specifically about the new GA4 traffic
-    signal.** The one-off `_check_*.ts`
-    scripts from this investigation were generalized into three committed,
-    parameterized tools — `gsc-explore.ts`, `gsc-compare.ts`, `ga4-explore.ts`
-    in `automation/pinterest-agent/scripts/`, documented in that folder's new
-    `README.md` (includes the recommended investigation order for a future
-    ranking/revenue dip). AdSense has no hour-level API dimension — don't
-    try to build that again, see the README's "Not built" section.
-
-17. **Download-count tracking (3 tiers) — built and deployed 2026-07-24,
-    ahead of tonight's Announcement-email send.** Goal: measure how many
-    downloads come specifically from tonight's newsletter click-throughs, to
-    calibrate a future free-tier download limit. Found the first tier
-    (per-design public `NDownloaded`) and a second tier (per-logged-in-user
-    lifetime total, `TotalDownloadsCount`/`LastDownloadAt` in `users.ts`)
-    already written but sitting **uncommitted and undeployed** from an
-    earlier, undocumented session — verified the code was sound, then added
-    the third tier and shipped all of it:
-    - **Verified first:** newsletter links carry `eid`/`cid` query params,
-      and `AuthControl.tsx`'s `AutoLogin` already auto-logs-in on page load
-      via `/api/auth/login-from-email` (checks `cid` against
-      `getVerifiedUserByCid`) — confirmed this is genuinely automatic, no
-      user action needed, before relying on it.
-    - **Gap found:** the existing lifetime counter (`incrementUserDownloadCount`)
-      had no way to isolate "downloads from tonight's send" — it's a
-      lifetime total that would mix in any logged-in user's download from
-      any day/source.
-    - **Built:** `AuthControl.tsx` now sets `sessionStorage.cameFromNewsletter
-      = 'true'` whenever `eid`+`cid` are present in the URL, regardless of
-      prior login state (the auto-login network call itself only fires when
-      not already logged in, but the newsletter-origin marker needs to apply
-      either way). `DownloadPdfLink.tsx` reads that flag and sends
-      `fromNewsletter: true` in the download POST body.
-      `/api/designs/[designId]` route passes it through to
-      `incrementUserDownloadCount(email, fromNewsletter)`, which now also
-      bumps `TotalNewsletterDownloadsCount`/`LastNewsletterDownloadAt` on the
-      user record when true — a separate counter from the lifetime total,
-      not a replacement.
-    - **Shipped:** typecheck clean on the 4 changed files, full
-      `npm run build`, manifest verified clean (no `static/development/`
-      contamination), local smoke test on port 3001 (`/`, `/albums`,
-      `/designs/4217` all 200, buildId matched), `eb deploy
-      cross-stitch-com-env-clone` — **Health: Green**, confirmed live before
-      tonight's send.
-    - **Deliberately deferred (Olga's call):** the "email in body, no auth"
-      pattern (see #12 below) that this feature's endpoint now also uses —
-      decide after seeing tonight's numbers, not before.
-    - **Committed 2026-07-24** (`f64bf7c`) — the 4 changed files
-      (`web/src/lib/users.ts`, `web/src/app/api/designs/[designId]/route.ts`,
-      `web/src/app/components/DownloadPdfLink.tsx`,
-      `web/src/app/components/AuthControl.tsx`) are in git, matching what's
-      deployed.
+17. **Download-count tracking (3 tiers) — built, deployed, committed
+    2026-07-24** (`f64bf7c`), ahead of the Announcement-email send. Measures
+    downloads specifically from newsletter click-throughs (`eid`/`cid` →
+    `fromNewsletter` flag → `TotalNewsletterDownloadsCount`). Still pending:
+    check the numbers once the Announcement email actually sends (#1), and
+    decide the email-in-body-no-auth question (#12) after seeing them. Full
+    build detail: `docs/session-log/2026-07.md`.
 
 18. **First real design-spotlight newsletter send via `UploaderCli` —
-    2026-07-24, needs follow-up monitoring.** Built end-to-end: the
-    `publish-design` skill (folder validation → upload/Pinterest/DDB →
-    newsletter template update → admin test), then a new `UploaderCli
-    send-newsletter --months N [--yes]` mode (mirrors MainWindow.xaml.cs's
-    `SendNotificationEmailsAsync`/`FetchAllUserEmailsAsync`/
-    `SendNotificationMailToUsersAsync` faithfully — same DDB scan/filter
-    logic, same per-recipient cid/eid tracking, unsubscribe headers,
-    `LastEmailDate` update). Olga asked for recipients filtered to
-    verified + subscribed + **visited (`LastSeenAt`) in the last 4
-    months** specifically (not the code's other default filter,
-    `LastEmailEntry`/`VerifiedAt` recency, which is a different criterion —
-    don't conflate the two if asked to repeat this).
-    **Sent:** "Lady of Perpetual Love" (DesignID 5459) to **841/841**
-    real recipients + 1 admin copy, zero failures, ~6 minutes total.
-    **Check back in a few days:** GA4 `src=newsletter medium=email` clicks
-    for this `eid`, `LastEmailEntry` updates on recipient records, and SES
-    bounce/complaint rate (no baseline established yet for this specific
-    send path since it's the first time `send-newsletter` has run) — if
-    complaint rate looks unusually high compared to the existing
-    Announcement-email precedent (memory: zero bounces/complaints
-    account-wide as of 2026-07-19), investigate before the next send.
+    2026-07-24, needs follow-up monitoring.** "Lady of Perpetual Love"
+    (DesignID 5459) sent to **841/841** real recipients + 1 admin copy, zero
+    failures. One complaint handled (SES suppression + message-id logging
+    added). **Check back in a few days:** GA4 newsletter-attributed clicks,
+    `LastEmailEntry` updates, SES bounce/complaint rate vs. baseline. Full
+    build/send detail: `docs/session-log/2026-07.md`.
+
+19. **`eb health`/`eb status` showed Red 2026-07-25 04:22 → 06:07 UTC
+    (~1h45m), starting before the createdAt/modifiedAt deploy — RESOLVED on
+    its own, self-recovered to Green. Root cause of the *initial* 04:22
+    trigger still not identified.** `environment-health.log` shows Severe/
+    Degraded/Warning cycling from **04:22 UTC** (before `eb deploy` even
+    started at 05:20:55 — today's deploy landed on an already-unhealthy-
+    per-EB-status environment, didn't cause it) through to a real recovery
+    at **06:07:53 UTC** (`"status":"Ok","causes":[]`), confirmed independently
+    via `describe-environment-health` and `eb status` both reading Green
+    afterward.
+
+    **Wrong turn worth flagging:** initially theorized this was a "low
+    real traffic" statistical artifact (EB's own `RequestCount`/`r/sec`
+    read 0 throughout) — **Olga correctly pushed back**. Checked GA4 for the
+    same hour (04:00-05:00 UTC): 13 sessions, 47 pageviews — real traffic
+    was there. Also confirmed `cross-stitch.com`'s DNS A-records resolve to
+    the exact same two IPs seen in this environment's ALB access-log
+    filenames — this **is** the real production-facing load balancer, not
+    some idle secondary. So "low traffic" was never the explanation; EB's
+    own `RequestCount` metric is simply unreliable/disconnected from
+    reality (it still reads 0 even now, in the confirmed-Green state) —
+    don't trust that field for anything.
+
+    **What actually happened, evidenced:** a real, small, fluctuating 5xx
+    error rate (specific percentages seen in the log: 2.6%, 1.1%-class
+    figures) that started at 04:22 and gradually settled over ~1h45m —
+    nothing deploy-shaped (no code/infra change from us at that time). Two
+    `restart-app-server`/deploy-triggered blips (05:21 deploy, 05:45 my own
+    restart-app-server attempt) each added a fresh short 5xx spike into the
+    same rolling window, visibly *extending* the cycle rather than fixing
+    it — confirmed by checking `environment-health.log` immediately after
+    each action. **Lesson: don't restart/redeploy to "fix" a Red status
+    without evidence restarting addresses the actual cause** — it can reset
+    the recovery clock instead. Confirmed via a same-day comparison (07-24
+    had a similar brief Yellow/Warning blip at 04:53-04:58 that self-cleared
+    in ~5 minutes on its own) that this system normally self-heals fast;
+    today's unusually long ~1h45m stuck-Red duration is itself something
+    worth remembering if it recurs. **Not yet done:** identify what actually
+    caused the original 04:22 UTC 5xx uptick (no deploy, no code change
+    found at that time) — currently unexplained, though moot for right now
+    since it fully resolved and current state is confirmed healthy. Don't
+    panic on a bare "Red" from `eb status` alone next time — cross-check
+    `aws elbv2 describe-target-health`, real ALB access logs, and GA4/DNS
+    before assuming a deploy broke something or reaching for a restart.
 
 ## Done when
 
@@ -371,9 +399,15 @@ live) to actually explain the revenue/traffic dip.
 - [x] First scheduled Lambda run verified in CloudWatch Logs (see Pending #14) — 2026-07-19
 - [x] Editor report added to Telegram, deployed — 2026-07-19
 - [x] SEO Gap 1 (alt text → SeoTitle) fixed, deployed, verified live — 2026-07-19
-- [ ] SEO Gap 3 (canonicalize near-duplicate designs) actioned (see Pending #13)
+- [x] SEO Gap 3 (canonicalize near-duplicate designs) — mechanism built, 59 designs (54 groups) canonicalized — 2026-07-25 (see Pending #13)
+- [x] SEO Gap 3 code deployed to production, Health Green, canonical tag confirmed live — 2026-07-25
+- [x] SEO Gap 3's 22 "worth-a-look" groups manually reviewed by Olga — 2026-07-25 (15 more confirmed, rest deferred — see Pending #13)
+- [ ] Decide "explain to Google" approach for color-variant (Whale/Wolf) and template-series (99 Names of Allah etc.) cases
 - [x] 3-tier download-count tracking (total/logged-in/newsletter) built, deployed, Health Green — 2026-07-24
 - [x] Download-count feature's 4 changed files committed — 2026-07-24 (`f64bf7c`)
 - [ ] Tonight's Announcement-email numbers checked (newsletter-attributed downloads + email-in-body auth decision, see Pending #17)
 - [x] First design-spotlight newsletter sent via `send-newsletter` — 841/841, 2026-07-24 (see Pending #18)
 - [ ] Follow-up check on that send (GA4 clicks, LastEmailEntry, SES bounce/complaint rate — see Pending #18)
+- [x] ConverterPatterns createdAt/modifiedAt split built, tested, deployed — 2026-07-25 (see Pending #11)
+- [x] `eb health` Red status (04:22-06:07 UTC) self-resolved, confirmed Green — 2026-07-25
+- [ ] Original 04:22 UTC trigger for that Red status identified (see Pending #19) — moot for now, but unexplained
