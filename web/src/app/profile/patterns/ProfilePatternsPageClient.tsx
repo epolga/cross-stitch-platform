@@ -12,6 +12,7 @@ interface PatternSummary {
   width: number;
   height: number;
   createdAt: string;
+  modifiedAt: string;
   thumbnail?: string;
 }
 
@@ -170,7 +171,7 @@ export default function ProfilePatternsPageClient() {
               </div>
               <h2 className="mt-4 text-xl font-semibold text-gray-900 truncate">{p.name}</h2>
               <p className="mt-1 text-sm text-gray-500">{p.width} × {p.height} stitches</p>
-              <p className="mt-1 text-xs text-gray-400">{formatDate(p.createdAt)}</p>
+              <p className="mt-1 text-xs text-gray-400">{formatDate(p.modifiedAt)}</p>
               <div className="mt-5 pt-2">
                 <Link
                   href={`/photo-to-cross-stitch?pattern=${p.id}`}

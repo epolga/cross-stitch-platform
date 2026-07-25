@@ -2,6 +2,7 @@ import {
   DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
+  UpdateItemCommand,
   QueryCommand,
   CreateTableCommand,
   DescribeTableCommand,
@@ -101,6 +102,7 @@ export interface SavedPattern {
   grid: number[][];
   hiddenColors?: number[];
   createdAt: string;
+  modifiedAt: string;
   ownerID?: string;
 }
 
@@ -120,15 +122,17 @@ export async function savePattern(
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
+  const now = new Date().toISOString();
   const item: Record<string, AttributeValue> = {
-    patternId: { S: id },
-    name:      { S: name.trim() || 'Untitled' },
-    width:     { N: String(width) },
-    height:    { N: String(height) },
-    palette:   { S: JSON.stringify(palette) },
-    grid:      { S: rle },
-    createdAt: { S: new Date().toISOString() },
-    ownerID:   { S: ownerID },
+    patternId:  { S: id },
+    name:       { S: name.trim() || 'Untitled' },
+    width:      { N: String(width) },
+    height:     { N: String(height) },
+    palette:    { S: JSON.stringify(palette) },
+    grid:       { S: rle },
+    createdAt:  { S: now },
+    modifiedAt: { S: now },
+    ownerID:    { S: ownerID },
   };
   if (thumbnail) item.thumbnail = { S: thumbnail };
   if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
@@ -153,20 +157,37 @@ export async function updatePattern(
   if (rle.length > 350_000)
     throw new Error('Pattern too large to save (grid exceeds 350 KB compressed)');
 
-  const item: Record<string, AttributeValue> = {
-    patternId: { S: id },
-    name:      { S: name.trim() || 'Untitled' },
-    width:     { N: String(width) },
-    height:    { N: String(height) },
-    palette:   { S: JSON.stringify(palette) },
-    grid:      { S: rle },
-    createdAt: { S: new Date().toISOString() },
-    ownerID:   { S: ownerID },
+  // Partial update (not a full Put) so createdAt is never touched — only
+  // modifiedAt should move on a resave.
+  const names: Record<string, string> = { '#n': 'name' };
+  const values: Record<string, AttributeValue> = {
+    ':n': { S: name.trim() || 'Untitled' },
+    ':w': { N: String(width) },
+    ':h': { N: String(height) },
+    ':p': { S: JSON.stringify(palette) },
+    ':g': { S: rle },
+    ':o': { S: ownerID },
+    ':m': { S: new Date().toISOString() },
   };
-  if (thumbnail) item.thumbnail = { S: thumbnail };
-  if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
+  const setParts = ['#n = :n', 'width = :w', 'height = :h', 'palette = :p', 'grid = :g', 'ownerID = :o', 'modifiedAt = :m'];
+  const removeParts: string[] = [];
 
-  await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
+  if (thumbnail) { values[':t'] = { S: thumbnail }; setParts.push('thumbnail = :t'); }
+  else removeParts.push('thumbnail');
+
+  if (hiddenColors && hiddenColors.length > 0) { values[':hc'] = { S: JSON.stringify(hiddenColors) }; setParts.push('hiddenColors = :hc'); }
+  else removeParts.push('hiddenColors');
+
+  let updateExpression = `SET ${setParts.join(', ')}`;
+  if (removeParts.length > 0) updateExpression += ` REMOVE ${removeParts.join(', ')}`;
+
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { patternId: { S: id } },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: values,
+  }));
 }
 
 export interface PatternSummary {
@@ -175,6 +196,7 @@ export interface PatternSummary {
   width: number;
   height: number;
   createdAt: string;
+  modifiedAt: string;
   thumbnail?: string;
 }
 
@@ -185,17 +207,23 @@ export async function listPatternsByOwner(ownerID: string): Promise<PatternSumma
     IndexName: 'ownerID-index',
     KeyConditionExpression: 'ownerID = :oid',
     ExpressionAttributeValues: { ':oid': { S: ownerID } },
-    ProjectionExpression: 'patternId, #n, width, height, createdAt, thumbnail',
+    ProjectionExpression: 'patternId, #n, width, height, createdAt, modifiedAt, thumbnail',
     ExpressionAttributeNames: { '#n': 'name' },
   }));
-  return Items.map(item => ({
-    id:        item.patternId.S!,
-    name:      item.name?.S ?? 'Untitled',
-    width:     parseInt(item.width?.N ?? '0'),
-    height:    parseInt(item.height?.N ?? '0'),
-    createdAt: item.createdAt?.S ?? '',
-    thumbnail: item.thumbnail?.S,
-  })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return Items.map(item => {
+    const createdAt = item.createdAt?.S ?? '';
+    return {
+      id:         item.patternId.S!,
+      name:       item.name?.S ?? 'Untitled',
+      width:      parseInt(item.width?.N ?? '0'),
+      height:     parseInt(item.height?.N ?? '0'),
+      createdAt,
+      // Pre-migration rows have no modifiedAt — fall back to createdAt so
+      // "most recently touched" sort still works for them.
+      modifiedAt: item.modifiedAt?.S ?? createdAt,
+      thumbnail:  item.thumbnail?.S,
+    };
+  }).sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
 }
 
 export async function loadPattern(id: string): Promise<SavedPattern | null> {
@@ -208,6 +236,7 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
 
   const width  = parseInt(Item.width.N!);
   const height = parseInt(Item.height.N!);
+  const createdAt = Item.createdAt.S!;
 
   return {
     id,
@@ -217,7 +246,8 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     palette:      JSON.parse(Item.palette.S!) as PatternPalette[],
     grid:         rleDecode(Item.grid.S!, width, height),
     hiddenColors: Item.hiddenColors?.S ? JSON.parse(Item.hiddenColors.S) as number[] : undefined,
-    createdAt:    Item.createdAt.S!,
+    createdAt,
+    modifiedAt:   Item.modifiedAt?.S ?? createdAt,
     ownerID:      Item.ownerID?.S,
   };
 }

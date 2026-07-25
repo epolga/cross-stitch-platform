@@ -9,6 +9,7 @@ interface PatternSummary {
   width: number;
   height: number;
   createdAt: string;
+  modifiedAt: string;
   thumbnail?: string;
 }
 
@@ -108,7 +109,7 @@ export default function OpenPatternDialog({ open, onPick, onClose }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 truncate">{p.name || 'Untitled'}</p>
-                  <p className="text-xs text-gray-400">{p.width} × {p.height} · {formatDate(p.createdAt)}</p>
+                  <p className="text-xs text-gray-400">{p.width} × {p.height} · {formatDate(p.modifiedAt)}</p>
                 </div>
               </button>
             ))}
