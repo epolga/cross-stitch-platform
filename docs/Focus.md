@@ -206,6 +206,51 @@ live) to actually explain the revenue/traffic dip.
     unexplained. Don't panic on a bare "Red" alone next time — cross-check
     `aws elbv2 describe-target-health` and real ALB/GA4 data first.
 
+20. **SEO content-depth work: subject blurbs, checklist variety, sitemap
+    lastmod fix — DONE, deployed, committed 2026-07-25.** Follows on from
+    Pending #13 (Gap 3 canonicalization, same day). Four pieces:
+    - **`SeoSubjectBlurb`** backfilled catalog-wide (vision-classifies each
+      design's real subject and writes a grounded fact/story, replacing the
+      generic "About this pattern" text with "Did you know?"). Full run hit
+      Anthropic API credit exhaustion partway through (561 designs failed
+      with a literal "credit balance too low" error, not a code bug) —
+      resumed successfully once Olga added credits. **5211/5271 designs now
+      have it; ~60 permanently missing** (pre-existing missing-source-image
+      gap, same 9-13 designs as the original visual-SEO backfill plus a
+      handful more found this round).
+    - **Stitch planning checklist + finishing tips** (previously identical
+      84-word boilerplate on all 5271 pages) now vary by each design's real
+      `NColors`/`Width`/`Height`/skill-level facts (`web/src/lib/pattern-
+      tips.ts`), wrapped in `<aside>` as secondary content. Measured result:
+      **86% of designs (4534/5271) now have a fully unique 7-bullet
+      combination**, largest exact-duplicate group down to 11 designs (was
+      100% identical everywhere).
+    - **Sitemap `<lastmod>` bug fixed** — was stamping every URL with
+      `new Date()` on every hourly S3-cache regen regardless of real change,
+      a signal Google discounts entirely. Now: designs/albums use a real
+      `LastModifiedAt` DDB field (stamped by every script that writes design
+      content), static pages use a hand-maintained per-route date keyed to
+      **deploy day, not commit day** (see `web/CLAUDE.md` "Sitemap lastmod
+      for static pages" + `.claude/commands/deploy-web.md` step 2b). Albums
+      have no content-edit path of their own yet, so album lastmod = the max
+      `LastModifiedAt` across that album's own designs. Verified live via
+      forced S3-cache invalidation + direct sitemap fetch. Sitemap resubmitted
+      to GSC afterward — meaningfully different from the earlier same-day
+      resubmit, which happened *before* this fix (so carried no real signal).
+    - **New `POST /api/admin/refresh-cache`** endpoint + button on `/admin` —
+      refreshes the in-memory design cache (`data-access.ts` `designCache`)
+      without a full `eb deploy`.
+    - Committed/pushed in two commits: `c7f3329` (subject blurbs, tips,
+      lastmod field + static dates, admin button), `4af3a98` (album lastmod
+      derivation).
+    - **Not yet done:** GSC indexed-rate sample taken today (26% ± 7pp) is
+      within noise of the ~21-22% baseline — too early to attribute to
+      anything, Google hasn't had time to recrawl today's changes yet. Check
+      back in a few days. Also worth directly checking the GSC UI for the
+      actual outcome of the original 2026-07-09 "Crawled – currently not
+      indexed" Validate Fix (checkpoint was due 2026-07-23, already passed,
+      never explicitly confirmed) — see Pending #13.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -252,3 +297,10 @@ live) to actually explain the revenue/traffic dip.
 - [x] ConverterPatterns createdAt/modifiedAt split built, tested, deployed — 2026-07-25 (see Pending #11)
 - [x] `eb health` Red status (04:22-06:07 UTC) self-resolved, confirmed Green — 2026-07-25
 - [ ] Original 04:22 UTC trigger for that Red status identified (see Pending #19) — moot for now, but unexplained
+- [x] SeoSubjectBlurb backfilled catalog-wide (5211/5271) — 2026-07-25 (see Pending #20; paused once by Anthropic credit exhaustion, resumed after Olga added credits)
+- [x] Stitch planning checklist / finishing tips varied by real per-design facts, wrapped in `<aside>` — 2026-07-25 (86% of designs now fully unique, see Pending #20)
+- [x] `POST /api/admin/refresh-cache` + admin button built, deployed — 2026-07-25
+- [x] Sitemap `<lastmod>` bug fixed for designs, albums, and static pages; verified live — 2026-07-25 (see Pending #20)
+- [x] Sitemap resubmitted to GSC after the lastmod fix — 2026-07-25
+- [x] Today's remaining work committed + pushed — 2026-07-25 (`c7f3329`, `4af3a98`)
+- [ ] GSC indexed-rate re-checked once Google has had time to recrawl today's subject-blurb/lastmod changes (see Pending #20)
