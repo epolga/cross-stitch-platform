@@ -2,19 +2,22 @@
 
 ## Current goal
 
-Newsletter relaunch: send the "You spoke, I listened" changelog/thank-you email
-to recently-active subscribers, then follow up with the Ann-persona blog teaser.
+Build out Ann as a recurring blog persona: flesh out her backstory/life
+(building on `web/plan/Ann_Persona_and_Newsletter_Content.md`), start writing
+blog posts in her voice, use the existing reactions feature for engagement.
+Full public comments deliberately deferred (see Pending #21). The
+`why-i-built-this` blog teaser email is still the immediate next send once
+there's Ann-voiced content to point it at.
 
 ## Active work
 
 Design-spotlight newsletter ("Lady of Perpetual Love") sent 2026-07-24 —
 841/841, see Pending #18 (one complaint handled, SES suppression added,
 message-id logging added for next time). The **Announcement email**
-("You spoke, I listened") is still separately pending (#1) — not sent yet,
-waiting on Olga to trigger it from the Uploader (Claude does not send mass
-emails without an explicit go-ahead per send). Download-count tracking (3
-tiers, Pending #17) is live so whenever the Announcement send happens, its
-newsletter-attributed downloads will be captured.
+("You spoke, I listened") has now been **sent** (confirmed by Olga
+2026-07-25) — Pending #1 closed. Download-count tracking (3 tiers, Pending
+#17) was live for the send, so its newsletter-attributed downloads should be
+checkable now.
 
 ## Session history
 
@@ -32,9 +35,9 @@ live) to actually explain the revenue/traffic dip.
 
 ## Pending for next session
 
-1. **Send the Announcement email** — open Uploader → "Reload Email Template"
-   → "Test Announcement Email" to admin first → review → "Send Announcement
-   Emails". Not sent yet, waiting on Olga.
+1. ~~**Send the Announcement email**~~ — **SENT, 2026-07-25** (confirmed by
+   Olga). Follow-up numbers (newsletter-attributed downloads, GA4
+   click-throughs, SES bounce/complaint rate) not yet checked.
 2. **Send the blog teaser** for `why-i-built-this` (excerpt + "read more"
    link, not full text — decided so the click-through/traffic goal is
    actually served) — send *after* the Announcement email, per the
@@ -251,6 +254,37 @@ live) to actually explain the revenue/traffic dip.
       indexed" Validate Fix (checkpoint was due 2026-07-23, already passed,
       never explicitly confirmed) — see Pending #13.
 
+21. **Ann-persona blog + engagement — scope decided 2026-07-25, not yet
+    built.** Olga's original idea was a full FB-page-style presence: Ann's
+    life story, a blog in her voice, and a comment section. Discussed and
+    scoped down:
+    - **Fake seed comments — rejected.** Considered and explicitly rejected,
+      even "just a couple" to prime real engagement: fabricated reader
+      comments are deceptive regardless of scale, and the discovery risk
+      (one spotted fake undermines trust in the whole "real voice of Ann"
+      project) outweighs solving the empty-room problem.
+    - **"Old embroidery forums all died" concern — addressed.** Those forums
+      failed because they *were* the community, competing for network effect
+      against FB/Reddit. A comment section under Ann's posts isn't a
+      standalone destination — it rides traffic the site already gets from
+      SEO/newsletter, so it doesn't need its own network effect to be worth
+      having. Bar for success is much lower.
+    - **Decision: start with posts + the existing reactions feature only**
+      (`CrossStitchBlogReactions`, shipped 2026-07-08, 0 items so far — see
+      `dynamodb-schema.md` §4.12). No new comments infrastructure yet.
+    - **Full public comments — deferred, not abandoned.** Add only once
+      organic demand actually shows up (readers asking to comment, replying
+      enthusiastically to emails, etc.), not speculatively upfront. When it
+      happens: DynamoDB confirmed suitable (discussed 2026-07-25) — new
+      self-provisioning table (same pattern as `blog-reactions.ts`/
+      `editor-events.ts`), PK `slug` / SK `commentId` for per-post ordered
+      retrieval, moderation status attribute + GSI (same shape as
+      `FeatureRequests`), comments tied to the existing login/session rather
+      than anonymous, to avoid becoming a new spam target.
+    - **Immediate next step:** flesh out Ann's backstory/life beyond what's
+      in `web/plan/Ann_Persona_and_Newsletter_Content.md`, then start writing
+      blog posts in her voice.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -265,7 +299,7 @@ live) to actually explain the revenue/traffic dip.
 - [x] sitemap.xml IP-instead-of-domain bug fixed — 2026-07-09
 - [x] IP review tooling built: analyze-ip.ts, watch-ip.ts, /review-ip skill — 2026-07-09
 - [x] Traffic-drop scare investigated end-to-end, no real crisis found — 2026-07-09
-- [ ] Announcement email actually sent (test, then real)
+- [x] Announcement email actually sent (test, then real) — 2026-07-25
 - [ ] Blog teaser email sent
 - [ ] **Distributed scraping mitigation — decide + implement (see Pending #4)**
 - [x] Editor fix: ResizeDialog clear-to-retype bug — 2026-07-10
