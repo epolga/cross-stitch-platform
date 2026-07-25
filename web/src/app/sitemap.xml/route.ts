@@ -72,23 +72,38 @@ async function generateAndUploadSitemap(baseUrl: string) {
   // Fetch album URLs
   const albums = (await getAllAlbumCaptions()) || [];
 
-  // getAllAlbumCaptions() doesn't carry LastModifiedAt (no write path sets it
-  // for albums yet), so lastmod is omitted here rather than faked as "now".
-  const albumUrls = albums.map(album => ({
-    url: CreateAlbumUrl(album.Caption),
-    changefreq: 'monthly',
-    priority: 0.6,
-  }));
-
-   
   // Fetch design URLs (set pageSize large enough to retrieve all in one call)
   let designs : Design[] = [];
   try {
     designs = await fetchAllDesigns();
   } catch (error) {
     console.error('Error fetching designs:', error);
-     
+
   }
+
+  // Albums have no content-edit path of their own yet, so there's no direct
+  // LastModifiedAt for them. Use the most recent LastModifiedAt among the
+  // album's own designs instead — a design changing is the closest real
+  // signal we have that the album page's content changed. Omitted (not
+  // faked as "now") for albums whose designs have no timestamp at all.
+  const albumLastmod = new Map<number, string>();
+  for (const design of designs) {
+    if (!design.LastModifiedAt) continue;
+    const current = albumLastmod.get(design.AlbumID);
+    if (!current || design.LastModifiedAt > current) {
+      albumLastmod.set(design.AlbumID, design.LastModifiedAt);
+    }
+  }
+
+  const albumUrls = albums.map(album => {
+    const lastmod = albumLastmod.get(album.albumId);
+    return {
+      url: CreateAlbumUrl(album.Caption),
+      changefreq: 'monthly',
+      priority: 0.6,
+      ...(lastmod ? { lastmod } : {}),
+    };
+  });
 
   const designUrls = designs.map(design => {
     const imgUrl = design.ImageUrl && /^https?:\/\//.test(design.ImageUrl) ? design.ImageUrl : null;
