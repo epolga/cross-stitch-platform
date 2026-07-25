@@ -202,6 +202,8 @@ async function initializeCache(): Promise<void> {
               SeoDescription: item.SeoDescription?.S || undefined,
               SeoTitle: item.SeoTitle?.S || undefined,
               CanonicalDesignId: item.CanonicalDesignId?.N ? parseInt(item.CanonicalDesignId.N) : undefined,
+              SeoSubjectBlurb: item.SeoSubjectBlurb?.S || undefined,
+              LastModifiedAt: item.LastModifiedAt?.S || undefined,
             };
             const w = design.Width;
             const h = design.Height;
@@ -254,6 +256,7 @@ async function initializeCache(): Promise<void> {
                 AlbumID: albumId,
                 Caption: caption,
                 SeoDescription: item.SeoDescription?.S || undefined,
+                LastModifiedAt: item.LastModifiedAt?.S || undefined,
               };
               albumCache.set(albumId, album);
               albumCaptionCache.set(albumId, caption); // Update caption cache

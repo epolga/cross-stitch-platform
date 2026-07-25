@@ -13,3 +13,9 @@ Places that track milestone progress:
 
 If a step also has a commit hash convention (see prior FOCUS.md entries), include the commit hash once the work is committed — but don't block the checkbox on the commit.
 
+## Sitemap lastmod for static pages
+
+`web/src/app/sitemap.xml/route.ts` has a `STATIC_PAGE_LASTMOD` map — one date per static route (pages with no DynamoDB row behind them, e.g. `/`, `/WhyCrossStitch`, `/exercises`). Designs and albums get their `<lastmod>` from a real `LastModifiedAt` DB field stamped automatically by whichever script writes their content; static pages have no such automatic path, so this map is hand-maintained.
+
+**Whenever you deploy a change to a static page's route file** (the ones listed in `STATIC_PAGE_LASTMOD`), update that page's date to the date of **the deploy that ships it** — not the date you edited or committed the file. What matters is when a crawler would actually see the new content; a commit that sits undeployed for days would otherwise tell Google the page changed before it really did. An unbumped (or wrongly-dated) entry here silently breaks the sitemap's `<lastmod>` signal to Google for that page — same failure mode as the bug this map was built to fix in the first place (see `docs/integration/dynamodb-schema.md` §4.2, `LastModifiedAt` row, 2026-07-25).
+

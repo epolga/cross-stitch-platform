@@ -61,6 +61,8 @@ const CARDS: AdminCard[] = [
 export default function AdminHubPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isUserLoggedIn()) { router.replace('/'); return; }
@@ -73,12 +75,39 @@ export default function AdminHubPage() {
       .catch(() => router.replace('/'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function handleRefreshCache() {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const res = await fetch('/api/admin/refresh-cache', { method: 'POST' });
+      const data = await res.json();
+      setRefreshResult(res.ok ? `Done in ${data.ms}ms` : (data.error || 'Failed'));
+    } catch {
+      setRefreshResult('Failed');
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   if (!ready) return null;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <h1 className="text-2xl font-semibold text-gray-900 mb-1">Admin</h1>
-      <p className="text-sm text-gray-500 mb-8">Internal tools and dashboards.</p>
+      <p className="text-sm text-gray-500 mb-6">Internal tools and dashboards.</p>
+
+      <div className="mb-8 flex items-center gap-3">
+        <button
+          onClick={handleRefreshCache}
+          disabled={refreshing}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {refreshing ? 'Refreshing…' : 'Refresh design cache'}
+        </button>
+        {refreshResult && (
+          <span className="text-xs text-gray-500">{refreshResult}</span>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {CARDS.map(card => (

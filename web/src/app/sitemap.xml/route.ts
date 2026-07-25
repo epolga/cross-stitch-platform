@@ -34,29 +34,50 @@ const S3_BUCKET = process.env.S3_BUCKET_NAME;
 const S3_KEY = 'sitemap.xml';
 const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 
+// Manually maintained per-route date: the day the change actually WENT LIVE
+// (the date of the `eb deploy` that shipped it), not the git commit date —
+// those can differ if a commit sits undeployed for a while, and the deploy
+// date is what actually matches when a crawler would see new content. There's
+// no CMS/DB row backing these routes to derive it from automatically.
+// Seeded 2026-07-25 from `git log -1 --format=%ad -- <source file>` per route
+// as an approximation (commit date, not confirmed deploy date) — good enough
+// for pages that rarely change; keep it exact for anything edited from here on.
+const STATIC_PAGE_LASTMOD: Record<string, string> = {
+  '/': '2026-07-09', // src/app/page.tsx
+  '/XStitch-Charts.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
+  '/photo-to-cross-stitch': '2026-07-10', // src/app/photo-to-cross-stitch/page.tsx
+  '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
+  '/WhyCrossStitch': '2026-06-01', // src/app/WhyCrossStitch/page.tsx
+  '/Article070409.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
+  '/exercises': '2026-06-01', // src/app/exercises/page.tsx
+  '/short-stories': '2026-07-08', // src/app/short-stories/page.tsx
+  '/privacy-policy': '2026-06-01', // src/app/privacy-policy/page.tsx
+};
+
 // Function to generate the sitemap XML
 async function generateAndUploadSitemap(baseUrl: string) {
   // Static URLs
   const staticUrls = [
-    { url: '/', changefreq: 'weekly', priority: 1.0, lastmod: new Date().toISOString() },
-    { url: '/XStitch-Charts.aspx', changefreq: 'daily', priority: 0.8, lastmod: new Date().toISOString() },
-    { url: '/photo-to-cross-stitch', changefreq: 'monthly', priority: 0.8, lastmod: new Date().toISOString() },
-    { url: '/Embroidery_History.aspx', changefreq: 'monthly', priority: 0.5, lastmod: new Date().toISOString() },
-    { url: '/WhyCrossStitch', changefreq: 'monthly', priority: 0.5, lastmod: new Date().toISOString() },
-    { url: '/Article070409.aspx', changefreq: 'monthly', priority: 0.5, lastmod: new Date().toISOString() },
-    { url: '/exercises', changefreq: 'monthly', priority: 0.5, lastmod: new Date().toISOString() },
-    { url: '/short-stories', changefreq: 'monthly', priority: 0.4, lastmod: new Date().toISOString() },
-    { url: '/privacy-policy', changefreq: 'yearly', priority: 0.3, lastmod: new Date().toISOString() },
+    { url: '/', changefreq: 'weekly', priority: 1.0, lastmod: STATIC_PAGE_LASTMOD['/'] },
+    { url: '/XStitch-Charts.aspx', changefreq: 'daily', priority: 0.8, lastmod: STATIC_PAGE_LASTMOD['/XStitch-Charts.aspx'] },
+    { url: '/photo-to-cross-stitch', changefreq: 'monthly', priority: 0.8, lastmod: STATIC_PAGE_LASTMOD['/photo-to-cross-stitch'] },
+    { url: '/Embroidery_History.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Embroidery_History.aspx'] },
+    { url: '/WhyCrossStitch', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/WhyCrossStitch'] },
+    { url: '/Article070409.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Article070409.aspx'] },
+    { url: '/exercises', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/exercises'] },
+    { url: '/short-stories', changefreq: 'monthly', priority: 0.4, lastmod: STATIC_PAGE_LASTMOD['/short-stories'] },
+    { url: '/privacy-policy', changefreq: 'yearly', priority: 0.3, lastmod: STATIC_PAGE_LASTMOD['/privacy-policy'] },
   ];
 
   // Fetch album URLs
   const albums = (await getAllAlbumCaptions()) || [];
 
+  // getAllAlbumCaptions() doesn't carry LastModifiedAt (no write path sets it
+  // for albums yet), so lastmod is omitted here rather than faked as "now".
   const albumUrls = albums.map(album => ({
     url: CreateAlbumUrl(album.Caption),
     changefreq: 'monthly',
     priority: 0.6,
-    lastmod: new Date().toISOString(),
   }));
 
    
@@ -75,7 +96,7 @@ async function generateAndUploadSitemap(baseUrl: string) {
       url: CreateDesignUrl(design),
       changefreq: 'monthly' as const,
       priority: 0.6,
-      lastmod: new Date().toISOString(),
+      ...(design.LastModifiedAt ? { lastmod: design.LastModifiedAt } : {}),
       ...(imgUrl ? {
         img: [{
           url: imgUrl,

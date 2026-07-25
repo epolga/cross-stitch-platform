@@ -129,8 +129,8 @@ async function main() {
       new UpdateItemCommand({
         TableName: ITEMS_TABLE,
         Key: { ID: { S: key.id }, NPage: { S: key.nPage } },
-        UpdateExpression: "SET CanonicalDesignId = :cid",
-        ExpressionAttributeValues: { ":cid": { N: String(a.canonicalId) } },
+        UpdateExpression: "SET CanonicalDesignId = :cid, LastModifiedAt = :u",
+        ExpressionAttributeValues: { ":cid": { N: String(a.canonicalId) }, ":u": { S: new Date().toISOString() } },
       }),
     );
     console.log(`  OK ${a.duplicateId} -> ${a.canonicalId}`);

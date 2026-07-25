@@ -104,6 +104,15 @@ export async function inspectUrl(
   };
 }
 
+/**
+ * Resubmit a sitemap to GSC — signals Google that its content changed and
+ * nudges crawl priority. Does not force immediate re-indexing (there is no
+ * such API); it's a "please recheck this soon" nudge, not a guarantee.
+ */
+export async function submitSitemap(siteUrl: string, feedpath: string): Promise<void> {
+  await searchConsole.sitemaps.submit({ siteUrl, feedpath });
+}
+
 export async function listSitemaps(siteUrl: string): Promise<GscSitemap[]> {
   const resp = await searchConsole.sitemaps.list({ siteUrl });
   return (resp.data.sitemap ?? []).map((s) => ({

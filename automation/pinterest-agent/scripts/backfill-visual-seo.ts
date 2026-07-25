@@ -170,7 +170,12 @@ async function getAlbumCaption(albumId: number): Promise<string> {
   }
 }
 
-async function writeVisualSeo(design: DesignRow, title: string, description: string): Promise<void> {
+async function writeVisualSeo(
+  design: DesignRow,
+  title: string,
+  description: string,
+  subjectBlurb: string,
+): Promise<void> {
   // Only back up the pre-vision text the first time — a --force rerun must not
   // clobber the original backup with the previous vision-generated text.
   const backupExpr = design.hasVisualSeo ? "" : ", SeoDescriptionPrevious = :prev";
@@ -178,11 +183,12 @@ async function writeVisualSeo(design: DesignRow, title: string, description: str
     new UpdateCommand({
       TableName: ITEMS_TABLE,
       Key: { ID: design.id, NPage: design.nPage },
-      UpdateExpression: `SET SeoTitle = :t, SeoDescription = :d, SeoTitleUpdatedAt = :u${backupExpr}`,
+      UpdateExpression: `SET SeoTitle = :t, SeoDescription = :d, SeoTitleUpdatedAt = :u, SeoSubjectBlurb = :b, LastModifiedAt = :u${backupExpr}`,
       ExpressionAttributeValues: {
         ":t": title,
         ":d": description,
         ":u": new Date().toISOString(),
+        ":b": subjectBlurb,
         ...(design.hasVisualSeo ? {} : { ":prev": design.previousSeoDescription ?? "" }),
       },
     }),
@@ -210,6 +216,13 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
+    visibleText: {
+      type: "string",
+      description:
+        "Any readable text/lettering/calligraphy visible in the image, transcribed as accurately as possible in its " +
+        "original script. If it is not in English/Latin script, follow it with a transliteration and a short English " +
+        "translation in parentheses, e.g. 'الرحمن (Ar-Rahman — The Most Merciful)'. Empty string if no readable text is visible.",
+    },
     title: {
       type: "string",
       description: "Short unique page title grounded in what's visible in the image, 4-9 words",
@@ -219,8 +232,19 @@ const RESPONSE_SCHEMA = {
       items: { type: "string" },
       description: "1 to 3 SEO paragraphs, varying length and thematic angle",
     },
+    subjectCategory: {
+      type: "string",
+      enum: ["animal", "building-landmark", "plant", "text-quote", "geometric-ornamental", "object", "other"],
+      description: "What kind of subject this design actually depicts",
+    },
+    subjectBlurb: {
+      type: "string",
+      description:
+        "A short mini-story/fact blurb about the SUBJECT itself (not the cross-stitch craft, not the pattern's specs) — " +
+        "empty string only if truly nothing concrete applies.",
+    },
   },
-  required: ["title", "paragraphs"],
+  required: ["visibleText", "title", "paragraphs", "subjectCategory", "subjectBlurb"],
   additionalProperties: false,
 };
 
@@ -248,6 +272,36 @@ function bodyInstructions(target: 1 | 2 | 3): string {
   }
 }
 
+/**
+ * The subject blurb needs its own independent length AND style variety —
+ * same "the model won't reliably self-vary, enforce it in code" lesson as
+ * pickParagraphTarget above, applied twice (once for length, once for
+ * register) so blurbs don't converge into a single recognizable shape
+ * across thousands of designs.
+ */
+function pickBlurbLength(): "short" | "medium" {
+  return Math.random() < 0.5 ? "short" : "medium";
+}
+
+const BLURB_STYLES = [
+  "factual and encyclopedic — like a well-written reference entry",
+  "warm and narrative — tell it like a small story",
+  "curious and conversational — as if pointing something out to a friend",
+  "quietly reflective — a calmer, more contemplative register",
+] as const;
+
+function pickBlurbStyle(): string {
+  return BLURB_STYLES[Math.floor(Math.random() * BLURB_STYLES.length)];
+}
+
+function blurbInstructions(length: "short" | "medium", style: string): string {
+  const lengthSpec =
+    length === "short"
+      ? "1 paragraph, 40-70 words"
+      : "1-2 short paragraphs, 90-140 words total";
+  return `Write ${lengthSpec}. Tone/register: ${style}.`;
+}
+
 function skillLevel(width: number, height: number, nColors: number): string {
   const small = width > 0 && width < 80 && height > 0 && height < 80;
   const large = width > 150 || height > 150;
@@ -261,11 +315,13 @@ async function generateVisualSeo(
   albumCaption: string,
   imageBase64: string,
   mediaType: "image/jpeg",
-): Promise<{ title: string; description: string; targetParagraphs: number } | null> {
+): Promise<{ title: string; description: string; targetParagraphs: number; subjectCategory: string; subjectBlurb: string } | null> {
   const size = design.width > 0 && design.height > 0 ? `${design.width} x ${design.height} stitches` : "compact";
   const colors = design.nColors > 0 ? `${design.nColors} DMC thread colors` : "a curated thread palette";
   const level = skillLevel(design.width, design.height, design.nColors);
   const targetParagraphs = pickParagraphTarget();
+  const blurbLength = pickBlurbLength();
+  const blurbStyle = pickBlurbStyle();
 
   const prompt = `Look at this cross-stitch pattern image, then write page copy for it.
 
@@ -277,19 +333,42 @@ Skill level: ${level}
 
 This design shares its generic file name with many other designs in the catalog (there may be over a hundred designs all named "${design.caption}"), so the title and text MUST be distinguishable from those other designs based on what is actually visible in THIS image — specific subject details, composition, and color mood (e.g. "soft pastel", "bold bright", "warm rustic", "cool muted", "jewel-toned").
 
+VISIBLE TEXT — read this first: look carefully for any readable text, lettering, or calligraphy stitched into the image (words, names, quotes, a monogram, religious/decorative script, etc.). Some designs in this catalog are a shared visual template (same border, same font, same layout) reused many times with DIFFERENT text each time — for those, the text is the ONLY real differentiator, and color/composition instructions above will not help. Transcribe it into the visibleText field exactly as it appears; if it isn't English/Latin script, add a transliteration and short translation in parentheses. Leave it as an empty string only if there is truly no readable text.
+
 TITLE (4-9 words):
-- Ground it in what you see: the specific subject/motif and a color-mood descriptor.
+- If visibleText is non-empty, the title MUST reference the specific text/name/quote itself (not just "calligraphy" or "quote design" generically) — that is what makes this page different from the others sharing the same template.
+- Otherwise, ground it in what you see: the specific subject/motif and a color-mood descriptor.
 - May include the design name naturally, but do not rely on the design name alone to differentiate it.
 - Do NOT include the word "Design" or any ID number.
 - Do NOT use these overused openers/fillers: "Beautiful", "Stunning", "Lovely", "Charming".
 
 BODY:
 - ${bodyInstructions(targetParagraphs)}
-- Pick angles that are actually relevant to THIS image from this pool: visual subject & composition, color palette & mood, stitching experience & difficulty, materials & practical info (Aida fabric, DMC threads, free printable PDF chart), gift/home-decor use ideas, seasonal/occasion relevance, motif meaning or story.
+- If visibleText is non-empty, one paragraph MUST state plainly what text/name/quote is stitched (quote it, with transliteration/translation if applicable) — do not just describe the calligraphy style without saying what it actually spells out.
+- Pick remaining angles that are actually relevant to THIS image from this pool: visual subject & composition, color palette & mood, stitching experience & difficulty, materials & practical info (Aida fabric, DMC threads, free printable PDF chart), gift/home-decor use ideas, seasonal/occasion relevance, motif meaning or story.
 - Ground concrete details (colors, subject specifics) in what you actually observe in the image, not generic phrases.
 - Vary your opening sentence structure — do not start every design the same way.
 - Do NOT use these overused openers: "This pattern", "Beautiful", "Stunning", "This design".
 - Use cross-stitch vocabulary naturally where relevant: counted cross stitch, Aida, DMC, needlework, embroidery.
+
+SUBJECT CLASSIFICATION + BLURB — this is separate from the BODY above and serves a different purpose: the BODY is about the pattern/craft, the blurb is about the actual real-world SUBJECT depicted.
+- First decide subjectCategory — what does this image actually depict:
+  - "animal" — a real or stylized creature
+  - "building-landmark" — architecture, a real or generic place
+  - "plant" — flowers, trees, produce, etc.
+  - "text-quote" — the image IS text/calligraphy/lettering (use visibleText as the basis)
+  - "geometric-ornamental" — an abstract, geometric, or repeating decorative pattern with no concrete depicted subject (diamonds, chevrons, mandalas, borders, quilting-style blocks, etc.)
+  - "object" — a concrete inanimate thing (a car, a cup, a building interior detail, etc.) that isn't architecture
+  - "other" — genuinely none of the above fits
+- Then write subjectBlurb — a short piece about that SUBJECT itself, not about cross-stitching it:
+  - animal/plant/object: a real, general, well-known fact or bit of natural/cultural interest about that specific species/thing. Don't invent specific statistics or dates you aren't confident about — prefer well-known general facts over specific ones you're unsure of.
+  - building-landmark: if you can identify the specific real place (helped by the design name/album above), a couple of genuinely interesting, well-known facts about it. If you cannot confidently identify the specific place, write generally about that *type* of architecture instead of guessing a specific identity.
+  - text-quote: briefly, what the text means or where this kind of saying/name comes from (culturally/historically), not a repeat of the BODY's mention of it.
+  - geometric-ornamental: this is NOT a "no story" case — every geometric/ornamental style has a real history. Identify the specific style of pattern visible (e.g. concentric diamond/lozenge, chevron/zigzag, mandala/radial symmetry, quilt-block, paisley, Celtic knotwork, Op-art) and write about THAT style's real tradition, symmetry, or cultural origin — grounded in the specific visual structure you actually see (how many layers, what kind of symmetry), not a generic statement that could describe any pattern.
+  - other: ground it in the most specific real visual detail you can point to in this exact image (not a generic sentence that could apply to any design).
+  - Leave subjectBlurb as an empty string only if you genuinely cannot say anything specific to this image.
+  - ${blurbInstructions(blurbLength, blurbStyle)}
+  - Do NOT mention stitching, DMC, Aida, or the craft itself in the blurb — that belongs in BODY, not here.
 
 Output only the structured result — no markdown, no headings.`;
 
@@ -311,7 +390,13 @@ Output only the structured result — no markdown, no headings.`;
 
     const block = msg.content[0];
     if (block.type !== "text") return null;
-    const parsed = JSON.parse(block.text) as { title: string; paragraphs: string[] };
+    const parsed = JSON.parse(block.text) as {
+      visibleText: string;
+      title: string;
+      paragraphs: string[];
+      subjectCategory: string;
+      subjectBlurb: string;
+    };
     let paragraphs = parsed.paragraphs.slice(0, 3);
     if (paragraphs.length !== targetParagraphs) {
       console.warn(`    DesignID=${design.designId}: asked for ${targetParagraphs} paragraph(s), got ${paragraphs.length} — merging to match`);
@@ -324,7 +409,30 @@ Output only the structured result — no markdown, no headings.`;
       const tail = paragraphs.slice(targetParagraphs - 1).join(" ");
       paragraphs = targetParagraphs > 0 ? [...head, tail] : paragraphs;
     }
-    return { title: parsed.title.trim(), description: paragraphs.join("\n\n").trim(), targetParagraphs };
+
+    let description = paragraphs.join("\n\n").trim();
+    const visibleText = parsed.visibleText.trim();
+    if (visibleText) {
+      // Belt-and-suspenders: the prompt asks the model to weave the actual
+      // text into a paragraph, but that instruction isn't always followed
+      // reliably (same lesson as the paragraph-count enforcement above) —
+      // if the transcribed text doesn't already appear verbatim, append a
+      // plain sentence stating it. This is the field that actually
+      // differentiates same-template/different-text designs (e.g. the "99
+      // Names of Allah" series), so it must land in the output every time.
+      const firstToken = visibleText.split(/[\s(,]/)[0];
+      if (firstToken && !description.includes(firstToken)) {
+        description += `\n\nThe stitched lettering reads: ${visibleText}.`;
+      }
+    }
+
+    return {
+      title: parsed.title.trim(),
+      description,
+      targetParagraphs,
+      subjectCategory: parsed.subjectCategory,
+      subjectBlurb: parsed.subjectBlurb.trim(),
+    };
   } catch (err) {
     console.warn(`    generation failed for DesignID=${design.designId}: ${(err as Error).message}`);
     return null;
@@ -406,9 +514,11 @@ async function printReport(): Promise<void> {
     console.log(`    TITLE: ${result.title}`);
     console.log(`    BODY (${result.description.split(/\n\n/).length} paragraphs, ${result.description.split(/\s+/).length} words):`);
     console.log(`    ${result.description.replace(/\n/g, "\n    ")}`);
+    console.log(`    SUBJECT CATEGORY: ${result.subjectCategory}`);
+    console.log(`    SUBJECT BLURB (${result.subjectBlurb ? result.subjectBlurb.split(/\s+/).length : 0} words): ${result.subjectBlurb || "(empty)"}`);
 
     if (!dryRun) {
-      await writeVisualSeo(design, result.title, result.description);
+      await writeVisualSeo(design, result.title, result.description, result.subjectBlurb);
       console.log(`    ✓ written`);
     } else {
       console.log(`    (dry-run, not written)`);

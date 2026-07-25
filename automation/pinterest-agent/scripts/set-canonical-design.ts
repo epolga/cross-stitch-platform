@@ -59,7 +59,8 @@ async function main() {
       new UpdateItemCommand({
         TableName: ITEMS_TABLE,
         Key: { ID: { S: key.id }, NPage: { S: key.nPage } },
-        UpdateExpression: "REMOVE CanonicalDesignId",
+        UpdateExpression: "REMOVE CanonicalDesignId SET LastModifiedAt = :u",
+        ExpressionAttributeValues: { ":u": { S: new Date().toISOString() } },
       }),
     );
     console.log(`Cleared CanonicalDesignId on design ${duplicateDesignId}.`);
@@ -86,8 +87,8 @@ async function main() {
     new UpdateItemCommand({
       TableName: ITEMS_TABLE,
       Key: { ID: { S: key.id }, NPage: { S: key.nPage } },
-      UpdateExpression: "SET CanonicalDesignId = :cid",
-      ExpressionAttributeValues: { ":cid": { N: String(canonicalDesignId) } },
+      UpdateExpression: "SET CanonicalDesignId = :cid, LastModifiedAt = :u",
+      ExpressionAttributeValues: { ":cid": { N: String(canonicalDesignId) }, ":u": { S: new Date().toISOString() } },
     }),
   );
   console.log(`Design ${duplicateDesignId} now canonicalizes to design ${canonicalDesignId}.`);

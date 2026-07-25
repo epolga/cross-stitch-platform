@@ -8,6 +8,8 @@ Build the Next.js app, deploy to Elastic Beanstalk, then check environment statu
 
 2. **Clean** — delete the `web/.next/` directory to avoid stale or mixed artifacts from any running dev server.
 
+2b. **Check static-page lastmod** — `web/src/app/sitemap.xml/route.ts` has a hand-maintained `STATIC_PAGE_LASTMOD` map (one date per static route with no DB row behind it, e.g. `/`, `/WhyCrossStitch`, `/exercises`). Check `git status`/`git diff` for changes to any of those routes' source files; if one changed, bump its date in `STATIC_PAGE_LASTMOD` to **today (this deploy's date)** before building — not the date the file was committed, since a commit can sit undeployed for a while and the deploy date is what actually matches when a crawler would see the new content. Otherwise the sitemap's `<lastmod>` for that page silently goes stale or wrong.
+
 3. **Build** — run `npm run build` from the `web/` directory. Wait for it to complete. If the build fails, stop and report the error.
 
 3b. **Verify production manifest** — open `web/.next/build-manifest.json` and confirm `lowPriorityFiles` references a hashed path like `static/<hash>/`, NOT `static/development/`. A `static/development/` path means `next dev` contaminated the manifest after the build — delete `.next/`, ensure no dev server is running, and rebuild.

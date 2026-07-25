@@ -14,6 +14,7 @@ import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
 import { getDesignById } from '@/lib/data-access';
+import { getStitchPlanningTips, getFinishingTips } from '@/lib/pattern-tips';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { devLog } from '@/lib/devLog';
@@ -187,6 +188,9 @@ export default async function DesignPage({ params }: Props) {
     ? CreateAlbumUrl(nav.albumCaption)
     : nav ? `/albums/${nav.albumId}` : null;
 
+  const stitchPlanningTips = getStitchPlanningTips(design);
+  const finishingTips = getFinishingTips(design);
+
   const featureItems: string[] = [];
   if (design.Width && design.Height) {
     featureItems.push(`Stitch count: ${design.Width} x ${design.Height}`);
@@ -280,16 +284,21 @@ export default async function DesignPage({ params }: Props) {
             )}
 
             <div className="text-left bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-2">
-              <h3 className="text-base font-semibold text-gray-900">About this pattern</h3>
+              <h3 className="text-base font-semibold text-gray-900">
+                {design.SeoSubjectBlurb ? 'Did you know?' : 'About this pattern'}
+              </h3>
               <p className="text-sm text-gray-800">
-                Each PDF includes stitch counts and a full color key so you can kit it quickly. Check the stitch size against your fabric count to estimate finished dimensions, and keep a few extra skeins on hand if you plan to backstitch or outline.
+                {design.SeoSubjectBlurb ||
+                  'Each PDF includes stitch counts and a full color key so you can kit it quickly. Check the stitch size against your fabric count to estimate finished dimensions, and keep a few extra skeins on hand if you plan to backstitch or outline.'}
               </p>
-              <h4 className="text-sm font-semibold text-gray-900">Quick finishing tips</h4>
-              <ul className="list-disc list-inside text-sm text-gray-800 space-y-1">
-                <li>Use shorter floss lengths to avoid tangles and keep coverage even.</li>
-                <li>Secure thread ends under nearby stitches instead of bulky knots.</li>
-                <li>Gently wash and press face-down on a towel before framing.</li>
-              </ul>
+              <aside>
+                <h4 className="text-sm font-semibold text-gray-900">Quick finishing tips</h4>
+                <ul className="list-disc list-inside text-sm text-gray-800 space-y-1">
+                  {finishingTips.map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </aside>
             </div>
             {featureItems.length > 0 && (
               <ul className="text-left text-sm text-gray-700 mb-4 list-disc list-inside">
@@ -377,15 +386,14 @@ export default async function DesignPage({ params }: Props) {
               </div>
             )}
 
-            <div className="text-left bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-2">
+            <aside className="text-left bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4 space-y-2">
               <h3 className="text-base font-semibold text-gray-900">Stitch planning checklist</h3>
               <ul className="list-disc list-inside text-sm text-gray-800 space-y-1">
-                <li>Measure your fabric against the stitch count to confirm finished size.</li>
-                <li>Sort floss by symbol before you start; pre-thread a few needles for speed.</li>
-                <li>Work in small blocks to keep counting accurate and spot mistakes early.</li>
-                <li>Backstitch at the end of each session so outlines stay crisp.</li>
+                {stitchPlanningTips.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
               </ul>
-            </div>
+            </aside>
            <div className="text-gray-700 mb-4 text-xs">
             {(design.Notes || 'No notes available')
             .split('<br />')
