@@ -19,6 +19,10 @@ export interface Design {
     NGlobalPage: number;
     SeoDescription?: string;
     SeoTitle?: string;
+    // Set on a near-duplicate design to point Google at the primary design
+    // instead (see docs/Focus.md Pending #13, Gap 3) — this design still
+    // renders normally, only its <link rel="canonical"> target changes.
+    CanonicalDesignId?: number;
     // Computed facets — derived at cache load, not stored in DDB
     subject?: string;
     orientation?: 'portrait' | 'landscape' | 'square';

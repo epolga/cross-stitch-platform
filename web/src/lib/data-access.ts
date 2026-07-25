@@ -201,6 +201,7 @@ async function initializeCache(): Promise<void> {
               NGlobalPage: item.NGlobalPage?.N ? parseInt(item.NGlobalPage.N) : 0,
               SeoDescription: item.SeoDescription?.S || undefined,
               SeoTitle: item.SeoTitle?.S || undefined,
+              CanonicalDesignId: item.CanonicalDesignId?.N ? parseInt(item.CanonicalDesignId.N) : undefined,
             };
             const w = design.Width;
             const h = design.Height;

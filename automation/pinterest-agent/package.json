@@ -37,6 +37,9 @@
     "watch-ip": "tsx scripts/watch-ip.ts",
     "analyze-ip": "tsx scripts/analyze-ip.ts",
     "reg-source": "tsx scripts/registration-source-report.ts",
+    "find-duplicates": "tsx scripts/find-duplicate-designs.ts",
+    "verify-duplicates-visual": "tsx scripts/verify-duplicate-designs-visual.ts",
+    "set-canonical": "tsx scripts/set-canonical-design.ts",
     "build:lambda": "esbuild lambda/handler.ts --bundle --platform=node --target=node22 --outfile=lambda/dist/handler.js --minify"
   },
   "keywords": [],
@@ -54,7 +57,8 @@
     "@aws-sdk/lib-dynamodb": "^3.1051.0",
     "dotenv": "^17.4.2",
     "googleapis": "^171.4.0",
-    "open": "^11.0.0"
+    "open": "^11.0.0",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.1061.0",

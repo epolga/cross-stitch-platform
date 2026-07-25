@@ -90,7 +90,13 @@ devLog("Generating metadata for designId:", designId);
     };
   }
 
-  const canonicalUrl = buildCanonicalUrl(await CreateDesignUrl(design));
+  let canonicalUrl = buildCanonicalUrl(await CreateDesignUrl(design));
+  if (design.CanonicalDesignId) {
+    const canonicalDesign = await getDesignById(design.CanonicalDesignId);
+    if (canonicalDesign) {
+      canonicalUrl = buildCanonicalUrl(await CreateDesignUrl(canonicalDesign));
+    }
+  }
   const ogImage = toAbsoluteUrl(design.ImageUrl) || DEFAULT_OG_IMAGE;
 
   const featureParts = [
