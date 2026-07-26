@@ -165,17 +165,35 @@ Allow natural-language queries: "simple colorful cat", "small Christmas pattern 
 
 ## Status
 
-Future — Phase 2.
+**Built and live — was marked "Future" here, which was stale (found and
+fixed 2026-07-26).** Core mechanism is done: `PersonalizedSection.tsx`
+renders a "Based on your browsing" strip on the homepage
+(`web/src/app/page.tsx`), backed by `POST /api/personalized`
+(`web/src/app/api/personalized/route.ts`) — no accounts, no server-side
+session, just a `viewed_designs` list in `localStorage`. Not yet done: the
+differentiated suggestion types below (simpler alternatives, palette
+matches, size variants) aren't distinct — it currently returns generic
+similarity neighbors only.
 
 ## Goal
 
 Recommend designs based on the visitor's current session — no user accounts or long-term tracking.
 
-## Planned work
+## Completed work
 
-* Track pages viewed in `sessionStorage` or browser memory
-* Suggest: designs similar to pages already viewed, simpler alternatives, comparable color palettes, larger/smaller versions of the same subject
-* Reuses visual embedding infrastructure from Milestone S3
+* `viewed_designs` tracked client-side in `localStorage` (not
+  `sessionStorage`, but same no-account/no-server-tracking property)
+* `/api/personalized` takes the last 5 viewed design IDs, pulls each one's
+  nearest neighbors via the Milestone S3 visual-embedding infrastructure
+  (`getSimilarIds`), round-robins across the neighbor lists so all viewed
+  designs get equal influence, returns up to 12 designs
+* Rendered on the homepage only, below the fold
+
+## Remaining work
+
+* Suggest specifically: simpler alternatives, comparable color palettes,
+  larger/smaller versions of the same subject — today it's generic
+  embedding-similarity only, not these differentiated categories
 
 ## Priority
 
@@ -211,7 +229,15 @@ Future — Phase 3.
 
 ## Status
 
-Partially complete — 2026-06-24 (search by image done; converter remaining).
+**Updated 2026-07-26 — converter v1 built, integrated, and live** (was
+"remaining" as of 2026-06-24; that was stale). Search by image done
+2026-06-24; the photo-to-cross-stitch converter (`/photo-to-cross-stitch`)
+shipped and was integrated into the main site shortly after, and has since
+received real feature work on top of v1 (DMC-matched color quantization,
+multi-page PDF chart export with a color key, and — 2026-07-26 — a
+3-stitch overlap between chart pages so a color band that shifts across a
+page boundary can be aligned, built from a real user feature request).
+Advanced v2 items below remain unbuilt.
 
 ## Completed work
 
@@ -225,21 +251,22 @@ Partially complete — 2026-06-24 (search by image done; converter remaining).
 * Image never stored — held in memory for ~1–2 s during Claude API call, then discarded
 * Also fixed: `imageVec`/`textVec` field name bug in `semantic-search.ts` that was silently zeroing all dot products (affected both image and text semantic search in production)
 
+**Photo-to-cross-stitch converter v1** — live at `/photo-to-cross-stitch`
+
+* Image → cross-stitch grid: color quantization down to a limited palette, matched against real DMC thread colors (exceeds the original "no generative AI required for v1" scope only in that it's a full palette-matching pipeline, not just resizing/reduction)
+* Multi-page PDF export (chart pages with symbols/colors + color key), including a 3-stitch overlap between adjoining pages (2026-07-26)
+* Drag-and-drop or file upload, same pattern as image search above
+
 ## Planned work
 
 **Search by uploaded image** — ✅ done
 
-**Photo-to-cross-stitch converter**
+**Photo-to-cross-stitch converter v1** — ✅ done (see Completed work above)
 
-* Basic browser tool: image resizing, color reduction, nearest-thread-color matching, downloadable grid preview
-* No generative AI required for v1
-* Advanced v2: background removal, edge preservation, face/subject emphasis, palette optimization, downloadable PDF patterns
+**Photo-to-cross-stitch converter v2 (not started)**
 
-**Photo-to-cross-stitch converter**
-
-* Basic browser tool: image resizing, color reduction, nearest-thread-color matching, downloadable grid preview
-* No generative AI required for v1
-* Advanced v2: background removal, edge preservation, face/subject emphasis, palette optimization, downloadable PDF patterns
+* Background removal, edge preservation, face/subject emphasis
+* Confirmed not in the codebase as of 2026-07-26 (checked directly, not assumed)
 
 ## Risks (converter)
 
@@ -250,8 +277,9 @@ Partially complete — 2026-06-24 (search by image done; converter remaining).
 
 ## Priority
 
-* Search by image: **Medium to high** (after S3)
-* Converter: **Medium** (largest stand-alone project in this set; strong organic traffic potential)
+* Search by image: **Medium to high** (after S3) — done
+* Converter v1: **Medium** — done
+* Converter v2 (background removal etc.): not yet prioritized
 
 ---
 

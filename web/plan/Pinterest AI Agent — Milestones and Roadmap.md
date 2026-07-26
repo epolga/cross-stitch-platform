@@ -207,7 +207,11 @@ Future versions should also reason about:
 
 ## Status
 
-Partially completed (local JSON layer done; DynamoDB layer still planned).
+Partially completed (local JSON layer + anomaly detection done; DynamoDB
+historical-memory layer still planned). **Updated 2026-07-26** — anomaly
+detection was previously listed as remaining work here; it has since been
+built and is running live as pipeline steps 6-7 (`anomalyDetector.ts` /
+`anomalyNotifier.ts`, notifications per Milestone 8).
 
 ## Completed work
 
@@ -217,9 +221,11 @@ Partially completed (local JSON layer done; DynamoDB layer still planned).
 
 * moving averages (3-day, 7-day windows)
 
-## Remaining work
+* anomaly detection — flags metrics deviating >N standard deviations from a
+  trailing-7-row mean, one `ANOMALY_EVENT` row per flagged metric, emailed
+  via the daily pipeline
 
-* anomaly detection
+## Remaining work
 
 * historical memory DynamoDB layer (currently lives in local JSON)
 
@@ -299,9 +305,9 @@ Album caption is used as the temporary theme/category field. Richer per-design m
 
 * DynamoDB persistence (see Milestone 8 in Memory and Trend Analysis)
 
-> Note: steps 11–13 in the Lambda pipeline (design pin map, design performance, AI design analysis) are currently **disabled** because the output is not surfaced anywhere. Re-enable once the email section is built.
+> Note: originally all three of steps 11–13 (design pin map, design performance, AI design analysis) were disabled because the output wasn't surfaced anywhere. **Updated 2026-07-26 — partially re-enabled since:** the design pin map export (step 13, `export-design-pin-map.ts`) was turned back on 2026-07-19 for an unrelated reason — the GSC indexed-rate sample (a later pipeline step) reads its output DynamoDB table live, so it needs daily refreshing regardless of whether design analysis is ever surfaced. Design performance (`build-design-performance.ts`) and AI design analysis (`test-ai-design-analysis.ts`) remain disabled/uncalled — the "surface it in the email" work above still hasn't happened, so there's still nothing to re-enable them for.
 >
-> **Why disabled (2026-06-09):** Step 12 fetches Pinterest analytics for all 957 organically pinned designs one-by-one. The Pinterest API rate-limits heavily (HTTP 429), and at ~0.8s/pin the step regularly consumed the entire 15-minute Lambda budget — causing the daily summary email (step 10) to never be sent. Since the analysis output was invisible to the user anyway, steps 11–13 were commented out. Commit `37f95e1`.
+> **Why originally disabled (2026-06-09):** Step 12 fetches Pinterest analytics for all 957 organically pinned designs one-by-one. The Pinterest API rate-limits heavily (HTTP 429), and at ~0.8s/pin the step regularly consumed the entire 15-minute Lambda budget — causing the daily summary email (step 10) to never be sent. Since the analysis output was invisible to the user anyway, steps 11–13 were commented out. Commit `37f95e1`.
 
 ---
 
@@ -314,9 +320,23 @@ Complete — 2026-06-03.
 ## Completed work
 
 * AWS Lambda `cross-stitch-daily-pipeline` deployed, EventBridge at 02:00 UTC (05:00 local)
-* 13-step pipeline: daily business → history → promoted ads → landing pages → pin attribution → anomaly detection → anomaly notifications → AI trend → recommendation change alert → design pin map → design performance → AI design analysis → daily summary email
 * Node.js 20 → 22 everywhere (Lambda runtime, esbuild target, EB platform, local nvm)
 * Windows Tasks `\PinterestDailyReport` and `\GoogleTokenRefreshReminder` disabled 2026-06-05, deleted 2026-06-11
+
+**Pipeline step list — corrected 2026-07-26** (the original 13-step list
+above was stale; the pipeline has grown and reordered significantly since
+2026-06-03). Current order per `automation/pinterest-agent/lambda/handler.ts`:
+
+* init: Pinterest token refresh, WAF auto-block IP sync, suspicious IP detection
+* 1. daily business report → 2. build business history → 3. promoted ads report → 4. landing page report → 5. pin attribution → 6. anomaly detection → 7. anomaly notifications → 8. AI trend analysis → 9. recommendation change alert → **10. daily summary email**
+* (non-numbered) Google token refresh reminder if due
+* 11. holiday reminder → 12. editor daily summary email
+* (non-numbered, monthly) AI-tools-scan if due (gated day-of-month === 26, added 2026-07-26)
+* 13. design pin map export (re-enabled 2026-07-19) → 14. GSC sitemap indexed-rate sample
+* 15. design performance — still disabled/commented out (see Milestone 6b)
+
+Note the daily summary email (step 10) now fires well before design pin
+map/performance — the original list implied the opposite order.
 
 ---
 
@@ -584,9 +604,13 @@ This roadmap targets AI-assisted business intelligence with controlled automatio
 
 ## Status
 
-Completed.
+Completed — including the "one remaining target" noted below, which was
+stale as of 2026-07-26: dedicated architecture documents now exist
+(`docs/plan/integration/ARCHITECTURE-SUMMARY.md`,
+`docs/web/platform-architecture-summary.md`, 273 lines, real content
+verified — not a placeholder).
 
-The original large planning document has been split into specialized thematic documents (see Documentation Index for the full list). A dedicated Architecture document is the one remaining target.
+The original large planning document has been split into specialized thematic documents (see Documentation Index for the full list).
 
 # Next Planned Milestones
 
