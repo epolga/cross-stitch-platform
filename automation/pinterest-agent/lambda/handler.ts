@@ -24,6 +24,7 @@ import { notifyRecommendationChange } from "../src/services/recommendationChange
 import { sendDailySummary } from "../src/services/dailySummary";
 import { sendEditorDailySummary } from "../src/services/editorDailySummary";
 import { sendAiToolsScanIfDue } from "../src/services/aiToolsScan";
+import { sendCompetitorScanIfDue } from "../src/services/competitorScan";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
 import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
@@ -147,6 +148,18 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     }
   } catch (err) {
     console.error("  AI tools scan failed:", err instanceof Error ? err.message : err);
+  }
+
+  console.log("[monthly] Competitor scan");
+  try {
+    const competitorResult = await sendCompetitorScanIfDue();
+    if (competitorResult.skipped) {
+      console.log(`  skipped: ${competitorResult.reason}`);
+    } else {
+      console.log(`  sent → SES MessageId=${competitorResult.messageId}`);
+    }
+  } catch (err) {
+    console.error("  Competitor scan failed:", err instanceof Error ? err.message : err);
   }
 
   // Re-enabled: the GSC indexed-rate sample (step 14) reads this DDB table

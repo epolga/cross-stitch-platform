@@ -109,6 +109,26 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
     on formula accuracy. Affects both `convertImage`'s clustering
     (`labDist2` is also used for k-means++ init/assignment, not just final
     DMC snapping) and `nearestDmcLab`'s final snap step.
+12. **Adopt DINOHash for near-duplicate catalog image detection** — found
+    via the 2026-07-26 AI-tools-scan. Current pipeline
+    (`automation/pinterest-agent/scripts/find-duplicate-designs.ts` +
+    `verify-duplicate-designs-visual.ts`) does a metadata-candidate pass
+    then verifies with SHA-256 (exact-byte matches only, zero false
+    positives) + a 64-bit dHash (Hamming distance) — and dHash has a
+    **confirmed false-positive mode**: the "99 Names of Allah" series (8
+    designs, same border/font/layout, different Arabic text each time)
+    landed at the same Hamming distance (4-8) as true duplicates, because
+    dHash compares raw pixel differences, not semantic content. DINOHash
+    (built on DINOv2 self-supervised features, adversarially trained —
+    https://github.com/proteus-photos/dinohash-perceptual-hash) compares
+    learned visual features instead of pixel deltas, which should
+    distinguish "same template, different content" from "actually the same
+    image" — directly targets this known failure mode. Also much cheaper/
+    faster than a Claude-vision call per candidate pair (20x smaller than
+    CLIP, 100x shorter hash, per its own benchmarks). Next step: prototype
+    it against the known confirmed/false-positive pairs already on file in
+    `reports/duplicate-designs-visual.json` before rewiring the real
+    pipeline on it.
 
 ## Done when
 
@@ -123,3 +143,4 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
 - [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
+- [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode

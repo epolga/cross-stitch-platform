@@ -23,7 +23,7 @@ Here is exactly what I have on the site, so you can search for things that would
 Search across all of these angles:
 1. New Claude/Anthropic API or Claude Code features I might not know about yet
 2. AI coding/agent tools relevant to a solo developer working across TypeScript, C#/.NET, and AWS infrastructure
-3. New/better approaches to photo-to-pixel-art or photo-to-limited-palette conversion, perceptual color-matching against a fixed real-world swatch/paint/thread library, or anything specific to cross-stitch/needlework/embroidery pattern generation (competitor products, open-source libraries, new algorithms)
+3. New/better approaches to photo-to-pixel-art or photo-to-limited-palette conversion, perceptual color-matching against a fixed real-world swatch/paint/thread library, or anything specific to cross-stitch/needlework/embroidery pattern generation — open-source libraries, algorithms, or research, NOT competing products/companies (competitor tracking is a separate monthly scan, don't cover it here)
 4. New vision-model capabilities relevant to bulk product-catalog description generation, near-duplicate/perceptual-hash image detection improvements, or SEO tooling aimed specifically at "many similar product pages" e-commerce catalogs
 5. AI-powered SEO/content-generation tools relevant to a content-heavy e-commerce catalog site generally (not just blog-post writers)
 6. AI tools for small-scale email marketing/newsletter automation generally, and anything specifically relevant to self-hosted/API-driven (not Mailchimp/Klaviyo-style SaaS) small-list email — deliverability, AI-assisted content, engagement analysis

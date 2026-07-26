@@ -1,55 +1,26 @@
 # Cross-Stitch Editor Competitor Analysis
 
-*Last updated: 2026-06-26*
+*Last updated: 2026-07-26 — refreshed from the monthly competitor scan's
+DynamoDB rows (`CrossStitchBusinessHistory`, `EntityType=COMPETITOR`,
+written by `automation/pinterest-agent/src/services/competitorScan.ts`).
+That table is now the working source of truth (upserted monthly); this file
+is a periodic human-readable snapshot of it, converted from the old
+fixed-width ASCII table to a normal markdown table since it kept growing.*
 
-  ---------------------------------------------------------------------------------------------
-  Project            Editor             Pattern Catalog  Strong SEO  Notes / Ideas to Study
-  ------------------ ------------------ ---------------- ----------- --------------------------
-  KnytStudio         ✅ Modern web      ✅ Community     ❌ Not a    Excellent UX,
-                     editor             patterns         major SEO   browser-based workflow, AI
-                                                         player (as  features, community. Good
-                                                         far as      inspiration for product
-                                                         publicly    design.
-                                                         visible)    
-
-  FlossCross         ✅ Web editor      ⚠ Limited        ❌ Weak SEO Strong editing
-                                        gallery          footprint   capabilities,
-                                                                     import/export, PDF
-                                                                     generation. More tool than
-                                                                     content site.
-
-  Stitch Fiddle      ✅ Web editor      ❌ No            ✅ Mainly   Interesting SaaS model.
-                                        cross-stitch     through     Covers several crafts, not
-                                        catalog          articles    focused on cross stitch
-                                                         and the     only.
-                                                         tool itself 
-
-  Pic2Pat            ⚠ Image-to-pattern ❌ No catalog    ✅          Specializes in image
-                     converter                           Excellent   conversion rather than
-                                                         SEO for     editing.
-                                                         "photo to   
-                                                         pattern"    
-                                                         queries     
-
-  WinStitch /        ✅ Desktop editors ❌ No catalog    ❌          Mature desktop software,
-  PCStitch                                                           traditional workflow.
-
-  Pattern Keeper     ❌ Viewer /        ❌               ❌          Excellent UX for stitching
-                     stitching                                       existing PDFs. Strong
-                     assistant (not                                  mobile experience.
-                     full editor)                                    
-
-  Cross Stitch       ✅ Desktop editor  ❌               ❌          Professional desktop
-  Professional                                                       package aimed at
-  Platinum                                                           designers.
-
-  Cross-Stitch.com   🚧 In development  ✅ \~5,500 free  🚧 Growing  Potential combination of
-  (current vision)                      patterns         rapidly     strong SEO catalog +
-                                                                     modern editor + image
-                                                                     conversion + automatic
-                                                                     confetti removal +
-                                                                     realistic stitch preview.
-  ---------------------------------------------------------------------------------------------
+| Project | Editor | Pattern Catalog | Strong SEO | Notes / Ideas to Study |
+|---|---|---|---|---|
+| **KnytStudio** | ✅ Modern web editor | ✅ Community "Discover" gallery (700+ user patterns, added ~2026-07) | ✅ Named competitor-comparison pages (e.g. "WinStitch vs Knytstudio", June 2026), active promo campaigns | Broadened into a multi-craft platform (needlepoint, fuse beads, diamond painting, knitting) with AI text-to-pattern generation. Free tier: 3 full-featured patterns; Pro ~€4/mo unlimited + PDF export. Now blurs "editor" vs "catalog+editor" — closer to our own positioning than before. |
+| **FlossCross** | ✅ Web editor | ⚠ Limited gallery | ❌ Weak SEO footprint | Strong editing capabilities, import/export, PDF generation. More tool than content site. No new findings this scan. |
+| **Stitch Fiddle** | ✅ Web editor | ❌ No cross-stitch catalog | ✅ Mainly through articles and the tool itself | Launched a native mobile app "Stitch Fiddle & Craft Maker" (Google Play since Feb 2026, iOS since ~mid-2026) with in-app purchases (~$2.75/mo); users report core features like undo are now paywalled on mobile. |
+| **Pic2Pat** | ⚠ Image-to-pattern converter | ❌ No catalog | ✅ Excellent SEO for "photo to pattern" queries | Specializes in image conversion rather than editing. Showing competitive erosion: backlinks down ~3.4% this month, and newer sites (Cross-Stitched, KnytStudio, Stitchmate) explicitly position it as the "worse alternative" in their own comparison content. |
+| **Xstitchify** | ✅ Web editor + file import (.oxs/.xsd/.pat) | ❌ No catalog | ✅ Aggressive named "vs WinStitch/Stitch Fiddle/Pic2Pat" comparison pages | Photo/text/QR-code/AI-prompt → pattern. DMC matching via Delta-E/CIELAB (we already do Lab-space CIE76 — see Focus.md open item on a CIEDE2000 upgrade). Freemium: 5 free PDFs, then $9.99/mo (stitch tracker, custom fonts, AI credits, commercial rights) or pay-per-credit packs. Recently added a stitchable QR-code generator and a prompt-to-editor AI generator; June 2026 terms update. Launched January 2026 — still young, but technically capable and already monetizing. |
+| **WinStitch / PCStitch** | ✅ Desktop editors | ❌ No catalog | ❌ | Mature desktop software, traditional workflow. Increasingly cited by newer web tools as "legacy/unmaintained" (PCStitch: no meaningful update since ~2016) in their own comparison SEO content. |
+| **Pattern Keeper** | ❌ Viewer / stitching assistant (not a full editor) | ❌ | ❌ | Excellent UX for stitching existing PDFs, strong mobile experience. Shipped a May 2026 update adding tentative fractional/partial-stitch support and the ability to flag stitches to unpick later. |
+| **Cross Stitch Professional Platinum** | ✅ Desktop editor | ❌ | ❌ | Professional desktop package aimed at designers. No new findings this scan. |
+| **Stitchmate.app** *(new, found 2026-07-26)* | ✅ Web editor | ❌ No catalog | ✅ Heavy comparison-content SEO vs. PCStitch/WinStitch/Stitch Fiddle/FlossCross | Modern browser-based editor with a distinctive "FLOW Score" stitchability rating and a confetti-cleanup brush. Pay-per-export, not subscription: free editor + PNG, $3.99/pattern PDF or $99 lifetime, $99-149/yr commercial license for sellers. Standalone desktop app shipping 2026. Closest functional clone of our own editor's value proposition found so far — worth watching closely. |
+| **Cross-Stitched.com** *(new, found 2026-07-26)* | ✅ Web editor | ❌/unclear (blog roundups, not a hosted catalog) | ✅ | Free photo-to-pattern + text/lettering generator; blog content explicitly attacks Pic2Pat's limitations, runs "best pattern maker" roundup posts. |
+| **AI generalist tools** *(category, not one product — Pixlio AI, Musely, Pixa.com)* | ⚠ Limited (one feature among many unrelated AI tools) | ❌ | ❓ Unclear | Broad multi-purpose AI image-tool sites bolting on a cross-stitch generator as one of dozens of features. Low specialization, likely low loyalty — a search-traffic/keyword-competition trend to monitor, not a deep product threat. |
+| **Cross-Stitch.com (current vision)** | 🚧 In development | ✅ ~5,500 free patterns | 🚧 Growing rapidly | Potential combination of strong SEO catalog + modern editor + image conversion + automatic confetti removal + realistic stitch preview. |
 
 ## Competitive observations
 
@@ -64,7 +35,9 @@ The combination of:
 -   free downloadable patterns,
 -   and a modern browser editor
 
-appears to be relatively uncommon in this niche.
+appears to be relatively uncommon in this niche — though KnytStudio's new
+community gallery and Stitchmate's rapid rise show the gap is being
+noticed and partly closed from the "editor" side.
 
 ## Features worth benchmarking
 
@@ -76,4 +49,27 @@ appears to be relatively uncommon in this niche.
 -   PDF export
 -   Progress tracking
 -   Browser performance on large designs
--   Community sharing/remixing
+-   Community sharing/remixing (KnytStudio's "Discover" gallery)
+-   "Stitchability" scoring before committing to a pattern (Stitchmate's
+    "FLOW Score") — a novel idea worth considering
+-   Pattern-file import (.oxs/.xsd/.pat) for editing others' existing charts
+    (Xstitchify) — we have the reverse direction covered instead: our own
+    catalog PDFs → editable grid, see the Catalog PDF-to-Editable Conversion
+    findings doc
+-   Monetization model — three different approaches now visible in the
+    market: Xstitchify's freemium + $9.99/mo subscription, KnytStudio's
+    freemium + ~€4/mo, and Stitchmate's pay-per-export ($3.99/pattern or
+    $99 lifetime, no subscription at all). Worth comparing against when we
+    eventually design our own paywall (no real paid tier yet — 598/1574
+    users grandfathered free-premium ahead of a future paywall).
+
+## How this file is kept current
+
+A monthly automated scan (`competitorScan.ts`, same day-of-month as the
+AI-tools-scan) searches for new competitors and new features/pricing on
+known ones, and upserts findings into DynamoDB
+(`CrossStitchBusinessHistory`, `EntityType=COMPETITOR`) — read via
+`getAllCompetitors()` in `historyStore.ts`. It emails/Telegrams a narrative
+report but does **not** edit this file directly (the Lambda has no access
+to the git checkout). Refresh this table from the DDB rows periodically —
+don't let it silently drift far out of sync with what the scan has found.

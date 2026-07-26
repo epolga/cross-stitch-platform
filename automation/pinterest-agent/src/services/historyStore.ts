@@ -32,7 +32,8 @@ export type EntityType =
   | "BLOCKED_IP"
   | "WATCHED_IP"
   | "IP_HISTORY"
-  | "GSC_INDEX_SAMPLE";
+  | "GSC_INDEX_SAMPLE"
+  | "COMPETITOR";
 
 export type AnalysisType = "trend" | "design";
 
@@ -64,6 +65,7 @@ export const sortKey = {
   watchedIp: (ip: string) => ip,
   ipHistory: (ip: string, at: string) => `${ip}#${at}`,
   gscIndexSample: (date: string) => date,
+  competitor: (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, ""),
 };
 
 // Input shapes (callers pass domain fields; the store assembles the DDB item).
@@ -554,6 +556,69 @@ export async function putIpHistory(input: IpHistoryInput): Promise<void> {
 export async function getIpHistory(ip: string): Promise<IpHistoryRecord[]> {
   const rows = await queryRange<IpHistoryRecord>("IP_HISTORY");
   return rows.filter((r) => r.ip === ip);
+}
+
+// Competitor tracking — one row per competitor, upserted by the monthly
+// competitorScan.ts. firstSeenAt is set once (if_not_exists); every other
+// field is overwritten with each scan's latest findings, so a row always
+// reflects the most recent known state, not a history of changes.
+export interface CompetitorInput {
+  name: string;
+  editor?: "yes" | "no" | "limited";
+  catalog?: "yes" | "no";
+  seo?: "yes" | "no" | "unclear";
+  notes: string; // latest finding(s) — free text, overwritten each scan
+  url?: string;
+}
+
+export interface CompetitorRecord {
+  EntityType: "COMPETITOR";
+  SortKey: string; // slug of name
+  name: string;
+  editor?: string;
+  catalog?: string;
+  seo?: string;
+  notes: string;
+  url?: string;
+  firstSeenAt: string;
+  lastUpdatedAt: string;
+}
+
+export async function putCompetitor(input: CompetitorInput): Promise<void> {
+  const now = new Date().toISOString();
+  const names: Record<string, string> = {
+    "#name": "name",
+    "#notes": "notes",
+    "#lastUpdatedAt": "lastUpdatedAt",
+    "#firstSeenAt": "firstSeenAt",
+  };
+  const values: Record<string, unknown> = { ":name": input.name, ":notes": input.notes, ":now": now };
+  const setParts = [
+    "#name = :name",
+    "#notes = :notes",
+    "#lastUpdatedAt = :now",
+    "#firstSeenAt = if_not_exists(#firstSeenAt, :now)",
+  ];
+  for (const [field, value] of [["editor", input.editor], ["catalog", input.catalog], ["seo", input.seo], ["url", input.url]] as const) {
+    if (value === undefined) continue;
+    names[`#${field}`] = field;
+    values[`:${field}`] = value;
+    setParts.push(`#${field} = :${field}`);
+  }
+
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE,
+      Key: { EntityType: "COMPETITOR", SortKey: sortKey.competitor(input.name) },
+      UpdateExpression: `SET ${setParts.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    })
+  );
+}
+
+export async function getAllCompetitors(): Promise<CompetitorRecord[]> {
+  return queryRange<CompetitorRecord>("COMPETITOR");
 }
 
 export interface PinterestTokenRecord {
