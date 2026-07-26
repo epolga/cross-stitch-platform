@@ -98,6 +98,17 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
     to the daily Lambda pipeline, gated on day-of-month === 26. Verified
     via manual local test runs only so far; first real scheduled trigger is
     **2026-08-26**.
+11. **Switch photo converter's DMC matching from CIE76 to CIEDE2000**
+    (`web/src/lib/pattern-converter.ts:32-61` — `rgbToLab`/`labDist2`/
+    `nearestDmcLab` currently do plain Euclidean distance in Lab space,
+    i.e. CIE76) — CIEDE2000 is a more perceptually accurate color-distance
+    formula (weights hue/chroma/lightness differences unevenly, unlike the
+    naive CIE76 Euclidean version). Prompted by the 2026-07-26 AI-tools-scan
+    flagging competitor Xstitchify's "Delta-E/CIELAB matching" as a
+    differentiator — we already do the Lab-space part, this closes the gap
+    on formula accuracy. Affects both `convertImage`'s clustering
+    (`labDist2` is also used for k-means++ init/assignment, not just final
+    DMC snapping) and `nearestDmcLab`'s final snap step.
 
 ## Done when
 
@@ -111,3 +122,4 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
 - [ ] Newsletter/Announcement follow-up metrics checked (GA4 clicks, LastEmailEntry, SES bounce/complaint rate)
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
+- [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
