@@ -33,18 +33,17 @@ future sends to answer "who did we send X to, who clicked" precisely.
 
 ## Next session — pick up here first
 
-**New idea from Olga (2026-07-26), investigated but not built, paused mid-thought
-to work on something else — resume this before the numbered Open items below:**
-convert the existing ~5271 catalog PDFs into the editable grid+palette format
-the `/photo-to-cross-stitch` editor uses, so users can customize existing
-catalog designs, not just their own photos. Feasibility already checked
-against a real sample (Design 4217) — turned out to be a **text-parsing**
-problem, not computer vision (PDFs are uncompressed, readable text; color-key
-page gives exact DMC numbers as literal text; chart page is a walkable
-sequence of cursor-move + symbol-draw operators). Full findings, exact
-operator patterns, and recommended next steps (ask Olga if original `.scc`
-source files still exist; then prototype on one sample; only then consider
-batching all 5271):
+**Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26): built and
+tested, not yet wired into any UI.** Parser at
+`web/src/lib/pdf-pattern-extractor.ts` + CLI at
+`web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a
+catalog kit PDF into the same grid+palette format `/photo-to-cross-stitch`
+uses. Tested end-to-end (parse → regenerate PDF via the existing
+`/api/convert/pdf` → visually compare) on 3 samples spanning the size range
+(5/50/100 colors, single-page and 8/36-page charts) — all exact matches.
+Full details, algorithm, and open items (not yet wired into a UI/route,
+not yet batched across the catalog, not yet spot-checked on the oldest
+designs, `SYMBOLS[]` overflow untested for >~150-color designs):
 `docs/plan/web/Catalog PDF-to-Editable Conversion — Feasibility Findings.md`.
 
 ## Open items
