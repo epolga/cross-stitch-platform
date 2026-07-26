@@ -25,6 +25,7 @@ backstory post, so trust is built first. Don't reorder without a reason.
 |---|---|---|
 | 2026-06-29/30 | "Test the new editor" announcement (original template, pre-2026-07-08 rewrite) — sent to the user list around the `photo-to-cross-stitch` site-integration launch (`1a906dc`, 2026-06-28) and the "Uploader: announcement email blast" commit (`d88e8cb`, 2026-06-29 17:35). | GA4: 25 sessions on 2026-06-30 from `src=newsletter medium=email`, 19 landing directly on `/photo-to-cross-stitch`, plus a trailing tail of clicks through 07-09. This is the send Jacky/Leisa/Sarah/Bianca/Céline replied to (logged below, 07-08). |
 | 2026-07-08/09 | "You spoke, I listened" rewrite — **test send only**, not the full list. | GA4: only 2 sessions on 07-09 landing on `/short-stories/editor-updates-july-2026` (the rewrite's `<changelog_url>`) — volume consistent with an admin-only "Test Announcement Email" send, not a blast to the full ~672-person recipient list. |
+| ~2026-07-11/13 (exact date not recorded at the time; Olga confirmed the real send happened 2026-07-26, ~2 weeks before that conversation, but couldn't recall the precise day) | "You spoke, I listened" — **real send to the full list**, not just a test. | Not independently verified here (no GA4/SES cross-check redone as of 2026-07-26) — recorded from Olga's recollection only. If this needs firming up later, check GA4 `src=newsletter medium=email` sessions landing on `/short-stories/editor-updates-july-2026` in the 07-10 to 07-14 window, and SES send stats for that period. |
 
 ## Sent (individual replies, not the periodic newsletter)
 
@@ -37,6 +38,7 @@ periodic newsletter — logged here for completeness / to avoid re-contacting.
 | 2026-07-08 | safety.proofs884@passmail.net (Sarah) | Thank-you: diagonal line drawing tool |
 | 2026-07-08 | pupsrock7@gmail.com (Bianca) | Thank-you: drag-and-drop import from Google fixed; fabric-merge idea acknowledged as in-progress |
 | 2026-07-08 | celinewolff@holycross-pri.essex.sch.uk (Céline) | Save-pattern button location (with mobile screenshot); PDF quarter-overlap idea acknowledged as in-progress |
+| 2026-07-26 | celinewolff@holycross-pri.essex.sch.uk (Céline) | Follow-up: PDF quarter-overlap idea now shipped (3-stitch overlap, orange OVERLAP outline + label) — sent by Olga manually |
 | — | hadenmaiden@gmail.com (Jacky Cooper) | Draft only — Olga sends manually via Reply, not sent by Claude |
 
 ## Periodic newsletter — queue

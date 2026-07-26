@@ -23,6 +23,7 @@ import { notifyAnomalies } from "../src/services/anomalyNotifier";
 import { notifyRecommendationChange } from "../src/services/recommendationChangeNotifier";
 import { sendDailySummary } from "../src/services/dailySummary";
 import { sendEditorDailySummary } from "../src/services/editorDailySummary";
+import { sendAiToolsScanIfDue } from "../src/services/aiToolsScan";
 import { sendGoogleTokenReminderIfDue } from "../src/services/googleTokenReminder";
 import { sendHolidayReminderIfDue } from "../src/services/holidayReminder";
 import { initPinterestToken } from "../src/services/pinterestTokenManager";
@@ -134,6 +135,18 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   } else {
     const c = editorResult.counts!;
     console.log(`  sent → SES MessageId=${editorResult.messageId} (sessions=${c.editor_opened}, pdfs=${c.pdf_exported})`);
+  }
+
+  console.log("[monthly] AI tools scan");
+  try {
+    const aiToolsResult = await sendAiToolsScanIfDue();
+    if (aiToolsResult.skipped) {
+      console.log(`  skipped: ${aiToolsResult.reason}`);
+    } else {
+      console.log(`  sent → SES MessageId=${aiToolsResult.messageId}`);
+    }
+  } catch (err) {
+    console.error("  AI tools scan failed:", err instanceof Error ? err.message : err);
   }
 
   // Re-enabled: the GSC indexed-rate sample (step 14) reads this DDB table

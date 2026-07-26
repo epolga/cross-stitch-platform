@@ -56,8 +56,12 @@ live) to actually explain the revenue/traffic dip.
    decision gets made. Volume (25 active blocks) is worth revisiting against
    the "keep monitoring, don't build WAF Bot Control" call whenever that
    decision comes up again — not re-opened here, just flagged.
-5. Bianca's fabric-merge idea and Céline's PDF-quarter-overlap idea remain
-   `nice-to-have`, unscheduled.
+5. Bianca's fabric-merge idea remains `nice-to-have`, unscheduled. Céline's
+   PDF-quarter-overlap idea — **built and deployed 2026-07-26** (3-stitch
+   overlap between chart pages, orange OVERLAP outline + label so it's
+   recognizable on the page itself, plus a Notes-page explanation); personal
+   follow-up email sent to her same day (Olga, manual send) — see
+   `Email_Content_Plan.md` individual-replies log.
 6. **Singapore GA4 traffic anomaly — confirmed bot traffic 2026-07-10** (0.7%
    engagement, 99% direct/none, 99.7% desktop/Chrome, same hot-path
    signature as the ALB scrapers, 83% of month's volume in one 5-day burst
@@ -324,6 +328,43 @@ live) to actually explain the revenue/traffic dip.
     - **Not yet done:** UploaderCli's `EmailSendLog` write not yet exercised
       by a real send — no real campaign data exists yet for either table.
 
+24. **Monthly "new AI tools" scan — built and deployed 2026-07-26.** Olga asked
+    for a recurring mechanism to surface new AI tools/features worth knowing
+    about. New `automation/pinterest-agent/src/services/aiToolsScan.ts`,
+    wired into the daily Lambda pipeline (`sendAiToolsScanIfDue()`, gated on
+    day-of-month === 26 — anchored to today, not the 1st, per Olga's explicit
+    correction). Uses Claude's server-side `web_search_20260209` tool
+    (Sonnet 5) to research two kinds of things in one prompt (Olga wanted
+    both combined, not either/or): general items (new Claude/Claude Code
+    features, general AI coding tools, general SEO/email-automation tools)
+    AND items specific to this site's actual mechanics (the photo-to-DMC-palette
+    pattern editor, the vision-based catalog-scale SEO backfill, small-scale
+    SES newsletter automation). Sends via the existing `sendEmail()` SES
+    helper **and** Telegram (`sendTelegramMessage`, with defensive truncation
+    for Telegram's 4096-char cap) — both channels, matching the existing
+    editor-report pattern.
+    - **Two real bugs found and fixed during testing, not just the day-gate
+      correction:** (1) the server-side web_search tool self-stops with
+      `stop_reason: "pause_turn"` after 10 internal search rounds if the
+      caller doesn't resume it — the original code didn't check for this, so
+      broad prompts silently came back with partial/cut-off text. Added a
+      resume loop (max 2 continuations). (2) `max_uses` on the web_search
+      tool was first set to 6, too low for this prompt's 6 research angles —
+      confirmed via a diagnostic script that every search past the 6th
+      returned `web_search_tool_result_error` with `error_code:
+      "max_uses_exceeded"` (a per-request cap, not a time-windowed account
+      rate limit — waiting doesn't clear it). Raised to 15.
+    - **Verified with real runs** (not just typecheck): a full run with the
+      corrected settings took ~4m43s and produced genuinely specific,
+      well-grounded results (e.g. DINOHash for near-duplicate image
+      detection, Xstitchify's Delta-E/CIELAB thread-color matching as a
+      direct competitor benchmark) — well within the Lambda's 900s (15 min)
+      timeout. Confirmed `ANTHROPIC_API_KEY`/`TELEGRAM_BOT_TOKEN`/`SES_SENDER`
+      are already set on the deployed function.
+    - **Not yet done:** first real trigger will be next 26th of the month
+      (2026-08-26) via the daily pipeline — not yet observed end-to-end from
+      an actual scheduled Lambda run, only from local manual test invocations.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -381,3 +422,7 @@ live) to actually explain the revenue/traffic dip.
 - [x] `EmailSendLog` table + recipient logging built in UploaderCli, `dotnet build` clean — 2026-07-26 (see Pending #22)
 - [x] Per-campaign entry tracking (`EmailEntryEvents`) deployed, Health Green — 2026-07-26
 - [ ] Per-campaign send tracking (`EmailSendLog`) used in a real send and verified end-to-end
+- [x] PDF quarter-overlap (Céline's feature request) built, deployed, Health Green — 2026-07-26 (see Pending #5)
+- [x] Personal follow-up email sent to Céline about the shipped overlap feature — 2026-07-26 (Olga, manual send)
+- [x] Monthly AI-tools-scan service built, deployed to Lambda, real runs verified — 2026-07-26 (see Pending #24)
+- [ ] First real monthly trigger observed via the actual scheduled pipeline (next: 2026-08-26)
