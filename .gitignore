@@ -25,6 +25,9 @@ reports/
 .a5c_backup/
 **/lambda/dist/
 
+# Scratch/diagnostic scripts (one-off, underscore-prefixed by convention)
+**/scripts/_*.ts
+
 # Logs
 *.log
 
