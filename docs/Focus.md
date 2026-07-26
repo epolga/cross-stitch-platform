@@ -285,6 +285,45 @@ live) to actually explain the revenue/traffic dip.
       in `web/plan/Ann_Persona_and_Newsletter_Content.md`, then start writing
       blog posts in her voice.
 
+22. **Per-campaign newsletter send + entry tracking — built and deployed
+    2026-07-26.** Two new tables, joinable, answering "who did we send
+    campaign X to, and who actually clicked":
+    - **`EmailEntryEvents`** (self-provisioning, PK `eid`/SK `cid`,
+      `EntryCount`/`FirstEntryAt`/`LastEntryAt`) — every email click-through
+      per campaign. New `web/src/lib/email-entries.ts`; wired into the 3
+      existing entry call sites (`[slug]/page.tsx`, `page.tsx`,
+      `api/auth/login-from-email/route.ts`). The pre-existing
+      `LastEmailEntry` field on the user record still works unchanged for
+      its original "last entry ever" purpose.
+    - **`EmailSendLog`** (manually created via AWS CLI 2026-07-26, PK
+      `eid`/SK `email`, GSI `email-index` for lookup-by-address) — who was
+      actually sent each campaign, written from `UploaderCli`'s
+      `SendNewsletterAsync` (new `LogSendAsync`, alongside the pre-existing
+      local `send-log.jsonl` file write, best-effort/non-blocking). Confirmed
+      builds clean (`dotnet build`, 0 errors).
+    - Reporting: `automation/pinterest-agent/scripts/check-email-campaign.ts
+      <eid>` (joins both tables, lists sent-but-never-entered recipients) and
+      `check-email-recipient.ts <email>` (full send history for one address —
+      built for handling complaints/inquiries without knowing the eid
+      upfront). Both documented in `dynamodb-schema.md` §4.15-4.16.
+    - **Confirmed: this is purely additive to the existing recipient-list
+      filter** — `LastSeenAt` within 3 months (`_check_email_list_size.ts`)
+      is updated by general site activity, not by email clicks, so it's
+      unaffected. The `EmailSendLog`+`EmailEntryEvents` join is what was
+      missing to eventually refine that filter with real per-user
+      send/engagement history (e.g. suppress someone still "active" by
+      `LastSeenAt` but who's ignored the last N campaigns) — not yet decided
+      whether/how to act on it; needs a few real sends' worth of data first.
+    - **Deployed 2026-07-26** — `npm run build` + `eb deploy
+      cross-stitch-com-env-clone`, Health Green, local smoke test passed
+      (`/`, `/albums`, `/designs/4217` all 200, buildId matched). Bumped
+      `STATIC_PAGE_LASTMOD['/']` to 2026-07-26 (homepage `page.tsx` changed).
+      The smoke test's own `?eid=test&cid=test` hit against the local prod
+      server (real AWS creds) incidentally self-provisioned `EmailEntryEvents`
+      for real — confirmed working, then deleted the resulting test row.
+    - **Not yet done:** UploaderCli's `EmailSendLog` write not yet exercised
+      by a real send — no real campaign data exists yet for either table.
+
 ## Done when
 
 - [x] Feedback backlog (4 items) triaged — 2026-07-08
@@ -325,7 +364,7 @@ live) to actually explain the revenue/traffic dip.
 - [ ] GSC indexed-rate re-checked in the coming days to see if today's canonical/content fixes move the needle (baseline: ~21-22% avg, noisy, flat pre-fix)
 - [x] 3-tier download-count tracking (total/logged-in/newsletter) built, deployed, Health Green — 2026-07-24
 - [x] Download-count feature's 4 changed files committed — 2026-07-24 (`f64bf7c`)
-- [ ] Tonight's Announcement-email numbers checked (newsletter-attributed downloads + email-in-body auth decision, see Pending #17)
+- [x] Newsletter-attributed downloads checked — 2026-07-26: 41 downloads / 34 distinct users since 2026-07-24 (spans both the design-spotlight newsletter and the Announcement email), 430 total logged-in downloads / 79 users overall (see Pending #17). Email-in-body auth decision (Pending #12) still not made.
 - [x] First design-spotlight newsletter sent via `send-newsletter` — 841/841, 2026-07-24 (see Pending #18)
 - [ ] Follow-up check on that send (GA4 clicks, LastEmailEntry, SES bounce/complaint rate — see Pending #18)
 - [x] ConverterPatterns createdAt/modifiedAt split built, tested, deployed — 2026-07-25 (see Pending #11)
@@ -338,3 +377,7 @@ live) to actually explain the revenue/traffic dip.
 - [x] Sitemap resubmitted to GSC after the lastmod fix — 2026-07-25
 - [x] Today's remaining work committed + pushed — 2026-07-25 (`c7f3329`, `4af3a98`)
 - [ ] GSC indexed-rate re-checked once Google has had time to recrawl today's subject-blurb/lastmod changes (see Pending #20)
+- [x] `EmailEntryEvents` table + per-campaign entry tracking built, typechecked — 2026-07-26 (see Pending #22)
+- [x] `EmailSendLog` table + recipient logging built in UploaderCli, `dotnet build` clean — 2026-07-26 (see Pending #22)
+- [x] Per-campaign entry tracking (`EmailEntryEvents`) deployed, Health Green — 2026-07-26
+- [ ] Per-campaign send tracking (`EmailSendLog`) used in a real send and verified end-to-end

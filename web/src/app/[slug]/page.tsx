@@ -6,6 +6,7 @@ import AlbumsPage from '../albums/page'; // Adjust path if needed
 import { getAlbumIdByCaption, getDesignIdByAlbumAndPage, updateLastEmailEntryByCid } from '@/lib/data-access'; // Adjust path if needed
 import { sendEmailToAdmin } from '@/lib/email-service'; // Import the email service
 import { updateLastEmailEntryInUsersTable } from '@/lib/users';
+import { recordEmailEntryEvent } from '@/lib/email-entries';
 import { headers } from 'next/headers';
 import { buildCanonicalUrl, getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
 import { devLog } from '@/lib/devLog';
@@ -173,6 +174,7 @@ export default async function SlugPage({ params, searchParams }: {
       await Promise.all([
         updateLastEmailEntryByCid(cid),
         updateLastEmailEntryInUsersTable(cid),
+        recordEmailEntryEvent(eid, cid),
       ]);
       await sendEmailToAdmin(subject, body, false); // Send as plain text
       devLog('Notification email sent to admin successfully.');

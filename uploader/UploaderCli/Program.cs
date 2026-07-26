@@ -765,6 +765,7 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
     string usersTable = ConfigurationManager.AppSettings["UsersTableName"] ?? "CrossStitchUsers";
     string emailAttribute = ConfigurationManager.AppSettings["UserEmailAttribute"] ?? "Email";
     string userIdAttribute = ConfigurationManager.AppSettings["UserIdAttribute"] ?? "ID";
+    string sendLogTable = ConfigurationManager.AppSettings["EmailSendLogTableName"] ?? "EmailSendLog";
 
     var latestDesign = await GetLatestDesignEmailInfoAsync(dynamoDbClient);
     Console.WriteLine($"Latest design: DesignID {latestDesign.DesignId}, AlbumID {latestDesign.AlbumId}, \"{latestDesign.Title}\"");
@@ -810,7 +811,7 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
         string adminSiteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid);
         var adminContent = RenderHtmlEmailContent(template, "admin", AppendUtmParameters(patternUrl), adminSiteUrl, imageUrl, altText, null);
         string? adminMessageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, adminContent.Subject, adminContent.TextBody, adminContent.HtmlBody, configurationSetName: sesConfigurationSetName);
-        AppendSendLog(logPath, admin, adminMessageId, "admin", latestDesign.DesignId, eid);
+        await LogSendAsync(dynamoDbClient, sendLogTable, logPath, admin, "admin", adminMessageId, "admin", latestDesign.DesignId, eid);
         Console.WriteLine($"Sent admin copy to {admin} (MessageId: {adminMessageId}).");
     }
 
@@ -826,7 +827,7 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
 
         var content = RenderHtmlEmailContent(LoadHtmlEmailTemplate(), recipient.FirstName, patternUrlWithTracking, siteUrlWithTracking, imageUrl, altText, unsubscribeUrl);
         string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
-        AppendSendLog(logPath, recipient.Email, messageId, "user", latestDesign.DesignId, eid);
+        await LogSendAsync(dynamoDbClient, sendLogTable, logPath, recipient.Email, cid, messageId, "user", latestDesign.DesignId, eid);
 
         try
         {
@@ -862,6 +863,37 @@ static void AppendSendLog(string logPath, string email, string? messageId, strin
     };
     string json = System.Text.Json.JsonSerializer.Serialize(entry);
     File.AppendAllText(logPath, json + Environment.NewLine);
+}
+
+// Same data as AppendSendLog, but also persisted centrally to DynamoDB
+// (EmailSendLog: PK eid, SK email) so it survives past the local machine and
+// can be joined against EmailEntryEvents (which entry (eid, cid) rows were
+// actually clicked) to compute real per-user send/engagement history, and so
+// a complaint/inquiry about a specific address can be looked up directly by
+// email instead of grepping whichever machine ran the send.
+static async Task LogSendAsync(AmazonDynamoDBClient dynamoDbClient, string sendLogTable, string logPath, string email, string cid, string? messageId, string recipientType, int designId, string eid)
+{
+    AppendSendLog(logPath, email, messageId, recipientType, designId, eid);
+
+    var item = new Dictionary<string, AttributeValue>
+    {
+        ["eid"] = new AttributeValue { S = eid },
+        ["email"] = new AttributeValue { S = email.Trim().ToLowerInvariant() },
+        ["recipientType"] = new AttributeValue { S = recipientType },
+        ["designId"] = new AttributeValue { N = designId.ToString(CultureInfo.InvariantCulture) },
+        ["sentAtUtc"] = new AttributeValue { S = DateTime.UtcNow.ToString("o") },
+    };
+    if (!string.IsNullOrWhiteSpace(cid)) item["cid"] = new AttributeValue { S = cid };
+    if (!string.IsNullOrWhiteSpace(messageId)) item["messageId"] = new AttributeValue { S = messageId };
+
+    try
+    {
+        await dynamoDbClient.PutItemAsync(new PutItemRequest { TableName = sendLogTable, Item = item });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Failed to write EmailSendLog row for {email} (eid {eid}): {ex.Message}");
+    }
 }
 
 static Dictionary<string, string> BuildUnsubscribeHeaders(string unsubscribeUrl, string sender)

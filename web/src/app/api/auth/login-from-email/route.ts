@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getVerifiedUserByCid, updateLastEmailEntryInUsersTable, updateLastSeenAtByEmail } from '@/lib/users';
 import { updateLastEmailEntryByCid } from '@/lib/data-access';
+import { recordEmailEntryEvent } from '@/lib/email-entries';
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const body = (await req.json()) as { eid?: string; cid?: string };
     const cid = (body.cid || '').trim();
+    const eid = (body.eid || '').trim();
 
     if (!cid) {
       return NextResponse.json({ success: false, error: 'Missing cid' }, { status: 400 });
@@ -19,10 +21,14 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    await Promise.all([
+    const entryPromises = [
       updateLastEmailEntryInUsersTable(cid),
       updateLastEmailEntryByCid(cid),
-    ]);
+    ];
+    if (eid) {
+      entryPromises.push(recordEmailEntryEvent(eid, cid, verifiedUser.email));
+    }
+    await Promise.all(entryPromises);
 
     if (verifiedUser.email) {
       try {

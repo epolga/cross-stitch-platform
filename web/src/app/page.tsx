@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import RegisterNewsletterLink from '@/app/components/RegisterNewsletterLink';
 import { updateLastEmailEntryInUsersTable } from '@/lib/users';
+import { recordEmailEntryEvent } from '@/lib/email-entries';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
 import AdSlot from '@/app/components/AdSlot';
@@ -186,6 +187,7 @@ export default async function Home({ searchParams }: Props) {
       await Promise.all([
         updateLastEmailEntryByCid(cid),
         updateLastEmailEntryInUsersTable(cid),
+        recordEmailEntryEvent(eid, cid),
       ]);
     } catch (error) {
       console.error('Failed to update LastEmailEntry for root email entry:', error);

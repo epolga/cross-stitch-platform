@@ -30,7 +30,7 @@ Out of scope:
 
 - Stripe/PayPal payloads or any non-DynamoDB stores.
 
-Also covered (added 2026-07-25, live-verified against AWS — see §4.9-4.14): six further tables that exist in code but weren't previously in this contract — `ConverterPatterns`, `CrossStitchLikes`, `FeatureRequests`, `CrossStitchBlogReactions`, `EditorEvents`, `SearchQueries` — plus the two originally out-of-scope auxiliary tables `PasswordResetTokens` (§4.7) and `SubscriptionEvents` (§4.8).
+Also covered (added 2026-07-25, live-verified against AWS — see §4.9-4.14): six further tables that exist in code but weren't previously in this contract — `ConverterPatterns`, `CrossStitchLikes`, `FeatureRequests`, `CrossStitchBlogReactions`, `EditorEvents`, `SearchQueries` — plus the two originally out-of-scope auxiliary tables `PasswordResetTokens` (§4.7) and `SubscriptionEvents` (§4.8). Also covered (added 2026-07-26): `EmailEntryEvents` (§4.15), a new self-provisioning table tracking per-campaign newsletter/announcement click-throughs, and `EmailSendLog` (§4.16), a manually-created table (written from the C# `UploaderCli`) logging who was actually sent each campaign — the two join to give real per-user send/engagement history.
 
 ## 4. Data Formats
 
@@ -297,6 +297,49 @@ Key schema: PK `date` (S), SK `ts` (S) = `<ISO-timestamp>#<6-char-random>`.
 Writes are fire-and-forget (`search-log.ts:33-34`, `.catch(err => console.error(...))`) — a missing table or any write failure is logged but never surfaced to the caller or retried, matching the "silently swallows write errors" note in Focus.md Pending #11.
 
 **TTL gap (found 2026-07-25, live-verified) — same bug as `EditorEvents`.** `search-log.ts` computes and writes a correct 90-day `ttl` value on every row, but nothing in this codebase ever calls `UpdateTimeToLiveCommand` for `SearchQueries` (there's no bootstrap function here at all, self-provisioning or otherwise). Live check confirms **`TimeToLiveStatus: DISABLED`**. Net effect: 2 084 items and growing, no cleanup. Same one-off fix as `EditorEvents`: `aws dynamodb update-time-to-live --table-name SearchQueries --time-to-live-specification "Enabled=true,AttributeName=ttl"`.
+
+### 4.15 `EmailEntryEvents` (per-campaign newsletter click-through tracking)
+
+Table name resolved from env `DDB_EMAIL_ENTRY_EVENTS_TABLE` (default `"EmailEntryEvents"`) in `web/src/lib/email-entries.ts:9`. **Self-provisions** (`ensureTable()`, lines 15-41). Built 2026-07-26 — not yet live-verified against AWS (no writes yet at doc time; first entry-tracked send will create it).
+
+Key schema: PK `eid` (S) — the per-campaign email id (`yyMMdd` or `"admin"`, per `url-conventions.md` §4.9), SK `cid` (S) — the per-user correlation id. One row per `(eid, cid)` pair, so **item count for a given `eid` = unique entries for that campaign** directly, without a separate GSI or scan.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `eid` | S | required | `email-entries.ts:83` (key) | PK | Campaign id from the `eid` URL query param |
+| `cid` | S | required | `email-entries.ts:83` (key) | SK | User correlation id from the `cid` URL query param |
+| `Email` | S | optional | `email-entries.ts:79-81` — only written when the caller already has it in hand (currently only `login-from-email/route.ts:34`, via `verifiedUser.email`) | reporting scripts | Lowercased. The two page-render call sites (`[slug]/page.tsx`, `page.tsx`) don't resolve email from `cid` before calling, so rows written from those paths omit it — join against `CrossStitchUsers.cid` if email is needed for those |
+| `FirstEntryAt` | S (ISO) | required | `email-entries.ts:76` (`if_not_exists`, set once) | reporting | First time this user entered via this campaign |
+| `LastEntryAt` | S (ISO) | required | `email-entries.ts:76` (overwritten every call) | reporting | Most recent entry via this campaign |
+| `EntryCount` | N | required | `email-entries.ts:88` (`ADD #entryCount :one`, atomic increment) | reporting | Repeat clicks by the same user on the same campaign link |
+
+No TTL — unlike `EditorEvents`/`SearchQueries` (unbounded per-event logs that need expiry), this table is bounded by (users × campaigns they've ever clicked), stays small, and is meant to accumulate as a long-term per-user engagement history (see Focus.md discussion of newsletter recipient-list filtering).
+
+Call sites that write to this table: `web/src/app/[slug]/page.tsx` (email link landing on a design/album page), `web/src/app/page.tsx` (email link landing on the homepage), `web/src/app/api/auth/login-from-email/route.ts` (auto-login flow, the only site with `Email` populated). All three fire alongside the pre-existing `updateLastEmailEntryByCid`/`updateLastEmailEntryInUsersTable` calls, which continue to maintain the single last-entry-ever field on the user record unchanged.
+
+Reporting: `automation/pinterest-agent/scripts/check-email-campaign.ts <eid>` queries this table directly and prints unique/total entries per campaign.
+
+### 4.16 `EmailSendLog` (per-campaign recipient log, C# writer)
+
+Table created manually via `aws dynamodb create-table` 2026-07-26 (does **not** self-provision — written from the WPF/C# side, which has no table-bootstrap convention anywhere else in that codebase either, e.g. `CrossStitchUsers`/`SubscriptionEvents` are also assumed pre-existing). Table name resolved from `EmailSendLogTableName` app setting (default `"EmailSendLog"`) in `uploader/UploaderCli/Program.cs` (`SendNewsletterAsync`, ~line 766); configured explicitly in `uploader/UploaderCli/App.config`.
+
+Key schema: PK `eid` (S), SK `email` (S, lowercased). GSI `email-index`: PK `email` (S), SK `eid` (S) — added so a specific address can be looked up across all campaigns without knowing which `eid` to check (built for complaint/inquiry handling).
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `eid` | S | required | `Program.cs` `LogSendAsync` (key) | PK | Campaign id, same value used in the tracked link's `eid` query param |
+| `email` | S | required | `Program.cs` `LogSendAsync` (key, lowercased) | SK / GSI PK | Recipient address actually handed to SES |
+| `recipientType` | S (`"admin"`\|`"user"`) | required | `Program.cs` `LogSendAsync` | — | Admin copy vs. real recipient |
+| `designId` | N | required | `Program.cs` `LogSendAsync` | — | The featured design for that send |
+| `sentAtUtc` | S (ISO) | required | `Program.cs` `LogSendAsync` | — | |
+| `cid` | S | optional | `Program.cs` `LogSendAsync` — only written if the recipient had one at send time (`recipient.Cid`); the admin row always gets the literal `"admin"`, matching the tracked link's `cid=admin` | joins against `EmailEntryEvents.cid` for the same `eid` | Absence means this recipient can't be joined to their `EmailEntryEvents` click rows by cid — email is the only guaranteed-present join key |
+| `messageId` | S | optional | `Program.cs` `LogSendAsync`, from `EmailHelper.SendEmailAsync`'s return value | complaint/bounce lookup | SES MessageId — the field an SES bounce/complaint notification references |
+
+Writes are best-effort: `LogSendAsync` always appends to the pre-existing local `send-log.jsonl` file first (unchanged behavior), then tries the DynamoDB `PutItemAsync` in a try/catch that only logs a warning on failure — a DynamoDB outage or misconfiguration never blocks or fails the actual send.
+
+Purpose: (1) joins with `EmailEntryEvents` (§4.15) to compute true per-user send/engagement history (was this person sent N campaigns, did they ever click any of them) — the missing piece flagged when `EmailEntryEvents` was first built, since that table alone only knows about clicks, not who received what; (2) direct complaint/inquiry lookup by email via `check-email-recipient.ts`, without grepping whichever machine happened to run a given send.
+
+Reporting: `automation/pinterest-agent/scripts/check-email-campaign.ts <eid>` (joins both tables, lists sent-but-never-entered recipients) and `check-email-recipient.ts <email>` (full send history for one address via the GSI).
 
 ## 5. API Endpoints / Interfaces
 

@@ -60,6 +60,24 @@ async function getEventCounts(date: string): Promise<EventCounts> {
   return counts;
 }
 
+const BASELINE_DAYS = 7;
+
+async function getBaselineCounts(beforeDate: string, days: number): Promise<EventCounts[]> {
+  const base = new Date(`${beforeDate}T00:00:00Z`);
+  const results: EventCounts[] = [];
+  for (let i = 1; i <= days; i++) {
+    const d = new Date(base);
+    d.setUTCDate(d.getUTCDate() - i);
+    results.push(await getEventCounts(d.toISOString().slice(0, 10)));
+  }
+  return results;
+}
+
+function average(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
 async function getFeedbackForDate(date: string): Promise<FeedbackRow[]> {
   const rows: FeedbackRow[] = [];
   let lastKey: Record<string, AttributeValue> | undefined;
@@ -84,7 +102,7 @@ async function getFeedbackForDate(date: string): Promise<FeedbackRow[]> {
   return rows;
 }
 
-async function getAiObservation(date: string, counts: EventCounts, feedback: FeedbackRow[]): Promise<string> {
+async function getAiObservation(date: string, counts: EventCounts, feedback: FeedbackRow[], baseline: EventCounts[]): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return "";
 
@@ -92,15 +110,24 @@ async function getAiObservation(date: string, counts: EventCounts, feedback: Fee
     ? `\nFeedback received (${feedback.length}):\n` + feedback.map(f => `- [${f.importance}] "${f.text}"`).join("\n")
     : "\nNo feedback received.";
 
+  const baselineSection = baseline.length > 0
+    ? `\n${baseline.length}-day trailing average (the ${baseline.length} days before ${date}, for comparison — do not treat today in isolation):
+- Sessions: ${average(baseline.map(b => b.editor_opened)).toFixed(0)}
+- Patterns generated: ${average(baseline.map(b => b.pattern_generated)).toFixed(0)}
+- PDFs exported: ${average(baseline.map(b => b.pdf_exported)).toFixed(0)}
+- Feedback submitted: ${average(baseline.map(b => b.feedback_submitted)).toFixed(1)}`
+    : "\nNo baseline history available yet.";
+
   const prompt = `Cross-stitch editor usage for ${date}:
 - Sessions opened: ${counts.editor_opened}
 - Patterns generated: ${counts.pattern_generated}
 - PDFs exported: ${counts.pdf_exported}
 - Feedback submitted: ${counts.feedback_submitted}
 - Errors: ${counts.editor_error}
+${baselineSection}
 ${feedbackSection}
 
-In 2-3 sentences, give a concise observation about today's editor usage. Focus on conversion rates, user engagement signals, and any patterns worth noting. Be direct and actionable.`;
+In 2-3 sentences, give a concise observation about today's editor usage COMPARED TO THE BASELINE ABOVE. Only call out something as unusual if it meaningfully deviates from the baseline average — otherwise say plainly that today is in line with recent usage. Do not use generic engagement language ("high engagement", "strong conversion", etc.) unless the numbers actually support that relative to baseline. Zero feedback is not worth commenting on unless it also deviates from the baseline. Be direct and actionable.`;
 
   const client = new Anthropic({ apiKey });
   const msg = await client.messages.create({
@@ -205,7 +232,8 @@ export async function sendEditorDailySummary(date: string): Promise<EditorDailyS
   }
 
   const feedback = await getFeedbackForDate(date);
-  const observation = await getAiObservation(date, counts, feedback).catch(() => "");
+  const baseline = await getBaselineCounts(date, BASELINE_DAYS).catch(() => []);
+  const observation = await getAiObservation(date, counts, feedback, baseline).catch(() => "");
 
   const textBody = buildTextBody(date, counts, feedback, observation);
   const htmlBody = buildHtmlBody(date, counts, feedback, observation);
