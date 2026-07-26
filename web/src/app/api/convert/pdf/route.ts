@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, rgb, StandardFonts, PDFString } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts, PDFString, degrees } from 'pdf-lib';
 import type { PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { renderSymbolToPng } from '@/lib/server-symbol-renderer';
@@ -23,6 +23,26 @@ const CHART_H = PAGE_H - MARGIN * 2 - HEADER_H - LABEL_TOP - FOOTER_H;
 const COLS_PER = Math.floor(CHART_W / CHART_CELL);
 const ROWS_PER = Math.floor(CHART_H / CHART_CELL);
 
+// Stitches of repeated context between adjacent chart pages (a "few stitches
+// of overlap" so a color band that needs shifting across a page boundary can
+// be aligned by eye, per user feedback 60cedb04-d36e-4938-a8f5-574d191e5c6a).
+const OVERLAP = 3;
+
+// Page start offsets along one axis: pages tile with stride < window size so
+// consecutive pages repeat OVERLAP cells of the same content at their shared edge.
+function tileOffsets(total: number, windowSize: number, overlap: number): number[] {
+  if (total <= windowSize) return [0];
+  const stride = Math.max(1, windowSize - overlap);
+  const offsets: number[] = [];
+  let offset = 0;
+  for (;;) {
+    offsets.push(offset);
+    if (offset + windowSize >= total) break;
+    offset += stride;
+  }
+  return offsets;
+}
+
 // Color key layout
 const KEY_ROW_H = 18;          // row height
 const KEY_HDR_BLOCK = 66;      // title + column headers + divider
@@ -40,8 +60,31 @@ const KX_ST    = MARGIN + 340;    // "Stitches"; values right-aligned +48
 const KX_SK    = MARGIN + 400;    // "Skeins"; values right-aligned +40
 
 const NAVY = rgb(0.04, 0.10, 0.30);
+const OVERLAP_COLOR = rgb(0.85, 0.35, 0.05); // warm orange — distinct from thread colors and gray gridlines
 
 function col(r: number, g: number, b: number) { return rgb(r / 255, g / 255, b / 255); }
+
+// Outlines a repeated-content band (drawn on top of cell fills/symbols so it stays
+// visible in every chart mode) with a short rotated/horizontal "OVERLAP" caption.
+function drawOverlapBand(p: PDFPage, x: number, y: number, width: number, height: number, font: PDFFont, vertical: boolean) {
+  p.drawRectangle({ x, y, width, height, borderColor: OVERLAP_COLOR, borderWidth: 1.3 });
+  const label = 'OVERLAP';
+  const size = 6;
+  const labelW = font.widthOfTextAtSize(label, size);
+  if (vertical) {
+    p.drawText(label, {
+      x: x + width / 2 - size * 0.32,
+      y: y + (height - labelW) / 2,
+      size, font, color: OVERLAP_COLOR, rotate: degrees(90),
+    });
+  } else {
+    p.drawText(label, {
+      x: x + (width - labelW) / 2,
+      y: y + height / 2 - size * 0.35,
+      size, font, color: OVERLAP_COLOR,
+    });
+  }
+}
 
 function centerText(page: PDFPage, text: string, y: number, size: number, font: PDFFont, color = rgb(0, 0, 0)) {
   const w = font.widthOfTextAtSize(text, size);
@@ -88,8 +131,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Pre-compute tiling dimensions so we know page numbers before adding pages
-    const pageCols = Math.ceil(cols / COLS_PER);
-    const pageRows = Math.ceil(rows / ROWS_PER);
+    const rowOffsets = tileOffsets(rows, ROWS_PER, OVERLAP);
+    const colOffsets = tileOffsets(cols, COLS_PER, OVERLAP);
+    const pageRows = rowOffsets.length;
+    const pageCols = colOffsets.length;
     const totalChartPages = pageCols * pageRows;
     const keyPagesCount = Math.ceil(usedPalette.length / KEY_ROWS_PER_PAGE);
 
@@ -287,15 +332,21 @@ export async function POST(request: NextRequest) {
       }
 
       // Intro text for grid
+      const hasOverlap = pageCols > 1 || pageRows > 1;
       const introY = infoStartY - infoLines.length * infoLineH - 28;
-      const introLine1 = 'Below is a plan showing how the chart pages fit together.';
-      const introLine2 = 'The page number is shown at the top left of each chart page.';
-      const introX = (PAGE_W - Math.max(font.widthOfTextAtSize(introLine1, 9), font.widthOfTextAtSize(introLine2, 9))) / 2;
-      p.drawText(introLine1, { x: introX, y: introY, size: 9, font, color: NAVY });
-      p.drawText(introLine2, { x: introX, y: introY - 14, size: 9, font, color: NAVY });
+      const introLines = [
+        'Below is a plan showing how the chart pages fit together.',
+        'The page number is shown at the top left of each chart page.',
+        ...(hasOverlap
+          ? [`Pages share a ${OVERLAP}-stitch overlap at touching edges, outlined in orange`,
+             'and labeled OVERLAP — those stitches repeat exactly on the next page.']
+          : []),
+      ];
+      const introX = (PAGE_W - Math.max(...introLines.map(l => font.widthOfTextAtSize(l, 9)))) / 2;
+      introLines.forEach((line, i) => p.drawText(line, { x: introX, y: introY - i * 14, size: 9, font, color: i >= 2 ? OVERLAP_COLOR : NAVY }));
 
       // Grid — cells labeled A:1, B:1, A:2, B:2 …
-      const gridTopY   = introY - 32;
+      const gridTopY   = introY - (introLines.length - 1) * 14 - 18;
       const gridAvailH = gridTopY - MARGIN;
       const gridAvailW = PAGE_W - MARGIN * 2;
       const cellW = Math.min(200, gridAvailW / pageCols);
@@ -327,9 +378,9 @@ export async function POST(request: NextRequest) {
     // ── Chart pages ────────────────────────────────────────────────────────────
     for (let pr = 0; pr < pageRows; pr++) {
       for (let pc = 0; pc < pageCols; pc++) {
-        const r0 = pr * ROWS_PER;
+        const r0 = rowOffsets[pr];
         const r1 = Math.min(r0 + ROWS_PER, rows);
-        const c0 = pc * COLS_PER;
+        const c0 = colOffsets[pc];
         const c1 = Math.min(c0 + COLS_PER, cols);
         const pageNum = firstChartPageNum + pr * pageCols + pc;
 
@@ -426,6 +477,21 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        // Overlap bands — mark the OVERLAP-stitch strips shared with a neighboring
+        // page (drawn on top of cells/gridlines so they stay visible in every mode)
+        if (pc > 0) {
+          drawOverlapBand(p, gx, gy - gridH, OVERLAP * CHART_CELL, gridH, font, true);
+        }
+        if (pc < pageCols - 1) {
+          drawOverlapBand(p, gx + gridW - OVERLAP * CHART_CELL, gy - gridH, OVERLAP * CHART_CELL, gridH, font, true);
+        }
+        if (pr > 0) {
+          drawOverlapBand(p, gx, gy - OVERLAP * CHART_CELL, gridW, OVERLAP * CHART_CELL, font, false);
+        }
+        if (pr < pageRows - 1) {
+          drawOverlapBand(p, gx, gy - gridH, gridW, OVERLAP * CHART_CELL, font, false);
+        }
+
         // Footer — page number
         const footer = `Page ${pageNum} of ${firstChartPageNum + totalChartPages - 1}`;
         const fw = font.widthOfTextAtSize(footer, 8);
@@ -433,6 +499,14 @@ export async function POST(request: NextRequest) {
           x: (PAGE_W - fw) / 2, y: MARGIN / 2 + 2,
           size: 8, font, color: rgb(0.5, 0.5, 0.5),
         });
+
+        // Footer legend, repeated on every chart page (not just the Notes page)
+        // so the reminder is right where the orange band actually appears.
+        if (pageCols > 1 || pageRows > 1) {
+          p.drawText(`Orange = ${OVERLAP}-stitch overlap (same stitches as the neighboring page)`, {
+            x: MARGIN, y: MARGIN / 2 + 2, size: 6, font, color: OVERLAP_COLOR,
+          });
+        }
       }
     }
 
