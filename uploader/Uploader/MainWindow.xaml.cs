@@ -91,8 +91,12 @@ namespace Uploader
         private const string CrossStitchRootToken = "%CROSS_STITCH%";
         private const string AdminPreviewUnsubscribeToken = "preview-admin-unsubscribe-token";
         private const string SuppressedListPath = @"D:\ann\Git\cross-stitch-platform\uploader\data\list-suppressed.txt";
-        // ConverterExePath lives in D:\ann\Git\Converter\ — a separate tool repo, not part of this monorepo.
-        private const string ConverterExePath = @"D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe";
+        // ConverterExePath points at the Converter console app's build output,
+        // which lives in this monorepo at uploader\Converter (built separately
+        // from Uploader.sln — see uploader\Converter\Converter.csproj).
+        private const string ConverterExePathDefault = @"%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe";
+        private static readonly string ConverterExePath =
+            ExpandCrossStitchToken(ConfigurationManager.AppSettings["ConverterExePath"] ?? ConverterExePathDefault);
         private static readonly string[] RequiredPdfVariants = { "1", "3", "5" };
         private static readonly string[] HtmlEmailTemplateRequiredSections =
             { "Subject", "Greeting", "BeforeImage", "ImageWithLink", "AfterImage", "Unsubscribe", "Closing", "Signature" };

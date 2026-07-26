@@ -14,4 +14,4 @@
 	- `D:\ann\Git\cross-stitch-platform-docs\plan\uploader\HtmlEmailTemplate.txt`
 	- `D:\ann\Git\cross-stitch-platform-docs\plan\uploader\TextEmailTemplate.txt`
 - Or keep the old relative paths for legacy use.
-- Converter is expected at `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe` and produces `<name>.converted.pdf`.
+- Converter now lives in this monorepo at `uploader\Converter` (see its own `Converter.csproj`, built separately from `Uploader.sln`). Its build output is expected at `%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe` (configurable via the `ConverterExePath` AppSettings key) and produces `<name>.converted.pdf`.

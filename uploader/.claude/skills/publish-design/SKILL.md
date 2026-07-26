@@ -27,10 +27,12 @@ silently working around any failure here:
    folder is actually ready, or if a different naming convention was used.
 3. Exactly one `.scc` file present. Zero or multiple → ask which one is the
    real chart file.
-4. `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe` exists (external
-   PDF-debranding tool this pipeline shells out to; not part of this
-   monorepo). Missing → tell the user exactly this, don't try to work
-   around it — this has happened before from an unrelated folder rename.
+4. `uploader\Converter\bin\Release\net9.0\Converter.exe` exists relative to
+   the monorepo root (the PDF-debranding tool this pipeline shells out to;
+   lives at `uploader\Converter`, built separately from `Uploader.sln` — run
+   `dotnet build -c Release` in that folder if the output is missing).
+   Missing → tell the user exactly this, don't try to work around it — this
+   has happened before from an unrelated folder rename.
 
 A reference photo of the finished design (`.jpg`/`.png`, any filename) is
 **not required** — if absent, the design's own extracted preview (`4.jpg`,
@@ -86,7 +88,8 @@ was sent; ask the user to check their inbox.
   email in Step 5. A real send to the subscriber list is a separate,
   explicit ask (same rule as the Announcement email — Claude doesn't send
   mass emails without an explicit per-send go-ahead).
-- **Never restores/renames external folders** (e.g. `Converter.exe`'s repo)
-  on its own if missing — that's exactly the kind of thing to surface in
-  Step 2 and ask about, since it may indicate an unrelated cleanup happened
-  and the user may want to fix it differently than last time.
+- **Never restores/renames build output folders** (e.g. `Converter`'s
+  `bin/Release`) on its own if missing — that's exactly the kind of thing to
+  surface in Step 2 and ask about, since it may indicate an unrelated
+  cleanup happened and the user may want to fix it differently than last
+  time.

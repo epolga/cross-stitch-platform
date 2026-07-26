@@ -315,7 +315,7 @@ If a single owner prefers to keep both: clarify the headers — this doc as **ca
 - [design-id.md](../integration/design-id.md) — `(ID, NPage)` compound PK + `DesignsByID-index` GSI + `NPage-1` slug convention.
 - [dynamodb-schema.md](../integration/dynamodb-schema.md) — `CrossStitchItems` + `CrossStitchUsers` + `PasswordResetTokens` + `SubscriptionEvents`; PinID drift across six names.
 - [s3-paths.md](../integration/s3-paths.md) — bucket names, CloudFront origin, photo/PDF/chart path templates.
-- [pdf-structure.md](../integration/pdf-structure.md) — variant set `{1, 3, 5}`, out-of-tree `Converter.exe`, partial-failure orphan risk.
+- [pdf-structure.md](../integration/pdf-structure.md) — variant set `{1, 3, 5}`, `Converter.exe` (built from `uploader/Converter`, same monorepo), partial-failure orphan risk.
 - [pinterest-metadata.md](../integration/pinterest-metadata.md) — pin title/desc templates, board naming, `AlbumBoards.csv`, OAuth scope set, token JSON asymmetry.
 - [README.md](../integration/README.md) — index of all six contracts above.
 

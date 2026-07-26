@@ -46,8 +46,9 @@ Pinterest-automation are operational alerts to the operator, not subscriber-faci
 
 ### 2.3 Constraints
 
-- Depends on an external, out-of-repo tool (`Converter.exe`) for PDF format conversion
-  during publishing; this dependency is out of scope for this SRS (see `00-Overview.md` §7).
+- Depends on a separate console app (`Converter.exe`, built from `uploader/Converter` —
+  same monorepo, not part of `Uploader.sln`) for PDF format conversion during publishing;
+  this dependency is out of scope for this SRS (see `00-Overview.md` §7).
 - Relies on the default AWS SDK credential chain on the operator's machine; no in-app
   credential management.
 - PDF metadata extraction (title/size/colors) is implemented as fixed-marker text scraping
@@ -160,7 +161,7 @@ Pinterest-automation are operational alerts to the operator, not subscriber-faci
 | AWS Elastic Beanstalk | Write | Environment restart after publish |
 | Pinterest API v5 | Read/write | Pin creation, board creation/rename, OAuth |
 | Anthropic Claude API | Send | SEO description generation, pin-title/board suggestions |
-| Local external tool `Converter.exe` | Invoke | PDF kit-variant conversion (out of repo — see `00-Overview.md` §7) |
+| `Converter.exe` (`uploader/Converter`) | Invoke | PDF kit-variant conversion (separate console app, same monorepo — see `00-Overview.md` §7) |
 
 ## 5. Data model
 

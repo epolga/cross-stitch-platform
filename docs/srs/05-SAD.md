@@ -127,7 +127,7 @@ is duplicated OAuth-client and Pinterest-upload logic, mitigated by both consumi
 | Framework | WPF (.NET), single-window desktop application |
 | Deployment | Runs on the operator's own machine (Visual Studio-built, no server deployment) |
 | Internal structure | `MainWindow.xaml(.cs)` (UI + orchestration — the design intentionally centralizes the publish/send workflows in the code-behind rather than a separate service layer), `Helpers/*.cs` (one class per integration concern: `PinSuggestionsGenerator`, `SeoTextGenerator`, `PinterestBoardCreator`/`Renamer`, `ElasticBeanstalkHelper`, `S3Helper`), `PatternInfo.cs` (PDF metadata scraper), `Templates/*.txt` (email content, loaded at runtime, not compiled in) |
-| External process dependency | Shells out to a separate, out-of-repo `Converter.exe` for PDF format conversion during publish (see `04-SRS-Uploader.md` §2.3) |
+| External process dependency | Shells out to `Converter.exe`, built from a separate console app at `uploader/Converter` (same monorepo, not part of `Uploader.sln`), for PDF format conversion during publish (see `04-SRS-Uploader.md` §2.3) |
 
 ### 4.4 Shared library (`shared/src/CrossStitch.Shared/`)
 

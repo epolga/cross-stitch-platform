@@ -33,7 +33,7 @@ failing.
 ```
 1. Query DesignsByID-index (max DesignID) → next DesignID = max + 1
 2. Query Designs-index    (max NGlobalPage) → next NGlobalPage = max + 1
-3. ConvertPdfForUploadAsync: shell out to external Converter.exe against 1.pdf/3.pdf/5.pdf
+3. ConvertPdfForUploadAsync: shell out to Converter.exe (built from `uploader/Converter`, same monorepo, not part of Uploader.sln) against 1.pdf/3.pdf/5.pdf
      → produces <name>.converted.pdf per input
 4. S3 upload (AmazonS3Client + TransferUtility, bucket cross-stitch-designs):
      - charts/{designId:D5}_{title}.scc

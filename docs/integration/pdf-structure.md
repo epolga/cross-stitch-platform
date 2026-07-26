@@ -4,7 +4,7 @@ PDF structure — kit downloads for cross-stitch patterns
 
 ## 2. Purpose
 
-Cross-stitch pattern "kit" PDFs are the downloadable artifact end users receive from `cross-stitch.com` for each design. They are produced upstream of the platform by an external chart program (which exports pattern PDFs), reshaped by the Uploader's adjacent `Converter.exe` tool, then uploaded by the WPF Uploader to S3 under a deterministic key pattern. The Next.js `cross-stitch` app reads them back through CloudFront and serves them to logged-in / paid users via `DownloadPdfLink`.
+Cross-stitch pattern "kit" PDFs are the downloadable artifact end users receive from `cross-stitch.com` for each design. They are produced upstream of the platform by an external chart program (which exports pattern PDFs), reshaped by the monorepo's `Converter` console app (`uploader/Converter`, invoked as a separately-built `Converter.exe`), then uploaded by the WPF Uploader to S3 under a deterministic key pattern. The Next.js `cross-stitch` app reads them back through CloudFront and serves them to logged-in / paid users via `DownloadPdfLink`.
 
 The Uploader is the **producer / owner** of the S3 PDF objects; the cross-stitch web app is a **read-only consumer**. There is no shared library; the path templates are duplicated as string literals on each side.
 
@@ -98,7 +98,7 @@ Default `formatNumber` when caller omits one is `'1'` — matching the variant t
 PDFs are **not generated** by the Uploader. The pipeline is:
 
 1. The user produces three input PDFs (`1.pdf`, `3.pdf`, `5.pdf`) with an external chart program. These are dropped into the batch folder.
-2. `Converter.exe` (a separate .NET 9 console app referenced as a hard-coded path at `Uploader/MainWindow.xaml.cs:84` — `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe`) rewrites each PDF into a `<name>.converted.pdf` (`Uploader/MainWindow.xaml.cs:973-1016`, `ConvertPdfForUploadAsync`).
+2. `Converter.exe` — built from the `Converter` console app at `uploader/Converter` (`Converter.csproj`, .NET 9), referenced via the `ConverterExePath` AppSettings key (`Uploader/App.config`, `%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe`, resolved at `Uploader/MainWindow.xaml.cs:94-95`) — rewrites each PDF into a `<name>.converted.pdf` (`Uploader/MainWindow.xaml.cs:973-1016`, `ConvertPdfForUploadAsync`).
 3. The converted PDFs are uploaded to S3 with the keys above.
 
 The Uploader uses `iTextSharp` **5.5.13.4** (declared at `Uploader/Uploader.csproj:15`) for **two read-only purposes only**:
@@ -148,7 +148,7 @@ Recommendation (1-2 lines): If the PDF interior shape is ever standardized, embe
 ## 7. Ownership & Contacts
 
 - **Maintainer:** Olga (`epolga`, olga.epstein@gmail.com).
-- **Code owner of the producer (writes the S3 PDF):** `Uploader` repo — primarily `Uploader/MainWindow.xaml.cs` (`UploadPdfToS3Async`, `BuildExpectedPdfKeys`) and the out-of-tree `Converter.exe` at `D:\ann\Git\Converter\`.
+- **Code owner of the producer (writes the S3 PDF):** `Uploader` repo — primarily `Uploader/MainWindow.xaml.cs` (`UploadPdfToS3Async`, `BuildExpectedPdfKeys`) and the `Converter` console app at `uploader/Converter` (same monorepo, built separately from `Uploader.sln`).
 - **Code owner of the consumer (reads via CloudFront):** `cross-stitch` repo — `src/lib/data-access.ts` and `src/app/components/DownloadPdfLink.tsx`.
 - **Docs hub:** `d:/ann/Git/cross-stitch-platform-docs`.
 
@@ -159,7 +159,7 @@ Recommendation (1-2 lines): If the PDF interior shape is ever standardized, embe
 - S3 bucket `cross-stitch-designs` (`Uploader/App.config:4`) — see the S3-bucket contract.
 - CloudFront distribution `d2o1uvvg91z7o4.cloudfront.net` (`cross-stitch/src/lib/data-access.ts:367`, `cross-stitch/src/app/components/DownloadPdfLink.tsx:38`) — read fronting.
 - `iTextSharp` **5.5.13.4** NuGet (`Uploader/Uploader.csproj:15`) — used only for inspection of input PDFs, not for writing the uploaded artifact.
-- `Converter.exe` — out-of-tree .NET 9 binary at hard-coded path `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe` (`Uploader/MainWindow.xaml.cs:84`). The actual PDF body shape is determined by this binary.
+- `Converter.exe` — .NET 9 binary built from `uploader/Converter` (same monorepo, not part of `Uploader.sln`), path resolved via the `ConverterExePath` AppSettings key (`Uploader/MainWindow.xaml.cs:94-95`). The actual PDF body shape is determined by this binary.
 - The three source PDFs `1.pdf`, `3.pdf`, `5.pdf` in the user's batch folder (`Uploader/MainWindow.xaml.cs:948-955`) — externally produced by a chart program.
 - AWS SDK `AWSSDK.S3 3.7.400.1` (`Uploader/Uploader.csproj:13`) — `TransferUtility` for upload.
 
@@ -186,7 +186,7 @@ Observed failure modes from code:
 - **Public PDFs.** The PDFs are anonymously fetchable over CloudFront; the `cross-stitch.com` paid/registration gate is enforced only in the React component (`cross-stitch/src/app/components/DownloadPdfLink.tsx:367-424`). Anyone with the URL can download. Treat the PDF content accordingly.
 - **No user-specific metadata.** Verified by code inspection: `UploadPdfToS3Async` (`Uploader/MainWindow.xaml.cs:946-971`) uploads the converter's output verbatim; the converter is invoked with only the input path as an argument (`Uploader/MainWindow.xaml.cs:993`). There is no per-recipient customization, no watermarking with `userEmail`, and no other PII branch in the upload path. `userEmail` does appear on the consumer side, but only for the paid-access HTTP check (`DownloadPdfLink.tsx:277`) — it is not appended to the PDF URL or to the file.
 - **No signed URLs / no expiring links.** Once published, the URL is permanent and shareable.
-- **Hard-coded converter path leak.** `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe` (`Uploader/MainWindow.xaml.cs:84`) embeds an absolute developer-machine path. Not a secret, but a portability/dev-environment coupling. Same applies to `SuppressedListPath = @"D:\ann\Git\cross-stitch\list-suppressed.txt"` on the adjacent line (`Uploader/MainWindow.xaml.cs:83`).
+- **Converter path is now config-driven, not hard-coded.** `ConverterExePath` (`Uploader/MainWindow.xaml.cs:94-98`) resolves the `ConverterExePath` AppSettings key through the same `%CROSS_STITCH%` token used for email templates, defaulting to `%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe` — the dev-machine coupling is now confined to the `CROSS_STITCH` env var / `CrossStitchRootDefault` fallback, same as the rest of the monorepo-relative paths. `SuppressedListPath = @"D:\ann\Git\cross-stitch-platform\uploader\data\list-suppressed.txt"` (adjacent) still has an unrelated hard-coded absolute path.
 - **No PDF/A or signature.** The PDFs are not digitally signed and there is no provenance / tamper-evidence step.
 
 ## 11. Testing & Validation

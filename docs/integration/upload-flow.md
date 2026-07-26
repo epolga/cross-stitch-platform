@@ -226,7 +226,7 @@ Reader side (consumed by cross-stitch Next.js) is **not** part of this contract:
 
 | Artifact | Purpose | Source |
 |----------|---------|--------|
-| `Converter.exe` at `D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe` | Re-renders each PDF before S3 upload (hardcoded absolute path) | `MainWindow.xaml.cs:84`, `:978-1015` |
+| `Converter.exe`, built from `uploader/Converter` (same monorepo, not part of `Uploader.sln`) | Re-renders each PDF before S3 upload; path configurable via `ConverterExePath` AppSettings key, default `%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe` | `MainWindow.xaml.cs:94-98`, `:978-1015` |
 | `AlbumBoards.csv` (configurable via `PinterestBoardsCsvPath`, default `AlbumBoards.csv`) | Maps 4-digit `AlbumID` → Pinterest `board_id` | `PinterestHelper.cs:47-49`, `:159-221` |
 | Pinterest OAuth tokens at `Uploader/secrets/pinterest_tokens.json` | Bearer token for step 3; obtained via `PinterestOAuthClient.GetValidAccessTokenAsync` | `PinterestHelper.cs:41-42`, `:97` |
 
@@ -245,7 +245,7 @@ Reader side (consumed by cross-stitch Next.js) is **not** part of this contract:
 | `_batchFolderPath` and `txtAlbumNumber.Text` non-empty | yes | `MainWindow.xaml.cs:168-173` |
 | `1.pdf`, `3.pdf`, `5.pdf` present | yes (twice: at folder select `:132-143`, and inside `UploadPdfToS3Async:952-955`) | |
 | `4.jpg` present | implicitly — `UploadPhotoFileAsync` will throw if the path doesn’t exist | `:1041-1054` |
-| `Converter.exe` present at hardcoded path | yes — `ConvertPdfForUploadAsync:978-979` throws `FileNotFoundException` | |
+| `Converter.exe` build output present at configured path | yes — `ConvertPdfForUploadAsync:978-979` throws `FileNotFoundException` | |
 | Pinterest OAuth token valid / refreshable | yes — `GetValidAccessTokenAsync` throws on failure | `PinterestHelper.cs:97` |
 | **ALBUM row exists in DDB for this `AlbumID`** | **NO** | not checked anywhere in the flow — see §9 |
 

@@ -136,7 +136,7 @@ Requirements / Known Issues section.
 - Infrastructure-as-code / deployment pipeline definitions (Elastic Beanstalk, Lambda
   packaging, WAF rule provisioning) — referenced where they affect functional behavior, not
   specified in detail.
-- The standalone `Converter.exe` tool invoked by the Uploader (lives outside this
-  monorepo).
+- The standalone `Converter.exe` tool invoked by the Uploader (`uploader/Converter` in
+  this monorepo, but built and versioned separately from `Uploader.sln`).
 - The `etsy-uploader` Etsy integration — present in code only as a disclosure page and a
   scaffolded, unwired helper class (`EtsyHelper.cs`); not a live feature.

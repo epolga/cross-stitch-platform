@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Converter": {
+      "commandName": "Project",
+      "commandLineArgs": "D:\\ann\\pdf_work\\downloaded\\pdfs\\54\\4262\\Stitch4262_1_Kit.pdf D:\\ann\\pdf_work\\converted\\pdfs\\54\\4262\\Stitch4262_1_Kit.pdf\r\n"
+    }
+  }
+}

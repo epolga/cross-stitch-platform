@@ -1,0 +1,26 @@
+## Build folders
+bin/
+obj/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## VS Code (if you ever open it)
+.vscode/
+
+## Rider / JetBrains
+.idea/
+
+## OS files
+Thumbs.db
+.DS_Store
+
+## Logs
+*.log
+
+## Test results
+TestResults/

@@ -31,7 +31,7 @@ using CrossStitch.Shared.Pinterest;
 using UploadPatterns;
 using Uploader.Helpers;
 
-const string ConverterExePath = @"D:\ann\Git\Converter\bin\Release\net9.0\Converter.exe";
+const string ConverterExePathDefault = @"%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe";
 const string PhotoPrefix = "photos";
 const string PinterestPhotoFileName = "4_pinterest.jpg";
 
@@ -379,6 +379,8 @@ static async Task UploadPdfToS3Async(TransferUtility s3, string bucketName, stri
 
 static async Task<string> ConvertPdfForUploadAsync(string inputPath)
 {
+    string ConverterExePath = ExpandCrossStitchToken(ConfigurationManager.AppSettings["ConverterExePath"] ?? ConverterExePathDefault);
+
     if (!File.Exists(inputPath)) throw new FileNotFoundException("Input PDF not found.", inputPath);
     if (!File.Exists(ConverterExePath)) throw new FileNotFoundException("Converter.exe not found.", ConverterExePath);
 
