@@ -8,7 +8,7 @@
 // docs/plan/web/Catalog PDF-to-Editable Conversion — Feasibility Findings.md
 // for the original investigation this is based on.
 import dmcColors from '@/data/dmc-colors.json';
-import { SYMBOLS } from '@/lib/symbols';
+import { SYMBOLS, symbolForIndex } from '@/lib/symbols';
 import type { ConvertedPattern, DmcColor, PatternPalette } from '@/lib/pattern-converter';
 
 const dmcByNumber = new Map<string, DmcColor>(
@@ -201,9 +201,11 @@ export function extractPatternFromPdf(pdfBytes: Buffer): ExtractResult {
 
   // Assign real DMC name/RGB (case-insensitive — the PDF has entries like
   // "Blanc"/"Ecru" that only match dmc-colors.json in lowercase) and a real
-  // editor symbol glyph from SYMBOLS (not a synthesized codepoint — indices
-  // past SYMBOLS.length fall back to '?', same convention as
-  // pattern-converter.ts's photo conversion path).
+  // editor symbol glyph from SYMBOLS. Catalog PDFs (unlike our own converter,
+  // capped at 25 colors) can easily exceed SYMBOLS.length — symbolForIndex
+  // falls back to plain numbers past that point so every color still gets a
+  // distinct symbol, instead of every overflow color colliding on a shared
+  // glyph and becoming indistinguishable on the chart.
   const palette: PatternPalette[] = rawPalette.map((p, i) => {
     const dmc = dmcByNumber.get(p.dmcNumber.toLowerCase());
     if (!dmc) warnings.push(`DMC number "${p.dmcNumber}" not found in dmc-colors.json — using PDF's own RGB`);
@@ -213,12 +215,12 @@ export function extractPatternFromPdf(pdfBytes: Buffer): ExtractResult {
       r: dmc?.r ?? p.r,
       g: dmc?.g ?? p.g,
       b: dmc?.b ?? p.b,
-      symbol: SYMBOLS[i] ?? '?',
+      symbol: symbolForIndex(i),
       stitchCount: 0, // filled in below from actual grid usage
     };
   });
   if (palette.length > SYMBOLS.length) {
-    warnings.push(`Design has ${palette.length} colors, more than the ${SYMBOLS.length} available editor symbols — some colors share the '?' fallback symbol`);
+    warnings.push(`Design has ${palette.length} colors, more than the ${SYMBOLS.length} styled editor symbols — colors past that point use a plain-number fallback instead`);
   }
 
   const symbolToPaletteIdx = new Map(rawPalette.map((p, i) => [p.symbol, i]));

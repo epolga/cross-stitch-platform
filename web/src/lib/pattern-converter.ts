@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import dmcColors from '@/data/dmc-colors.json';
-import { SYMBOLS } from '@/lib/symbols';
+import { symbolForIndex } from '@/lib/symbols';
 import type { ConversionMode } from '@/lib/image-analysis';
 
 export interface DmcColor {
@@ -275,7 +275,7 @@ export async function convertImage(
   const palette: PatternPalette[] = uniqueDmc
     .map((dmcIdx, i) => ({ ...DMC[dmcIdx], symbol: '', stitchCount: stitchCounts[i] }))
     .sort((a, b) => b.stitchCount - a.stitchCount);
-  palette.forEach((p, i) => { p.symbol = SYMBOLS[i] ?? '?'; });
+  palette.forEach((p, i) => { p.symbol = symbolForIndex(i); });
 
   // Remap grid indices to sorted palette order
   const numberToNew = new Map(palette.map((p, ni) => [p.number, ni]));

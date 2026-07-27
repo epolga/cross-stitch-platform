@@ -55,6 +55,10 @@ export default function ClientNav() {
             My thoughts
           </Link>
           <span className="text-gray-400 text-xl">&middot;</span>
+          <Link href="/photo-to-cross-stitch" className={desktopLinkBase}>
+            Photo to pattern
+          </Link>
+          <span className="text-gray-400 text-xl">&middot;</span>
           {/* Desktop Tools dropdown */}
           <div className="relative">
             <button
@@ -67,16 +71,8 @@ export default function ClientNav() {
             {isToolsOpenDesktop && (
               <div
                 style={{ width: '256px' }}
-                className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10"
+                className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-40"
               >
-                <Link
-                  href="/photo-to-cross-stitch"
-                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
-                  onClick={() => setIsToolsOpenDesktop(false)}
-                >
-                  Photo to pattern
-                </Link>
-                <hr />
                 <Link
                   href="/dmc-color-chart"
                   className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
@@ -111,7 +107,7 @@ export default function ClientNav() {
             {isArticlesOpenDesktop && (
               <div
                 style={{ width: '256px' }}
-                className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10"
+                className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-40"
               >
                 <Link
                   href="/Embroidery_History.aspx"
@@ -231,6 +227,13 @@ export default function ClientNav() {
               >
                 My thoughts
               </Link>
+              <Link
+                href="/photo-to-cross-stitch"
+                className={mobileLinkBase}
+                onClick={closeMobileMenu}
+              >
+                Photo to pattern
+              </Link>
               {/* Tools as submenu on mobile */}
               <div className="mt-2">
                 <button
@@ -244,13 +247,6 @@ export default function ClientNav() {
 
                 {isToolsOpenMobile && (
                   <div className="mt-1 ml-2 border-l border-gray-200 pl-2">
-                    <Link
-                      href="/photo-to-cross-stitch"
-                      className={mobileSubLinkBase}
-                      onClick={closeMobileMenu}
-                    >
-                      Photo to pattern
-                    </Link>
                     <Link
                       href="/dmc-color-chart"
                       className={mobileSubLinkBase}

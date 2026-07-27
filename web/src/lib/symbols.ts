@@ -28,3 +28,14 @@ export const SYMBOLS: string[] = [
   // ASCII misc
   '!', '#', '$', '%', '&', '<', '>', '?', '@', '^', '~', ':', ';', '*', '-', '·',
 ];
+
+// Palettes past SYMBOLS.length (e.g. reverse-parsed catalog PDFs with 150+
+// DMC colors, unlike our own converter which caps the color-limit dropdown
+// at 25) used to all collapse onto the same '?' glyph, making every
+// overflow color visually indistinguishable on the chart. Plain numbers
+// (no digit appears anywhere in SYMBOLS[], so no collision) at least keep
+// every color distinct, the same convention commercial chart software
+// falls back to for very large palettes.
+export function symbolForIndex(i: number): string {
+  return SYMBOLS[i] ?? String(i - SYMBOLS.length + 1);
+}
