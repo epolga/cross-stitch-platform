@@ -1,0 +1,669 @@
+# Catalog Pattern Extraction — Batch Run Issues (2026-07-27)
+
+Full-catalog run of `web/scripts/batch-extract-catalog-patterns.ts --all`. 5271 designs total: 1 already done (Fox/744, earlier manual test), 134 failed (skipped entirely), 364 succeeded with a warning, 4772 succeeded cleanly.
+
+## Failed — 134 designs (not in S3, no EditorPatternKey)
+
+### extraction error: No color-key page found (no "Cat No." column detected) (72)
+
+- DesignID 5397
+- DesignID 5186
+- DesignID 2736
+- DesignID 1426
+- DesignID 1427
+- DesignID 391
+- DesignID 389
+- DesignID 388
+- DesignID 386
+- DesignID 387
+- DesignID 384
+- DesignID 382
+- DesignID 381
+- DesignID 379
+- DesignID 380
+- DesignID 378
+- DesignID 374
+- DesignID 375
+- DesignID 373
+- DesignID 369
+- DesignID 367
+- DesignID 368
+- DesignID 366
+- DesignID 362
+- DesignID 363
+- DesignID 358
+- DesignID 356
+- DesignID 355
+- DesignID 354
+- DesignID 353
+- DesignID 350
+- DesignID 351
+- DesignID 348
+- DesignID 340
+- DesignID 343
+- DesignID 338
+- DesignID 339
+- DesignID 337
+- DesignID 336
+- DesignID 335
+- DesignID 331
+- DesignID 333
+- DesignID 332
+- DesignID 327
+- DesignID 325
+- DesignID 326
+- DesignID 324
+- DesignID 321
+- DesignID 322
+- DesignID 323
+- DesignID 319
+- DesignID 318
+- DesignID 320
+- DesignID 315
+- DesignID 316
+- DesignID 317
+- DesignID 314
+- DesignID 301
+- DesignID 300
+- DesignID 302
+- DesignID 299
+- DesignID 298
+- DesignID 295
+- DesignID 291
+- DesignID 217
+- DesignID 208
+- DesignID 204
+- DesignID 205
+- DesignID 206
+- DesignID 201
+- DesignID 203
+- DesignID 200
+
+### extraction error: No chart page found (no "Position X:Y" page label detected) (44)
+
+- DesignID 5294
+- DesignID 4443
+- DesignID 4360
+- DesignID 4344
+- DesignID 4309
+- DesignID 4101
+- DesignID 4099
+- DesignID 4080
+- DesignID 4074
+- DesignID 4068
+- DesignID 4062
+- DesignID 4056
+- DesignID 4011
+- DesignID 3997
+- DesignID 3975
+- DesignID 3964
+- DesignID 3932
+- DesignID 3898
+- DesignID 3875
+- DesignID 3774
+- DesignID 3754
+- DesignID 3698
+- DesignID 3638
+- DesignID 3635
+- DesignID 3634
+- DesignID 3587
+- DesignID 3532
+- DesignID 3531
+- DesignID 3482
+- DesignID 1993
+- DesignID 1659
+- DesignID 1651
+- DesignID 1647
+- DesignID 1633
+- DesignID 1175
+- DesignID 973
+- DesignID 532
+- DesignID 529
+- DesignID 530
+- DesignID 526
+- DesignID 527
+- DesignID 528
+- DesignID 524
+- DesignID 445
+
+### PDF fetch HTTP 403 (17)
+
+- DesignID 5279
+- DesignID 3773
+- DesignID 3771
+- DesignID 3732
+- DesignID 3653
+- DesignID 3536
+- DesignID 3535
+- DesignID 3534
+- DesignID 3354
+- DesignID 2869
+- DesignID 2840
+- DesignID 2839
+- DesignID 2549
+- DesignID 2510
+- DesignID 2472
+- DesignID 2204
+- DesignID 1115
+
+### PDF fetch HTTP 503 (1)
+
+- DesignID 4313
+
+## Warnings — 364 designs (uploaded, but review recommended)
+
+**Missing DMC numbers, by frequency** (fixing dmc-colors.json for the top few would clear most warnings at once):
+
+- DMC 779: 151 designs
+- DMC 967: 145 designs
+- DMC 505: 58 designs
+- DMC 777: 7 designs
+- DMC 403: 5 designs
+- DMC 266: 4 designs
+- DMC 2: 3 designs
+- DMC 33: 3 designs
+- DMC 214: 3 designs
+- DMC 265: 3 designs
+- DMC 305: 3 designs
+- DMC 381: 3 designs
+- DMC 860: 3 designs
+- DMC 861: 3 designs
+- DMC 1037: 3 designs
+- DMC 1044: 3 designs
+- DMC 10: 2 designs
+- DMC 26: 2 designs
+- DMC 31: 2 designs
+- DMC 60: 2 designs
+- DMC 74: 2 designs
+- DMC 75: 2 designs
+- DMC 213: 2 designs
+- DMC 231: 2 designs
+- DMC 234: 2 designs
+- DMC 235: 2 designs
+- DMC 256: 2 designs
+- DMC 260: 2 designs
+- DMC 262: 2 designs
+- DMC 264: 2 designs
+- DMC 267: 2 designs
+- DMC 268: 2 designs
+- DMC 273: 2 designs
+- DMC 343: 2 designs
+- DMC 382: 2 designs
+- DMC 681: 2 designs
+- DMC 843: 2 designs
+- DMC 846: 2 designs
+- DMC 847: 2 designs
+- DMC 859: 2 designs
+- DMC 862: 2 designs
+- DMC 876: 2 designs
+- DMC 968: 2 designs
+- DMC 1002: 2 designs
+- DMC 1016: 2 designs
+- DMC 1040: 2 designs
+- DMC 1041: 2 designs
+- DMC 1042: 2 designs
+- DMC 8581: 2 designs
+- DMC 8: 1 designs
+- DMC 9: 1 designs
+- DMC 11: 1 designs
+- DMC 13: 1 designs
+- DMC 20: 1 designs
+- DMC 22: 1 designs
+- DMC 23: 1 designs
+- DMC 24: 1 designs
+- DMC 25: 1 designs
+- DMC 27: 1 designs
+- DMC 28: 1 designs
+- DMC 36: 1 designs
+- DMC 38: 1 designs
+- DMC 40: 1 designs
+- DMC 41: 1 designs
+- DMC 48: 1 designs
+- DMC 49: 1 designs
+- DMC 66: 1 designs
+- DMC 73: 1 designs
+- DMC 90: 1 designs
+- DMC 95: 1 designs
+- DMC 102: 1 designs
+- DMC 127: 1 designs
+- DMC 133: 1 designs
+- DMC 134: 1 designs
+- DMC 149: 1 designs
+- DMC 215: 1 designs
+- DMC 216: 1 designs
+- DMC 233: 1 designs
+- DMC 236: 1 designs
+- DMC 238: 1 designs
+- DMC 240: 1 designs
+- DMC 244: 1 designs
+- DMC 245: 1 designs
+- DMC 246: 1 designs
+- DMC 253: 1 designs
+- DMC 254: 1 designs
+- DMC 255: 1 designs
+- DMC 258: 1 designs
+- DMC 259: 1 designs
+- DMC 261: 1 designs
+- DMC 263: 1 designs
+- DMC 269: 1 designs
+- DMC 274: 1 designs
+- DMC 275: 1 designs
+- DMC 290: 1 designs
+- DMC 291: 1 designs
+- DMC 292: 1 designs
+- DMC 293: 1 designs
+- DMC 295: 1 designs
+- DMC 298: 1 designs
+- DMC 302: 1 designs
+- DMC 323: 1 designs
+- DMC 330: 1 designs
+- DMC 332: 1 designs
+- DMC 339: 1 designs
+- DMC 358: 1 designs
+- DMC 359: 1 designs
+- DMC 360: 1 designs
+- DMC 362: 1 designs
+- DMC 366: 1 designs
+- DMC 373: 1 designs
+- DMC 374: 1 designs
+- DMC 379: 1 designs
+- DMC 387: 1 designs
+- DMC 392: 1 designs
+- DMC 393: 1 designs
+- DMC 399: 1 designs
+- DMC 401: 1 designs
+- DMC 683: 1 designs
+- DMC 845: 1 designs
+- DMC 848: 1 designs
+- DMC 849: 1 designs
+- DMC 851: 1 designs
+- DMC 856: 1 designs
+- DMC 858: 1 designs
+- DMC 870: 1 designs
+- DMC 872: 1 designs
+- DMC 878: 1 designs
+- DMC 883: 1 designs
+- DMC 923: 1 designs
+- DMC 1001: 1 designs
+- DMC 1004: 1 designs
+- DMC 1006: 1 designs
+- DMC 1013: 1 designs
+- DMC 1014: 1 designs
+- DMC 1020: 1 designs
+- DMC 1022: 1 designs
+- DMC 1023: 1 designs
+- DMC 1024: 1 designs
+- DMC 1026: 1 designs
+- DMC 1047: 1 designs
+- DMC 1076: 1 designs
+- DMC 1084: 1 designs
+- DMC 1094: 1 designs
+- DMC 1096: 1 designs
+- DMC 9159: 1 designs
+
+**Full per-design list:**
+
+- DesignID 5445: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5391: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5378: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5370: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5365: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5361: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5287: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5277: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5271: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5267: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5266: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5256: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5210: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5178: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5163: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5131: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5125: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5075: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5074: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5056: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 5033: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4998: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4954: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4934: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4926: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4873: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4865: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4835: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4826: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4809: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4737: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4659: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4640: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4638: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4619: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4568: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4539: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4501: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4472: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4432: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4414: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4411: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4402: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4400: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4306: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4218: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4085: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 4077: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3996: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3993: Color-key column length mismatch (color=10, symbol=10, catNo=9)
+- DesignID 3991: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3983: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3954: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3942: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3934: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3922: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3857: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3839: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3833: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3782: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3764: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3750: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3658: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3639: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3585: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3579: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3542: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3508: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3456: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3416: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3399: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3396: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3392: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3379: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3368: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3347: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3260: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3241: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3231: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3205: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3180: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3176: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3156: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3148: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3141: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3094: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3090: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3089: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3061: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3060: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 3026: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2997: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2980: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2979: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2978: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2975: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2972: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2948: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2945: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2943: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2942: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2905: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2887: DMC number "967" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2880: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2850: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2835: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2830: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2829: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2827: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2812: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2783: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2768: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2750: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2748: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2741: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2719: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2712: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2699: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2696: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2691: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2653: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2649: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2646: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2636: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2625: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2621: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2608: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2605: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2604: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2599: DMC number "967" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2583: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2581: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2552: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2535: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2532: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2518: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2497: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2489: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2474: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2471: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2470: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2463: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2456: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2439: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2437: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2425: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2407: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2405: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2404: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2399: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2378: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2372: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2352: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2340: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2327: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2320: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2309: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2303: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2295: DMC number "505" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2292: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2289: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2278: DMC number "292" not found in dmc-colors.json — using PDF's own RGB | DMC number "293" not found in dmc-colors.json — using PDF's own RGB | DMC number "295" not found in dmc-colors.json — using PDF's own RGB | DMC number "275" not found in dmc-colors.json — using PDF's own RGB | DMC number "302" not found in dmc-colors.json — using PDF's own RGB | DMC number "1004" not found in dmc-colors.json — using PDF's own RGB | DMC number "305" not found in dmc-colors.json — using PDF's own RGB | DMC number "1002" not found in dmc-colors.json — using PDF's own RGB | DMC number "1001" not found in dmc-colors.json — using PDF's own RGB | DMC number "1037" not found in dmc-colors.json — using PDF's own RGB | DMC number "213" not found in dmc-colors.json — using PDF's own RGB | DMC number "264" not found in dmc-colors.json — using PDF's own RGB | DMC number "265" not found in dmc-colors.json — using PDF's own RGB | DMC number "266" not found in dmc-colors.json — using PDF's own RGB | DMC number "253" not found in dmc-colors.json — using PDF's own RGB | DMC number "254" not found in dmc-colors.json — using PDF's own RGB | DMC number "255" not found in dmc-colors.json — using PDF's own RGB | DMC number "256" not found in dmc-colors.json — using PDF's own RGB | DMC number "259" not found in dmc-colors.json — using PDF's own RGB | DMC number "260" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2276: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2269: DMC number "298" not found in dmc-colors.json — using PDF's own RGB | DMC number "323" not found in dmc-colors.json — using PDF's own RGB | DMC number "1047" not found in dmc-colors.json — using PDF's own RGB | DMC number "305" not found in dmc-colors.json — using PDF's own RGB | DMC number "1002" not found in dmc-colors.json — using PDF's own RGB | DMC number "1013" not found in dmc-colors.json — using PDF's own RGB | DMC number "10" not found in dmc-colors.json — using PDF's own RGB | DMC number "31" not found in dmc-colors.json — using PDF's own RGB | DMC number "33" not found in dmc-colors.json — using PDF's own RGB | DMC number "26" not found in dmc-colors.json — using PDF's own RGB | DMC number "27" not found in dmc-colors.json — using PDF's own RGB | DMC number "28" not found in dmc-colors.json — using PDF's own RGB | DMC number "38" not found in dmc-colors.json — using PDF's own RGB | DMC number "40" not found in dmc-colors.json — using PDF's own RGB | DMC number "41" not found in dmc-colors.json — using PDF's own RGB | DMC number "60" not found in dmc-colors.json — using PDF's own RGB | DMC number "74" not found in dmc-colors.json — using PDF's own RGB | DMC number "75" not found in dmc-colors.json — using PDF's own RGB | DMC number "66" not found in dmc-colors.json — using PDF's own RGB | DMC number "870" not found in dmc-colors.json — using PDF's own RGB | DMC number "90" not found in dmc-colors.json — using PDF's own RGB | DMC number "95" not found in dmc-colors.json — using PDF's own RGB | DMC number "343" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB | DMC number "851" not found in dmc-colors.json — using PDF's own RGB | DMC number "231" not found in dmc-colors.json — using PDF's own RGB | DMC number "234" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2268: DMC number "291" not found in dmc-colors.json — using PDF's own RGB | DMC number "330" not found in dmc-colors.json — using PDF's own RGB | DMC number "332" not found in dmc-colors.json — using PDF's own RGB | DMC number "13" not found in dmc-colors.json — using PDF's own RGB | DMC number "20" not found in dmc-colors.json — using PDF's own RGB | DMC number "22" not found in dmc-colors.json — using PDF's own RGB | DMC number "1006" not found in dmc-colors.json — using PDF's own RGB | DMC number "102" not found in dmc-colors.json — using PDF's own RGB | DMC number "127" not found in dmc-colors.json — using PDF's own RGB | DMC number "133" not found in dmc-colors.json — using PDF's own RGB | DMC number "134" not found in dmc-colors.json — using PDF's own RGB | DMC number "149" not found in dmc-colors.json — using PDF's own RGB | DMC number "1076" not found in dmc-colors.json — using PDF's own RGB | DMC number "923" not found in dmc-colors.json — using PDF's own RGB | DMC number "246" not found in dmc-colors.json — using PDF's own RGB | DMC number "1044" not found in dmc-colors.json — using PDF's own RGB | DMC number "245" not found in dmc-colors.json — using PDF's own RGB | DMC number "256" not found in dmc-colors.json — using PDF's own RGB | DMC number "258" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2266: DMC number "339" not found in dmc-colors.json — using PDF's own RGB | DMC number "1022" not found in dmc-colors.json — using PDF's own RGB | DMC number "1023" not found in dmc-colors.json — using PDF's own RGB | DMC number "1024" not found in dmc-colors.json — using PDF's own RGB | DMC number "9" not found in dmc-colors.json — using PDF's own RGB | DMC number "10" not found in dmc-colors.json — using PDF's own RGB | DMC number "11" not found in dmc-colors.json — using PDF's own RGB | DMC number "31" not found in dmc-colors.json — using PDF's own RGB | DMC number "33" not found in dmc-colors.json — using PDF's own RGB | DMC number "24" not found in dmc-colors.json — using PDF's own RGB | DMC number "25" not found in dmc-colors.json — using PDF's own RGB | DMC number "26" not found in dmc-colors.json — using PDF's own RGB | DMC number "36" not found in dmc-colors.json — using PDF's own RGB | DMC number "1094" not found in dmc-colors.json — using PDF's own RGB | DMC number "60" not found in dmc-colors.json — using PDF's own RGB | DMC number "73" not found in dmc-colors.json — using PDF's own RGB | DMC number "74" not found in dmc-colors.json — using PDF's own RGB | DMC number "75" not found in dmc-colors.json — using PDF's own RGB | DMC number "968" not found in dmc-colors.json — using PDF's own RGB | DMC number "1016" not found in dmc-colors.json — using PDF's own RGB | DMC number "861" not found in dmc-colors.json — using PDF's own RGB | DMC number "266" not found in dmc-colors.json — using PDF's own RGB | DMC number "240" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2263: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2261: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2235: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2231: DMC number "967" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2221: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2211: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2205: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2200: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2184: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2182: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2167: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2161: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2149: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2142: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2134: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2130: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2122: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2120: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2112: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2108: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2104: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2086: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2083: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2058: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2053: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2032: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 2020: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1999: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1995: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1990: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1960: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1946: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1918: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1878: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1877: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1876: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1875: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1870: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1869: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1857: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1852: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1838: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1831: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1818: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1814: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1811: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1793: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1786: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1778: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1773: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1761: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1735: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1730: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1704: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1693: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1690: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1687: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1686: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1677: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1664: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1630: DMC number "2" not found in dmc-colors.json — using PDF's own RGB | DMC number "387" not found in dmc-colors.json — using PDF's own RGB | DMC number "366" not found in dmc-colors.json — using PDF's own RGB | DMC number "358" not found in dmc-colors.json — using PDF's own RGB | DMC number "359" not found in dmc-colors.json — using PDF's own RGB | DMC number "360" not found in dmc-colors.json — using PDF's own RGB | DMC number "381" not found in dmc-colors.json — using PDF's own RGB | DMC number "403" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1626: DMC number "373" not found in dmc-colors.json — using PDF's own RGB | DMC number "362" not found in dmc-colors.json — using PDF's own RGB | DMC number "381" not found in dmc-colors.json — using PDF's own RGB | DMC number "382" not found in dmc-colors.json — using PDF's own RGB | DMC number "883" not found in dmc-colors.json — using PDF's own RGB | DMC number "379" not found in dmc-colors.json — using PDF's own RGB | DMC number "1084" not found in dmc-colors.json — using PDF's own RGB | DMC number "1037" not found in dmc-colors.json — using PDF's own RGB | DMC number "1096" not found in dmc-colors.json — using PDF's own RGB | DMC number "847" not found in dmc-colors.json — using PDF's own RGB | DMC number "849" not found in dmc-colors.json — using PDF's own RGB | DMC number "1042" not found in dmc-colors.json — using PDF's own RGB | DMC number "214" not found in dmc-colors.json — using PDF's own RGB | DMC number "860" not found in dmc-colors.json — using PDF's own RGB | DMC number "681" not found in dmc-colors.json — using PDF's own RGB | DMC number "2" not found in dmc-colors.json — using PDF's own RGB | DMC number "1040" not found in dmc-colors.json — using PDF's own RGB | DMC number "8581" not found in dmc-colors.json — using PDF's own RGB | DMC number "273" not found in dmc-colors.json — using PDF's own RGB | DMC number "1041" not found in dmc-colors.json — using PDF's own RGB | DMC number "231" not found in dmc-colors.json — using PDF's own RGB | DMC number "235" not found in dmc-colors.json — using PDF's own RGB | DMC number "236" not found in dmc-colors.json — using PDF's own RGB | DMC number "401" not found in dmc-colors.json — using PDF's own RGB | DMC number "403" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1625: DMC number "382" not found in dmc-colors.json — using PDF's own RGB | DMC number "1037" not found in dmc-colors.json — using PDF's own RGB | DMC number "343" not found in dmc-colors.json — using PDF's own RGB | DMC number "9159" not found in dmc-colors.json — using PDF's own RGB | DMC number "847" not found in dmc-colors.json — using PDF's own RGB | DMC number "1042" not found in dmc-colors.json — using PDF's own RGB | DMC number "876" not found in dmc-colors.json — using PDF's own RGB | DMC number "878" not found in dmc-colors.json — using PDF's own RGB | DMC number "213" not found in dmc-colors.json — using PDF's own RGB | DMC number "214" not found in dmc-colors.json — using PDF's own RGB | DMC number "859" not found in dmc-colors.json — using PDF's own RGB | DMC number "860" not found in dmc-colors.json — using PDF's own RGB | DMC number "861" not found in dmc-colors.json — using PDF's own RGB | DMC number "862" not found in dmc-colors.json — using PDF's own RGB | DMC number "264" not found in dmc-colors.json — using PDF's own RGB | DMC number "265" not found in dmc-colors.json — using PDF's own RGB | DMC number "266" not found in dmc-colors.json — using PDF's own RGB | DMC number "267" not found in dmc-colors.json — using PDF's own RGB | DMC number "268" not found in dmc-colors.json — using PDF's own RGB | DMC number "1044" not found in dmc-colors.json — using PDF's own RGB | DMC number "260" not found in dmc-colors.json — using PDF's own RGB | DMC number "262" not found in dmc-colors.json — using PDF's own RGB | DMC number "843" not found in dmc-colors.json — using PDF's own RGB | DMC number "846" not found in dmc-colors.json — using PDF's own RGB | DMC number "2" not found in dmc-colors.json — using PDF's own RGB | DMC number "403" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1624: DMC number "305" not found in dmc-colors.json — using PDF's own RGB | DMC number "374" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1612: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1610: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1599: DMC number "290" not found in dmc-colors.json — using PDF's own RGB | DMC number "1014" not found in dmc-colors.json — using PDF's own RGB | DMC number "274" not found in dmc-colors.json — using PDF's own RGB | DMC number "403" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1591: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1577: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1535: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1503: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1501: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1496: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1495: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1484: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1474: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1463: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1456: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1443: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1413: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1408: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1404: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1402: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1398: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1383: DMC number "505" not found in dmc-colors.json — using PDF's own RGB | DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1365: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1292: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1273: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1256: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1249: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1241: DMC number "8" not found in dmc-colors.json — using PDF's own RGB | DMC number "33" not found in dmc-colors.json — using PDF's own RGB | DMC number "238" not found in dmc-colors.json — using PDF's own RGB | DMC number "244" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1215: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1199: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1148: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1138: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1132: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1107: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1091: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1057: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1049: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1015: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1013: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1012: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 1007: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 986: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 968: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 959: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 935: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 900: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 875: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 862: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 861: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 853: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 852: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 830: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 826: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 811: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 805: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 804: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 773: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 758: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 757: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 747: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 725: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 716: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 704: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 696: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 691: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 688: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 679: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 669: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 662: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 659: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 641: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 629: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 623: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 608: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 607: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 604: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 603: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 602: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 590: DMC number "967" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 583: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 581: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 579: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 576: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 517: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 489: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 468: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 457: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 454: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 436: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 430: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 423: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 419: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 408: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 398: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 370: DMC number "777" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 365: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 346: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 344: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 286: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 267: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 264: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 216: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 215: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 214: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 212: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 210: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 196: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 192: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 186: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 183: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 182: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 178: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 171: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 170: DMC number "967" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 169: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 168: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 165: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 136: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 132: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 129: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 127: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 123: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 120: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 119: DMC number "505" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 111: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 109: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 108: DMC number "381" not found in dmc-colors.json — using PDF's own RGB | DMC number "1020" not found in dmc-colors.json — using PDF's own RGB | DMC number "23" not found in dmc-colors.json — using PDF's own RGB | DMC number "48" not found in dmc-colors.json — using PDF's own RGB | DMC number "49" not found in dmc-colors.json — using PDF's own RGB | DMC number "1026" not found in dmc-colors.json — using PDF's own RGB | DMC number "968" not found in dmc-colors.json — using PDF's own RGB | DMC number "872" not found in dmc-colors.json — using PDF's own RGB | DMC number "1016" not found in dmc-colors.json — using PDF's own RGB | DMC number "848" not found in dmc-colors.json — using PDF's own RGB | DMC number "876" not found in dmc-colors.json — using PDF's own RGB | DMC number "214" not found in dmc-colors.json — using PDF's own RGB | DMC number "215" not found in dmc-colors.json — using PDF's own RGB | DMC number "216" not found in dmc-colors.json — using PDF's own RGB | DMC number "683" not found in dmc-colors.json — using PDF's own RGB | DMC number "858" not found in dmc-colors.json — using PDF's own RGB | DMC number "859" not found in dmc-colors.json — using PDF's own RGB | DMC number "860" not found in dmc-colors.json — using PDF's own RGB | DMC number "861" not found in dmc-colors.json — using PDF's own RGB | DMC number "862" not found in dmc-colors.json — using PDF's own RGB | DMC number "265" not found in dmc-colors.json — using PDF's own RGB | DMC number "266" not found in dmc-colors.json — using PDF's own RGB | DMC number "267" not found in dmc-colors.json — using PDF's own RGB | DMC number "268" not found in dmc-colors.json — using PDF's own RGB | DMC number "269" not found in dmc-colors.json — using PDF's own RGB | DMC number "1044" not found in dmc-colors.json — using PDF's own RGB | DMC number "261" not found in dmc-colors.json — using PDF's own RGB | DMC number "262" not found in dmc-colors.json — using PDF's own RGB | DMC number "263" not found in dmc-colors.json — using PDF's own RGB | DMC number "843" not found in dmc-colors.json — using PDF's own RGB | DMC number "845" not found in dmc-colors.json — using PDF's own RGB | DMC number "846" not found in dmc-colors.json — using PDF's own RGB | DMC number "681" not found in dmc-colors.json — using PDF's own RGB | DMC number "392" not found in dmc-colors.json — using PDF's own RGB | DMC number "393" not found in dmc-colors.json — using PDF's own RGB | DMC number "1040" not found in dmc-colors.json — using PDF's own RGB | DMC number "8581" not found in dmc-colors.json — using PDF's own RGB | DMC number "273" not found in dmc-colors.json — using PDF's own RGB | DMC number "1041" not found in dmc-colors.json — using PDF's own RGB | DMC number "856" not found in dmc-colors.json — using PDF's own RGB | DMC number "233" not found in dmc-colors.json — using PDF's own RGB | DMC number "234" not found in dmc-colors.json — using PDF's own RGB | DMC number "235" not found in dmc-colors.json — using PDF's own RGB | DMC number "399" not found in dmc-colors.json — using PDF's own RGB | DMC number "403" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 107: DMC number "505" not found in dmc-colors.json — using PDF's own RGB | DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 96: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 91: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 83: DMC number "967" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 82: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 70: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 69: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
+- DesignID 61: DMC number "779" not found in dmc-colors.json — using PDF's own RGB
