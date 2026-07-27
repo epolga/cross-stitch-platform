@@ -33,17 +33,56 @@ future sends to answer "who did we send X to, who clicked" precisely.
 
 ## Next session — pick up here first
 
-**Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26): built and
-tested, not yet wired into any UI.** Parser at
-`web/src/lib/pdf-pattern-extractor.ts` + CLI at
+**Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26) — agreed plan, 2026-07-27:**
+
+1. **Step 1 (current step): get the editor's own PDF output (`/api/convert/pdf`)
+   to a quality Olga is happy with.** Olga will review the PDFs the editor
+   currently produces (all 3 chart modes: color+symbol, symbol-only,
+   color-only) and say what needs improving. Do not start Step 2 until
+   she's signed off here.
+   Progress so far (2026-07-27, reviewed against
+   `Stitch26_Kit.pdf`/"Evening Lake" as the reference): cover title switched
+   Helvetica→Times New Roman Bold 30pt + added optional "by {author}" line;
+   cover image resized from ~84%-of-page-height to a contained ~40% box
+   matching the original's proportions; Notes page recolored/refonted to
+   match (Times New Roman, brown info block, blue page-map intro) with the
+   overlap explanation moved to its own caption under the map instead of
+   mixed into the borrowed text; page-map grid cells shrunk from an
+   uncapped fill-all-space size to a fixed ~60×75pt (was stretching almost
+   to the bottom margin); per-chart-page overlap footer reworded to be
+   actionable ("stitch it once") and moved to its own bigger (9pt) centered
+   line above the page number. Not yet tested on a single-page (no
+   overlap/no page-map-grid) design — next step.
+2. **Step 2: batch-run the extractor across all 5000+ catalog designs**,
+   save each design's grid+palette JSON to S3, and add a link/button on
+   each design page that opens that saved representation in the editor —
+   so any existing catalog design (not just a user's own photo upload)
+   becomes editable and re-downloadable as PDF. Every design already has 3
+   published PDFs (color+symbol, symbol, color); each regenerated PDF must
+   look **no worse** than the existing one of the same kind.
+
+Parser at `web/src/lib/pdf-pattern-extractor.ts` + CLI at
 `web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a
 catalog kit PDF into the same grid+palette format `/photo-to-cross-stitch`
-uses. Tested end-to-end (parse → regenerate PDF via the existing
-`/api/convert/pdf` → visually compare) on 3 samples spanning the size range
-(5/50/100 colors, single-page and 8/36-page charts) — all exact matches.
-Full details, algorithm, and open items (not yet wired into a UI/route,
-not yet batched across the catalog, not yet spot-checked on the oldest
-designs, `SYMBOLS[]` overflow untested for >~150-color designs):
+uses. Tested end-to-end (parse → regenerate PDF via `/api/convert/pdf` →
+visually compare) on 3 samples spanning the size range (5/50/100 colors,
+single-page and 8/36-page charts) — all exact matches. Two debug/visual-
+check CLI scripts added 2026-07-27: `web/scripts/preview-pattern.ts`
+(renders a pattern JSON straight to PNG) and
+`web/scripts/render-pdf-from-pattern.ts` (calls the real `/api/convert/pdf`
+route handler directly, no dev server needed).
+
+**Found and fixed 2026-07-27** (deployed, commit `538a78c`): `SYMBOLS[]`
+(`web/src/lib/symbols.ts`) only has 151 distinct glyphs — any palette past
+that index used to collapse every overflow color onto a shared `'?'`
+glyph, making them indistinguishable on the chart. Added
+`symbolForIndex()`, falling back to unique plain numbers instead; fixed in
+both `pdf-pattern-extractor.ts` and `pattern-converter.ts`. Note: no
+catalog design currently in the DB actually exceeds 100 colors, so this
+specific bug couldn't be reproduced live — fixed from code inspection +
+Olga's description, not a confirmed live repro.
+
+Full background/algorithm:
 `docs/plan/web/Catalog PDF-to-Editable Conversion — Feasibility Findings.md`.
 
 ## Open items

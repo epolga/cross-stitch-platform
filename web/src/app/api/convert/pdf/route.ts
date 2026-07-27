@@ -61,6 +61,7 @@ const KX_SK    = MARGIN + 400;    // "Skeins"; values right-aligned +40
 
 const NAVY = rgb(0.04, 0.10, 0.30);
 const OVERLAP_COLOR = rgb(0.85, 0.35, 0.05); // warm orange — distinct from thread colors and gray gridlines
+const NOTES_BROWN = rgb(0.55, 0.27, 0.07); // matches the info-block color in the existing catalog kit PDFs
 
 function col(r: number, g: number, b: number) { return rgb(r / 255, g / 255, b / 255); }
 
@@ -93,10 +94,11 @@ function centerText(page: PDFPage, text: string, y: number, size: number, font: 
 
 export async function POST(request: NextRequest) {
   try {
-    const { grid, palette, title = 'Cross-Stitch Pattern', chartMode = 'symbol', previewImage = null } = await request.json() as {
+    const { grid, palette, title = 'Cross-Stitch Pattern', author = null, chartMode = 'symbol', previewImage = null } = await request.json() as {
       grid: number[][];
       palette: PatternPalette[];
       title?: string;
+      author?: string | null;
       chartMode?: 'symbol' | 'color-symbol' | 'color';
       previewImage?: string | null;
     };
@@ -118,6 +120,11 @@ export async function POST(request: NextRequest) {
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    // Cover title/attribution match the look of the existing catalog kit PDFs
+    // (Times New Roman), which is a different face from the Helvetica used
+    // for the rest of this document (key/chart pages) — left as-is for now.
+    const titleFont = await pdf.embedFont(StandardFonts.TimesRomanBold);
+    const titleFontRegular = await pdf.embedFont(StandardFonts.TimesRoman);
 
     // Rasterize every unique symbol — black always, white only for color-symbol mode
     const uniqueSymbols = [...new Set(usedPalette.map(c => c.symbol))];
@@ -145,14 +152,26 @@ export async function POST(request: NextRequest) {
     {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
 
-      // Title
-      const titleSize = title.length > 30 ? 20 : title.length > 20 ? 24 : 28;
-      centerText(p, title, PAGE_H - MARGIN - 44, titleSize, fontBold, rgb(0.05, 0.05, 0.05));
+      // Title — Times New Roman Bold, matching the existing catalog kit PDFs
+      // (e.g. https://d2o1uvvg91z7o4.cloudfront.net/pdfs/8/Stitch26_Kit.pdf:
+      // 30pt title, 12pt "by", 20pt designer name, all Times New Roman).
+      let y = PAGE_H - MARGIN - 44;
+      const titleSize = title.length > 30 ? 20 : title.length > 20 ? 24 : 30;
+      centerText(p, title, y, titleSize, titleFont, rgb(0.05, 0.05, 0.05));
+
+      if (author) {
+        y -= 18;
+        centerText(p, 'by', y, 12, titleFontRegular, rgb(0.05, 0.05, 0.05));
+        y -= 22;
+        centerText(p, author, y, 20, titleFontRegular, rgb(0.05, 0.05, 0.05));
+      }
+
+      y -= 20;
       const siteUrl = 'https://cross-stitch.com';
       const siteSize = 11;
       const siteW = font.widthOfTextAtSize(siteUrl, siteSize);
       const siteX = (PAGE_W - siteW) / 2;
-      const siteY = PAGE_H - MARGIN - 64;
+      const siteY = y;
       p.drawText(siteUrl, { x: siteX, y: siteY, size: siteSize, font, color: rgb(0.1, 0.3, 0.75) });
       const linkAnnot = pdf.context.obj({
         Type: 'Annot', Subtype: 'Link',
@@ -163,12 +182,16 @@ export async function POST(request: NextRequest) {
       p.node.addAnnot(pdf.context.register(linkAnnot));
 
       // Stitch count line
+      y -= 16;
       const stitchLine = `${cols} × ${rows} stitches · ${usedPalette.length} colors`;
-      centerText(p, stitchLine, PAGE_H - MARGIN - 80, 9, font, rgb(0.55, 0.55, 0.55));
+      centerText(p, stitchLine, y, 9, font, rgb(0.55, 0.55, 0.55));
 
-      const maxW = PAGE_W - MARGIN * 2;
-      const maxH = PAGE_H - MARGIN - 100;
-      const oy = MARGIN;
+      // Cover image box — sized/positioned to match the existing catalog kit
+      // PDFs (a modest ~40%-of-page-height box roughly centered in the lower
+      // half, not a nearly-full-page image touching the bottom margin).
+      const coverImgBoxW = Math.min(453, PAGE_W - MARGIN * 2);
+      const coverImgBoxH = PAGE_H * 0.40;
+      const coverImgTopY = PAGE_H * 0.69;
 
       if (previewImage) {
         // Embed the canvas capture (aida + crosses + shadows) as the cover image
@@ -178,20 +201,21 @@ export async function POST(request: NextRequest) {
           ? await pdf.embedPng(imgBytes)
           : await pdf.embedJpg(imgBytes);
         const { width: iw, height: ih } = embedded.scale(1);
-        const scale = Math.min(maxW / iw, maxH / ih);
+        const scale = Math.min(coverImgBoxW / iw, coverImgBoxH / ih);
         const imgW = iw * scale, imgH = ih * scale;
         p.drawImage(embedded, {
           x: (PAGE_W - imgW) / 2,
-          y: oy,
+          y: coverImgTopY - imgH,
           width: imgW,
           height: imgH,
         });
       } else {
         // Fallback: programmatic X-stitch thumbnail
-        const scale = Math.min(maxW / cols, maxH / rows);
+        const scale = Math.min(coverImgBoxW / cols, coverImgBoxH / rows);
         const thumbW = cols * scale, thumbH = rows * scale;
         const tx = (PAGE_W - thumbW) / 2;
-        p.drawRectangle({ x: tx, y: oy, width: thumbW, height: thumbH, color: rgb(0.96, 0.94, 0.89) });
+        const ty = coverImgTopY - thumbH;
+        p.drawRectangle({ x: tx, y: ty, width: thumbW, height: thumbH, color: rgb(0.96, 0.94, 0.89) });
         const stitchThick = Math.max(0.3, scale * 0.18);
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -199,14 +223,14 @@ export async function POST(request: NextRequest) {
             const pal = palette[ci];
             if (!pal) continue;
             const cx = tx + c * scale;
-            const cy = oy + (rows - r - 1) * scale;
+            const cy = ty + (rows - r - 1) * scale;
             const pad = scale * 0.08;
             const strokeColor = col(pal.r, pal.g, pal.b);
             p.drawLine({ start: { x: cx + pad, y: cy + pad }, end: { x: cx + scale - pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
             p.drawLine({ start: { x: cx + scale - pad, y: cy + pad }, end: { x: cx + pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
           }
         }
-        p.drawRectangle({ x: tx, y: oy, width: thumbW, height: thumbH, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
+        p.drawRectangle({ x: tx, y: ty, width: thumbW, height: thumbH, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
       }
     }
 
@@ -294,11 +318,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Notes + Page map ──────────────────────────────────────────────────────
+    // Layout/colors matched to the existing catalog kit PDFs (Times New Roman
+    // throughout, brown info block, blue "how pages fit together" note) —
+    // e.g. https://d2o1uvvg91z7o4.cloudfront.net/pdfs/8/Stitch26_Kit.pdf.
+    // The only content here with no equivalent in those PDFs is the overlap
+    // explanation, since the original chart pages don't share stitches at
+    // their edges — kept, but as its own small caption under the map instead
+    // of mixed into the borrowed intro text.
     {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
 
-      // Title
-      centerText(p, 'Notes', PAGE_H - MARGIN - 20, 20, fontBold, NAVY);
+      // Title — regular weight in the original, not bold (unlike the cover title)
+      centerText(p, 'Notes', PAGE_H - MARGIN - 20, 20, titleFontRegular, NAVY);
 
       // Info block — 14-count Aida measurements
       const COUNT = 14;
@@ -320,37 +351,37 @@ export async function POST(request: NextRequest) {
         'Stitch Style:  Cross-stitch Using 2 strands',
       ];
 
-      const infoLineH = 15;
-      const infoStartY = PAGE_H - MARGIN - 44;
-      const maxInfoW = Math.max(...infoLines.map(l => font.widthOfTextAtSize(l, 9)));
+      const infoLineH = 16;
+      const infoStartY = PAGE_H - MARGIN - 48;
+      const maxInfoW = Math.max(...infoLines.map(l => titleFontRegular.widthOfTextAtSize(l, 12)));
       const infoX = (PAGE_W - maxInfoW) / 2;
       for (let i = 0; i < infoLines.length; i++) {
         p.drawText(infoLines[i], {
           x: infoX, y: infoStartY - i * infoLineH,
-          size: 9, font, color: NAVY,
+          size: 12, font: titleFontRegular, color: NOTES_BROWN,
         });
       }
 
-      // Intro text for grid
+      // Intro text for grid — matches the original's two-line explanation verbatim
       const hasOverlap = pageCols > 1 || pageRows > 1;
       const introY = infoStartY - infoLines.length * infoLineH - 28;
       const introLines = [
         'Below is a plan showing how the chart pages fit together.',
         'The page number is shown at the top left of each chart page.',
-        ...(hasOverlap
-          ? [`Pages share a ${OVERLAP}-stitch overlap at touching edges, outlined in orange`,
-             'and labeled OVERLAP — those stitches repeat exactly on the next page.']
-          : []),
       ];
-      const introX = (PAGE_W - Math.max(...introLines.map(l => font.widthOfTextAtSize(l, 9)))) / 2;
-      introLines.forEach((line, i) => p.drawText(line, { x: introX, y: introY - i * 14, size: 9, font, color: i >= 2 ? OVERLAP_COLOR : NAVY }));
+      const introX = (PAGE_W - Math.max(...introLines.map(l => titleFontRegular.widthOfTextAtSize(l, 9)))) / 2;
+      introLines.forEach((line, i) => p.drawText(line, { x: introX, y: introY - i * 14, size: 9, font: titleFontRegular, color: NAVY }));
 
       // Grid — cells labeled A:1, B:1, A:2, B:2 …
       const gridTopY   = introY - (introLines.length - 1) * 14 - 18;
       const gridAvailH = gridTopY - MARGIN;
       const gridAvailW = PAGE_W - MARGIN * 2;
-      const cellW = Math.min(200, gridAvailW / pageCols);
-      const cellH = Math.min(200, gridAvailH / pageRows);
+      // Capped well below gridAvailH/gridAvailW — those spans nearly the whole
+      // rest of the page, which stretched the map into a huge block. The
+      // original catalog PDFs use a compact ~53.5x71pt-per-cell map with room
+      // to spare below it; matched here instead of filling all available space.
+      const cellW = Math.min(60, gridAvailW / pageCols);
+      const cellH = Math.min(75, gridAvailH / pageRows);
       const gridTotalW = cellW * pageCols;
       const gridX = MARGIN + (gridAvailW - gridTotalW) / 2;
 
@@ -366,12 +397,28 @@ export async function POST(request: NextRequest) {
             borderColor: rgb(0.15, 0.15, 0.15), borderWidth: 1,
           });
 
-          const lw = font.widthOfTextAtSize(label, 11);
+          const lw = titleFontRegular.widthOfTextAtSize(label, 11);
           p.drawText(label, {
             x: mx + (cellW - lw) / 2, y: my + cellH / 2 - 5,
-            size: 11, font, color: NAVY,
+            size: 11, font: titleFontRegular, color: NAVY,
           });
         }
+      }
+
+      // Our own addition, with no equivalent in the original catalog PDFs:
+      // a small caption under the map explaining the overlap bands, styled
+      // like the footer legend repeated on every chart page rather than
+      // blended into the borrowed intro text above.
+      if (hasOverlap) {
+        const gridBottomY = gridTopY - pageRows * cellH;
+        const overlapNoteLines = [
+          `Orange bands mark a ${OVERLAP}-stitch overlap at touching page edges —`,
+          'those stitches repeat exactly on the neighboring page.',
+        ];
+        const overlapX = (PAGE_W - Math.max(...overlapNoteLines.map(l => font.widthOfTextAtSize(l, 8)))) / 2;
+        overlapNoteLines.forEach((line, i) => p.drawText(line, {
+          x: overlapX, y: gridBottomY - 18 - i * 11, size: 8, font, color: OVERLAP_COLOR,
+        }));
       }
     }
 
@@ -502,10 +549,12 @@ export async function POST(request: NextRequest) {
 
         // Footer legend, repeated on every chart page (not just the Notes page)
         // so the reminder is right where the orange band actually appears.
+        // On its own centered line above the page number (not squeezed next
+        // to it on the same row) so it can be a genuinely legible size
+        // without any risk of the two touching.
         if (pageCols > 1 || pageRows > 1) {
-          p.drawText(`Orange = ${OVERLAP}-stitch overlap (same stitches as the neighboring page)`, {
-            x: MARGIN, y: MARGIN / 2 + 2, size: 6, font, color: OVERLAP_COLOR,
-          });
+          const legendText = `Orange = ${OVERLAP}-stitch overlap with the neighboring page — stitch it once`;
+          centerText(p, legendText, MARGIN / 2 + 13, 9, font, OVERLAP_COLOR);
         }
       }
     }
