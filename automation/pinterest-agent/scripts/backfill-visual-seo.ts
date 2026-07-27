@@ -373,7 +373,12 @@ SUBJECT CLASSIFICATION + BLURB — this is separate from the BODY above and serv
 Output only the structured result — no markdown, no headings.`;
 
   try {
-    const msg = await anthropic.messages.create({
+    // Non-streaming call (no `stream: true`), but the params cast below (needed
+    // because output_config/json_schema isn't in this SDK version's stricter
+    // MessageCreateParams type) makes TS widen create()'s return type to
+    // include the Stream<...> overload too — cast the result back down to the
+    // real (non-stream) Message shape so `.content` resolves.
+    const msg = (await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 700,
       messages: [
@@ -386,7 +391,7 @@ Output only the structured result — no markdown, no headings.`;
         },
       ],
       output_config: { format: { type: "json_schema", schema: RESPONSE_SCHEMA } },
-    } as Anthropic.MessageCreateParams);
+    } as Anthropic.MessageCreateParams)) as Anthropic.Message;
 
     const block = msg.content[0];
     if (block.type !== "text") return null;
