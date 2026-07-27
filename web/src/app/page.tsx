@@ -25,7 +25,7 @@ const faqEntries: FAQEntry[] = [
   {
     question: 'Are the cross-stitch patterns really free?',
     answer:
-      'Yes. Every chart on Cross Stitch Pattern is offered as a free PDF so you can stitch without paying subscriptions or hidden fees.',
+      "Yes. Every chart on Cross Stitch Pattern is offered as a free PDF — no subscriptions, no hidden fees. You'll just need a free account (see below) to download.",
   },
   {
     question: 'Do I need to create an account to download the PDFs?',
