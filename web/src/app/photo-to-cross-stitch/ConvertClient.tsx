@@ -567,10 +567,52 @@ export default function ConvertPage() {
     if (id) loadPatternById(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Offer to resume an unsaved local draft — only when landing fresh (no
-  // ?pattern= id, which loads its own saved/shared state instead)
+  // Auto-load a batch-extracted catalog design from ?catalogPatternId=<designId>
+  // — a read-only starting point (not a user's own saved pattern), so unlike
+  // loadPatternById this deliberately does NOT set savedPatternId: hitting
+  // Save should create a new pattern owned by the current user, not overwrite
+  // the catalog source.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('pattern')) return;
+    const designId = new URLSearchParams(window.location.search).get('catalogPatternId');
+    if (!designId) return;
+    setPatternLoading(true);
+    setPatternLoadError('');
+    fetch(`/api/converter/catalog-pattern/${designId}`)
+      .then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
+        return data;
+      })
+      .then(data => {
+        if (!Array.isArray(data.grid) || !Array.isArray(data.palette)) {
+          throw new Error('Invalid pattern data received');
+        }
+        updateGrid(data.grid);
+        updatePalette(data.palette);
+        setHiddenColors(new Set<number>());
+        setPatternName(data.title ?? '');
+        setCellSize(12);
+        trackEvent('project_reopened', {
+          catalogDesignId: designId,
+          patternWidth: data.width,
+          patternHeight: data.height,
+          colorCount: data.palette.length,
+        });
+      })
+      .catch(e => {
+        console.error('[load catalog pattern]', e);
+        setPatternLoadError(e instanceof Error ? e.message : 'Failed to load catalog pattern');
+        trackEvent('editor_error', { errorCode: 'load_failed', step: 'catalog_pattern_load' });
+        postEditorEvent('editor_error', { errorCode: 'load_failed', step: 'catalog_pattern_load' });
+      })
+      .finally(() => setPatternLoading(false));
+  }, []);
+
+  // Offer to resume an unsaved local draft — only when landing fresh (no
+  // ?pattern= or ?catalogPatternId=, which load their own state instead)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('pattern') || p.get('catalogPatternId')) return;
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (!raw) return;
@@ -1764,11 +1806,6 @@ export default function ConvertPage() {
                 <span className="text-xs font-mono text-gray-600 flex-none w-8 text-right">{cellSize}px</span>
               </div>
 
-            {patternLoading && (
-              <div className="text-xs text-gray-500 px-1 flex items-center gap-2">
-                <span className="animate-spin">⏳</span> Loading pattern…
-              </div>
-            )}
             {patternLoadError && (
               <div className="text-xs text-red-600 px-1 flex items-center justify-between gap-2">
                 <span>⚠ {patternLoadError}</span>
@@ -1817,6 +1854,14 @@ export default function ConvertPage() {
                   .finally(() => setPatternLoading(false));
               }}
             >
+              {patternLoading && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/85 backdrop-blur-sm">
+                  <div className="flex flex-col items-center text-center px-8 py-6">
+                    <span className="text-5xl mb-4 animate-spin">⏳</span>
+                    <p className="text-base font-semibold text-gray-700">Loading pattern…</p>
+                  </div>
+                </div>
+              )}
               {!hasDesign && (
                 <div
                   className="absolute top-0 bottom-0 left-0 flex items-center justify-center z-10 pointer-events-none select-none"

@@ -36,12 +36,12 @@ future sends to answer "who did we send X to, who clicked" precisely.
 **Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26) — agreed plan, 2026-07-27:**
 
 1. **Step 1: get the editor's own PDF output (`/api/convert/pdf`) to a
-   quality Olga is happy with.** Still open — Olga reviews as we go, no
-   formal sign-off yet, but extensively iterated on 2026-07-27 (reviewed
-   against `Stitch26_Kit.pdf`/"Evening Lake" and `Stitch744_Kit.pdf`/"Fox"
-   as references) and looking solid across the size range now (tested 1,
-   2, 4, 6, and 36-page designs — see below).
-   Progress so far: cover title Helvetica→Times New Roman Bold 30pt +
+   quality Olga is happy with. Signed off 2026-07-27** — Olga confirmed
+   "будем считать, что сделано" after reviewing the full cycle of fixes
+   below, tested against `Stitch26_Kit.pdf`/"Evening Lake" and
+   `Stitch744_Kit.pdf`/"Fox" as references, across 1, 2, 4, 6, and 36-page
+   designs. **Next session should start on Step 2.**
+   What shipped: cover title Helvetica→Times New Roman Bold 30pt +
    optional "by {author}" line; cover image resized from ~84%-of-page-
    height to a contained ~40% box; Notes page recolored/refonted to match
    (Times New Roman, brown info block, blue page-map intro), overlap
@@ -72,6 +72,56 @@ future sends to answer "who did we send X to, who clicked" precisely.
    generation/export happens later, on demand, only if/when a user opens
    a design in the editor and chooses to save or download it — not
    preemptively for all 5000+ designs as part of the batch job.
+   **Built and tested end-to-end 2026-07-27** (not yet run at scale — only
+   design 744/"Fox" processed for real so far, plus a 3-design dry-run):
+   - S3 bucket `cross-stitch-editor-designs` created (us-east-1), **fully
+     private** (Block Public Access on) — Olga's call: unlike the public
+     kit-PDF bucket, this one is reachable only through the site's own
+     server. No extra IAM policy needed — the EB EC2 role
+     (`aws-elasticbeanstalk-ec2-role`) already has `AmazonS3FullAccess`.
+   - `web/scripts/batch-extract-catalog-patterns.ts` — loops
+     `DesignsByID-index` with `ScanIndexForward: false` (newest DesignID
+     first, per Olga's request), skips designs that already have
+     `EditorPatternKey` (marker attribute) unless `--force`, uploads
+     `patterns/{designId}.json` to the bucket, stamps
+     `EditorPatternKey`/`LastModifiedAt`. Flags: `--report`,
+     `--designIds=`, `--limit`, `--all`, `--dry-run`, `--force`,
+     `--concurrency` (default 3) — same shape as
+     `automation/pinterest-agent/scripts/backfill-visual-seo.ts`. Needed a
+     `withRetry` wrapper (4 attempts, exponential backoff) around every
+     DDB/S3/fetch call after two transient `ETIMEDOUT`s killed early test
+     runs — a full-catalog run makes thousands of sequential network
+     calls, so a single blip can't be allowed to abort the whole thing.
+   - New route `web/src/app/api/converter/catalog-pattern/[designId]/route.ts`
+     — the only way to read a catalog pattern's JSON: looks up the
+     design's `EditorPatternKey` via `getDesignById`, fetches it from S3
+     server-side with the app's own credentials, re-serves it to the
+     client. No direct/public S3 or CloudFront URL exists for these files.
+   - `web/src/app/types/design.ts` + `web/src/lib/data-access.ts` —
+     `Design.EditorPatternKey?: string`, mapped from the DDB attribute in
+     the same cache-building scan `SeoSubjectBlurb`/`CanonicalDesignId`
+     already go through.
+   - `ConvertClient.tsx` — new `?catalogPatternId=<designId>` URL param
+     (parallel to the existing `?pattern=<uuid>` for a user's own saved
+     patterns), fetches from the new route and loads `grid`/`palette`/
+     `title` into the editor. Deliberately does NOT set `savedPatternId`
+     — this is a read-only starting point, so hitting Save creates a new
+     pattern owned by the current user rather than overwriting the
+     catalog source.
+   - `web/src/app/designs/[designId]/page.tsx` — a second CTA button,
+     "Open this pattern in the editor", shown only when
+     `design.EditorPatternKey` is set (cloned from the existing "Turn
+     your own photo into a pattern" `EditorCTAButton`).
+   - Verified end-to-end in the browser: design 744 ("Fox") page → new
+     button → editor loads the actual 27×36/9-color pattern from S3
+     through the new route, no console errors.
+   - **Not yet done**: running the batch beyond the single test design —
+     next session should decide a batch size/schedule (`--all` is ~5271
+     designs; consider chunking with `--limit`/checking `--report`
+     between runs) and review the `withWarnings` list the script prints
+     (designs whose extraction produced a warning — worth a manual look
+     before trusting them, same as the Fox/Zebra bugs found earlier this
+     session).
 
 Parser at `web/src/lib/pdf-pattern-extractor.ts` + CLI at
 `web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a

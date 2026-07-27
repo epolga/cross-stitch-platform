@@ -33,6 +33,11 @@ export interface Design {
     // last wrote SEO/content fields on this design. Used as sitemap <lastmod>
     // instead of "now" so Google can tell real changes from unchanged pages.
     LastModifiedAt?: string;
+    // S3 object key (in the private cross-stitch-editor-designs bucket) of this
+    // design's grid+palette JSON, once the catalog batch-extractor has produced
+    // one. Presence of this field is what gates showing "Open in editor" on the
+    // design page — absence just means it hasn't been processed yet.
+    EditorPatternKey?: string;
     // Computed facets — derived at cache load, not stored in DDB
     subject?: string;
     orientation?: 'portrait' | 'landscape' | 'square';

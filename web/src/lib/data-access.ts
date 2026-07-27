@@ -204,6 +204,7 @@ async function initializeCache(): Promise<void> {
               CanonicalDesignId: item.CanonicalDesignId?.N ? parseInt(item.CanonicalDesignId.N) : undefined,
               SeoSubjectBlurb: item.SeoSubjectBlurb?.S || undefined,
               LastModifiedAt: item.LastModifiedAt?.S || undefined,
+              EditorPatternKey: item.EditorPatternKey?.S || undefined,
             };
             const w = design.Width;
             const h = design.Height;

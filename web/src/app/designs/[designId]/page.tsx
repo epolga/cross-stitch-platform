@@ -339,7 +339,7 @@ export default async function DesignPage({ params }: Props) {
               </div>
             )}
 
-            <div className="my-5 flex justify-center md:justify-start">
+            <div className="my-5 flex flex-wrap gap-3 justify-center md:justify-start">
               <EditorCTAButton
                 href={`/photo-to-cross-stitch?source=design_page&designId=${design.DesignID}`}
                 label="Turn your own photo into a pattern"
@@ -347,6 +347,15 @@ export default async function DesignPage({ params }: Props) {
                 eventParams={{ designId: design.DesignID, source: 'design_page' }}
                 className="inline-block px-5 py-2.5 bg-rose-600 text-white text-sm font-medium rounded-lg hover:bg-rose-700 transition-colors"
               />
+              {design.EditorPatternKey && (
+                <EditorCTAButton
+                  href={`/photo-to-cross-stitch?source=design_page_catalog&catalogPatternId=${design.DesignID}`}
+                  label="Open this pattern in the editor"
+                  eventName="design_editor_cta_clicked"
+                  eventParams={{ designId: design.DesignID, source: 'design_page_catalog' }}
+                  className="inline-block px-5 py-2.5 border-2 border-rose-600 text-rose-600 text-sm font-medium rounded-lg hover:bg-rose-50 transition-colors"
+                />
+              )}
             </div>
           </div>
 
