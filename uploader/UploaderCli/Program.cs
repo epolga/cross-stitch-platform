@@ -40,6 +40,7 @@ if (args.Length < 1)
     Console.Error.WriteLine("Usage: UploaderCli <batchFolderPath> [--yes]");
     Console.Error.WriteLine("       UploaderCli send-admin-test");
     Console.Error.WriteLine("       UploaderCli send-newsletter --months <N> [--yes]");
+    Console.Error.WriteLine("       UploaderCli send-announcement [--months <N>] [--yes]");
     return 2;
 }
 
@@ -59,6 +60,20 @@ if (string.Equals(args[0], "send-newsletter", StringComparison.OrdinalIgnoreCase
     }
     bool newsletterAutoYes = args.Contains("--yes");
     await SendNewsletterAsync(months, newsletterAutoYes);
+    return 0;
+}
+
+if (string.Equals(args[0], "send-announcement", StringComparison.OrdinalIgnoreCase))
+{
+    int announceMonthsIdx = Array.IndexOf(args, "--months");
+    int announceMonths = 3; // matches MainWindow.xaml.cs's SendAnnouncementEmailsAsync default cutoff
+    if (announceMonthsIdx >= 0 && (announceMonthsIdx + 1 >= args.Length || !int.TryParse(args[announceMonthsIdx + 1], out announceMonths)))
+    {
+        Console.Error.WriteLine("Usage: UploaderCli send-announcement [--months <N>] [--yes]");
+        return 2;
+    }
+    bool announceAutoYes = args.Contains("--yes");
+    await SendAnnouncementBatchAsync(announceMonths, announceAutoYes);
     return 0;
 }
 
@@ -747,6 +762,150 @@ static string AppendQueryParameters(string url, IReadOnlyList<string> parameters
     }
     string separator = baseUrl.Contains("?") ? "&" : "?";
     return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
+}
+
+// ---------------- send-announcement (mirrors MainWindow.xaml.cs's SendAnnouncementEmailsAsync /
+// RenderAnnouncementEmailContent) ----------------
+
+static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
+{
+    string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+    if (string.IsNullOrEmpty(sender))
+        throw new InvalidOperationException("SenderEmail must be configured.");
+
+    var dynamoDbClient = new AmazonDynamoDBClient();
+    var sesClient = new AmazonSimpleEmailServiceClient();
+    var emailHelper = new EmailHelper();
+    var linkHelper = HelperFactory.CreatePatternLinkHelper();
+    string? sesConfigurationSetName = ConfigurationManager.AppSettings["SesConfigurationSetName"];
+    string sendLogTable = ConfigurationManager.AppSettings["EmailSendLogTableName"] ?? "EmailSendLog";
+
+    DateTime cutoffUtc = DateTime.UtcNow.AddMonths(-months);
+    Console.WriteLine($"Filter: verified + subscribed + not BotSuspect + visited (LastSeenAt) since {cutoffUtc:yyyy-MM-dd}");
+
+    var allRecipients = await FetchAllUserEmailsAsync(dynamoDbClient, onlyVerified: true, onlySubscribed: true, minLastSeenAtUtc: cutoffUtc);
+    var eligibleRecipients = allRecipients.Where(r => !string.IsNullOrWhiteSpace(r.UnsubscribeToken)).ToList();
+    int skippedNoToken = allRecipients.Count - eligibleRecipients.Count;
+
+    Console.WriteLine($"Matched: {allRecipients.Count} (verified+subscribed+not bot+recently visited)");
+    Console.WriteLine($"Skipped (no unsubscribe token): {skippedNoToken}");
+    Console.WriteLine($"Will send to: {eligibleRecipients.Count} recipient(s).");
+
+    if (eligibleRecipients.Count == 0)
+    {
+        Console.WriteLine("No eligible recipients. Nothing to send.");
+        return;
+    }
+
+    if (!autoYes)
+    {
+        Console.Write($"Type 'yes' to send the Announcement email to {eligibleRecipients.Count} real recipients: ");
+        string? answer = Console.ReadLine();
+        if (!string.Equals(answer?.Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Aborted. Nothing was sent.");
+            return;
+        }
+    }
+
+    var htmlTemplate = LoadAnnouncementHtmlTemplate();
+    var textTemplate = LoadAnnouncementTextTemplate();
+    string editorUrl = $"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
+    string changelogUrl = $"{linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
+    string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+
+    string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "send-log-announcement.jsonl");
+    logPath = Path.GetFullPath(logPath);
+    Console.WriteLine($"Logging each send (email + SES MessageId) to {logPath}");
+
+    var stopwatch = Stopwatch.StartNew();
+    int sent = 0;
+    foreach (var recipient in eligibleRecipients)
+    {
+        string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, recipient.UnsubscribeToken!);
+        var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+
+        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrl, linkHelper.SiteBaseUrl, unsubscribeUrl, changelogUrl);
+        string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
+        await LogSendAsync(dynamoDbClient, sendLogTable, logPath, recipient.Email, recipient.Cid ?? string.Empty, messageId, "user", 0, eid);
+
+        sent++;
+        if (sent % 25 == 0 || sent == eligibleRecipients.Count)
+            Console.WriteLine($"Sent {sent}/{eligibleRecipients.Count} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}");
+    }
+
+    Console.WriteLine($"Done. Sent {sent}/{eligibleRecipients.Count} in {stopwatch.Elapsed:hh\\:mm\\:ss}.");
+}
+
+static EmailTemplateDefinition LoadAnnouncementHtmlTemplate() =>
+    LoadAnnouncementTemplate("AnnouncementHtmlEmailTemplatePath", "Templates\\AnnouncementEmailHtml.txt");
+
+static EmailTemplateDefinition LoadAnnouncementTextTemplate() =>
+    LoadAnnouncementTemplate("AnnouncementTextEmailTemplatePath", "Templates\\AnnouncementEmailText.txt");
+
+static EmailTemplateDefinition LoadAnnouncementTemplate(string configKey, string defaultPath)
+{
+    string[] requiredSections = { "Subject", "Greeting", "Body1", "EditorLink", "Body2", "Unsubscribe", "Closing", "Signature" };
+    string configuredPath = ConfigurationManager.AppSettings[configKey] ?? defaultPath;
+    string resolvedPath = ResolveTemplatePath(configuredPath);
+    if (!File.Exists(resolvedPath))
+        throw new FileNotFoundException($"Email template file was not found: {resolvedPath}", resolvedPath);
+
+    var sections = ParseTemplateSections(File.ReadAllText(resolvedPath), resolvedPath);
+    foreach (var required in requiredSections)
+    {
+        if (!sections.TryGetValue(required, out var value) || string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Email template section '{required}' is missing or empty in {resolvedPath}.");
+    }
+    return new EmailTemplateDefinition(resolvedPath, sections);
+}
+
+static RenderedEmailContent RenderAnnouncementEmailContent(
+    EmailTemplateDefinition htmlTemplate,
+    EmailTemplateDefinition textTemplate,
+    string? firstName,
+    string editorUrl,
+    string? siteUrl,
+    string? unsubscribeUrl,
+    string? changelogUrl = null)
+{
+    Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
+    replacements["<editor_url>"] = editorUrl;
+    replacements["<changelog_url>"] = changelogUrl ?? string.Empty;
+    replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+    string subject = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Subject"), replacements);
+    string greeting = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Greeting"), replacements);
+    string body1 = htmlTemplate.GetRequiredSection("Body1");
+    string editorLink = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("EditorLink"), replacements);
+    string body2 = htmlTemplate.GetRequiredSection("Body2");
+    string unsubscribe = RenderOptionalTemplateSection(htmlTemplate.GetRequiredSection("Unsubscribe"), replacements, unsubscribeUrl);
+    string closing = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Closing"), replacements);
+    string signature = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Signature"), replacements);
+    string signatureHtml = RenderHtmlSignature(signature, siteUrl);
+
+    string htmlBody =
+        JoinHtmlSections(greeting, body1) +
+        editorLink +
+        JoinHtmlSections(body2, unsubscribe, closing) +
+        signatureHtml;
+
+    Dictionary<string, string> textReplacements = CreateCommonTemplateReplacements(firstName);
+    textReplacements["<editor_url>"] = editorUrl;
+    textReplacements["<changelog_url>"] = changelogUrl ?? string.Empty;
+    textReplacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+
+    string tGreeting = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Greeting"), textReplacements);
+    string tBody1 = textTemplate.GetRequiredSection("Body1");
+    string tEditorLink = ReplaceTemplateTokens(textTemplate.GetRequiredSection("EditorLink"), textReplacements);
+    string tBody2 = textTemplate.GetRequiredSection("Body2");
+    string tUnsubscribe = RenderOptionalTemplateSection(textTemplate.GetRequiredSection("Unsubscribe"), textReplacements, unsubscribeUrl);
+    string tClosing = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Closing"), textReplacements);
+    string tSignature = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Signature"), textReplacements);
+
+    string textBody = JoinTextSections(tGreeting, tBody1, tEditorLink, tBody2, tUnsubscribe, tClosing, tSignature);
+
+    return new RenderedEmailContent(subject, textBody, htmlBody);
 }
 
 // ---------------- send-newsletter (mirrors MainWindow.xaml.cs's SendNotificationEmailsAsync /

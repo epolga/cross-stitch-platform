@@ -1,37 +1,23 @@
 [Subject]
-You spoke, I listened — here's what changed
+Every pattern in the catalog can now open right in the editor
 
 [Greeting]
 Hi [FName],
 
 [Body1]
-A little while back, I asked some of my friends — the people who already know my work — to try the new pattern editor and tell me, honestly, what felt off.
+Something I've wanted to build for a long time is finally live: every design in the catalog can now be opened directly in the pattern editor.
 
-You did. And I want you to know I read every single word.
+Until now, the editor was really for one thing — turning your own photo into a brand-new pattern. But quite a few of you asked for a way to open a design you found on the site the same way, so you could tweak it before you stitch: swap a color that doesn't quite match your floss stash, adjust the size, hide colors while you work, or just make it a little more yours.
 
-Since then, thanks entirely to what you told me, I've fixed:
-
-Drawing a diagonal line now follows your mouse at a real angle instead of stair-stepping — no more fighting the grid just to draw a simple line.
-
-Dragging a photo straight out of Google (or almost any other site) into the editor now actually works — before, it silently did nothing.
-
-The Save and Download buttons no longer overlap on a phone screen — a small thing, but I know it was blocking real work.
-
-Saved patterns now remember exactly which colors you had hidden, so picking up where you left off actually works the way it should.
+Now you can. Just open any design's page and look for the new button: "Open this pattern in the editor." One click, and the whole chart is right there, fully editable.
 
 [EditorLink]
-👉 Come see it for yourself: <editor_url>
-
-📋 Full list of what changed: <changelog_url>
+👉 Browse the catalog and try it on a design you love: <editor_url>
 
 [Body2]
-None of this happened because I guessed what to fix. It happened because you told me.
+Getting here took some quiet, unglamorous work behind the scenes — converting thousands of existing patterns, one by one, into a format the editor can actually open, and checking each one for accuracy. A handful are still stubborn and I'm still chasing those down, so if you open a design and something looks off, please tell me — you'll be helping me catch the last few stragglers.
 
-So please — keep telling me. If something still feels clunky, confusing, or just wrong, I want to hear about it. And if you have an idea, however small or however wild it sounds, I want that too.
-
-You can leave a note through the feedback button inside the editor, or just hit Reply — I read every message myself.
-
-Thank you for being the kind of friend who tells me the truth instead of just being polite about it. It's made this editor genuinely better.
+As always, this happened because you asked for it. Keep telling me what you'd change next — through the feedback button inside the editor, or just hit Reply. I read every message myself.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:

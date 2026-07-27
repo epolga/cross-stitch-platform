@@ -131,6 +131,14 @@ if (-not $fnExists) {
         --region $REGION | Out-Null
     if ($LASTEXITCODE -ne 0) { Write-Error "update-function-code failed"; exit 1 }
 
+    # The code update above returns as soon as AWS accepts the request, but
+    # applies asynchronously — calling update-function-configuration right
+    # after can hit "ResourceConflictException: An update is in progress"
+    # (observed 2026-07-27). Wait for it to actually finish first.
+    Write-Host "  Waiting for code update to finish applying..." -ForegroundColor Yellow
+    aws lambda wait function-updated --function-name $FUNCTION_NAME --region $REGION
+    if ($LASTEXITCODE -ne 0) { Write-Error "wait function-updated failed"; exit 1 }
+
     aws lambda update-function-configuration `
         --function-name $FUNCTION_NAME `
         --runtime "nodejs22.x" `
