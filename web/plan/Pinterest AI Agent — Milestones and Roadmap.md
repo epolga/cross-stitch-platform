@@ -207,11 +207,20 @@ Future versions should also reason about:
 
 ## Status
 
+**Deprioritized 2026-07-27 — not relevant.** Olga: "Пинтерест не стоит
+внимания" (Pinterest isn't worth the attention), consistent with her
+2026-07-11 decision to cut Pinterest ad spend to $0 (unprofitable, ROI
+~-₪315/29 days). The remaining DynamoDB historical-memory layer below is
+on hold indefinitely — local JSON + anomaly detection already cover the
+practical need, and the underlying channel this milestone optimizes for
+isn't being invested in further.
+
 Partially completed (local JSON layer + anomaly detection done; DynamoDB
-historical-memory layer still planned). **Updated 2026-07-26** — anomaly
-detection was previously listed as remaining work here; it has since been
-built and is running live as pipeline steps 6-7 (`anomalyDetector.ts` /
-`anomalyNotifier.ts`, notifications per Milestone 8).
+historical-memory layer still planned, now on hold — see above).
+**Updated 2026-07-26** — anomaly detection was previously listed as
+remaining work here; it has since been built and is running live as
+pipeline steps 6-7 (`anomalyDetector.ts` / `anomalyNotifier.ts`,
+notifications per Milestone 8).
 
 ## Completed work
 
@@ -298,6 +307,12 @@ Completed (Version 1). See the matching "Design-Level Intelligence Layer" sectio
 Album caption is used as the temporary theme/category field. Richer per-design metadata (theme, style, subject, colors) is deferred to a future iteration.
 
 ## Remaining work for V2
+
+**Deprioritized 2026-07-27 — not relevant**, same call as Milestone 5:
+Olga has concluded Pinterest isn't worth further attention (consistent
+with the 2026-07-11 decision to cut Pinterest ad spend as unprofitable).
+This V2 work is specifically about surfacing/improving Pinterest per-pin
+performance analysis, so it's on hold indefinitely along with it.
 
 * **surface AI design analysis in the daily email** — the analysis runs and saves to S3/DDB but is never shown to the user; add a section to the daily summary email (or a separate weekly digest) with top albums, underperforming albums, and design directions to create
 
@@ -480,7 +495,11 @@ Replace the plain text search sidebar with an AI-powered hero search bar on the 
 
 ## Status
 
-Future.
+**Deprioritized 2026-07-27 — not relevant.** Same call as Milestone 5/6b:
+Olga has concluded Pinterest isn't worth further attention, so expanding
+the same ad-optimization framework to more platforms (Meta, Reddit,
+Google Ads, TikTok) isn't justified either. Off the roadmap indefinitely,
+not just "Future."
 
 ## Planned platforms
 
@@ -618,5 +637,5 @@ In active priority order:
 
 * **Site Technology** — see `Cross-Stitch.com — Site Technology Milestones.md` (S1–S8)
 
-* Milestone 11 — Cross-platform expansion
+* ~~Milestone 11 — Cross-platform expansion~~ — deprioritized 2026-07-27, see Milestone 11 above
 

@@ -21,17 +21,94 @@ once there's Ann-voiced content to point it at.
 
 ## Active work
 
-Two mass sends went out recently: the design-spotlight newsletter ("Lady of
+Three mass sends so far: the design-spotlight newsletter ("Lady of
 Perpetual Love") on 2026-07-24 (841/841, one complaint handled, SES
-suppression + message-id logging added), and the Announcement email ("You
-spoke, I listened") confirmed sent 2026-07-25 (real send was actually ~2
-weeks before that — 2026-07-25 was when Olga confirmed it to Claude, not
-the send date; exact original send date not recorded). Both need follow-up
-metrics checked (see Open items below). Per-campaign send/entry tracking
+suppression + message-id logging added; follow-up checked 2026-07-27,
+healthy — see Open item #8), the Announcement email ("You spoke, I
+listened") confirmed sent 2026-07-25 (real send was actually ~2 weeks
+before that; exact original send date not recorded, follow-up
+unverifiable), and a new Announcement send 2026-07-27 — "Every pattern in
+the catalog can now open right in the editor" (announces the Step 2 work
+above), sent to 723/723 eligible recipients, 0 errors, via a new
+`UploaderCli send-announcement` CLI command (the GUI's mass-send button
+had no headless equivalent). One address bounced via the SES account
+suppression list (`benoit_stb@yahoo.com`, pre-existing complaint from the
+07-24 newsletter, not a new complaint). Found+fixed a real bug while
+reviewing that bounce notice: a literal `<br/>` tag in the Announcement
+HTML template's Unsubscribe section was rendering as visible text instead
+of a line break (`HtmlEncode` runs before newline→`<br/>` conversion, so a
+raw tag in the template leaks through escaped) — fixed for future sends,
+already-sent copies can't be recalled. Per-campaign send/entry tracking
 (`EmailEntryEvents` + `EmailSendLog`, built 2026-07-26) now exists for
-future sends to answer "who did we send X to, who clicked" precisely.
+future sends to answer "who did we send X to, who clicked" precisely; the
+07-27 Announcement send is the first real exercise of `EmailSendLog` via
+this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
+
+**Milestone S5 remaining work (noted 2026-07-27 for next session):**
+differentiate the homepage "Based on your browsing" personalization
+(`PersonalizedSection.tsx` / `/api/personalized`) beyond generic
+embedding-similarity. Today it returns one undifferentiated pool of up to
+12 nearest neighbors (round-robin across the last 5 viewed designs' `getSimilarIds`
+lists). Planned categories, not yet built: simpler alternatives (fewer
+colors/smaller size), comparable color-palette matches, larger/smaller
+versions of the same subject. Priority: medium — doesn't block anything,
+pure quality improvement on an already-live feature.
+
+**Milestone S6 first step (noted 2026-07-27 for next session):** before
+any prefetch/`content-visibility` work, measure current real navigation
+performance — PageSpeed and Core Web Vitals (LCP, INP, CLS) on
+representative pages (homepage, design page, albums) — so later changes
+have a real baseline to compare against, per the doc's own caution
+("introduce only after measuring current navigation performance").
+
+**Quick wins from the `web/plan/*_ChatGPT.md` docs (mined 2026-07-27,
+see below for source-doc note) — all small enough for one session:**
+
+1. **Pattern-quality feedback widget** — after generation, ask "Are you
+   happy with this pattern? Yes/Mostly/No", with a reason picklist on
+   "No". Distinct from the existing `FeatureRequestDialog` (that asks
+   feature *importance*, not output *quality*) — no overlap. Log via the
+   existing `editor-events.ts` pipeline (new event type).
+2. **1-2 new analytics funnel events** — e.g. "generated a second pattern
+   on a return visit". Event infrastructure (`logEditorEvent`, DDB table,
+   admin dashboard) already exists; just add the bounded event + a
+   milestone check.
+3. **Ann story-timeline file** — new `ann_story_timeline.md` companion to
+   `Ann_Persona_and_Newsletter_Content.md`: a dated log of which
+   persona facts/events have already been published, plus a "not yet
+   mentioned" list. Directly serves the Current goal (Ann blog voice).
+4. **PDF footer fingerprint** — one line on generated PDFs, e.g.
+   `cross-stitch.com · Pattern #ID · Download ID`. Forensic only, not DRM.
+5. **Catalog metadata consistency-check script** — one-off script
+   comparing DB metadata vs. rendered page vs. PDF dimensions, flagging
+   mismatches (known issue class: contradicting registration
+   instructions, mismatched sizes).
+6. **AI-decision framework as a standing doc** — fold
+   `AI_Product_Decision_Guide_ChatGPT.md`'s checklist (pre-mortem,
+   fact/inference/hypothesis labeling, decision gate) into an existing
+   planning doc as a standing protocol for future product calls.
+   Documentation-only.
+
+Source note: these came from reviewing 7 untracked `web/plan/*_ChatGPT.md`
+files (ChatGPT-generated recommendations, not yet acted on). Their
+own priority-1 recommendation ("save/reopen projects" and "customize an
+existing catalog design") turned out to already be built (shipped
+2026-07-27, see Step 2 below) — those docs are partially stale. A
+Pinterest-pin-format suggestion in the same docs was skipped as
+out-of-scope per the 2026-07-27 Pinterest deprioritization (see
+`Pinterest AI Agent — Milestones and Roadmap.md`, Milestones 5/6b/11).
+Bigger items from the same docs
+(competitor benchmark, stitch-progress tracker, OXS import/export,
+backstitch/special stitches, anti-scraping S3/CloudFront migration, new
+SEO landing pages, retention-analytics overhaul, text-to-pattern) were
+judged too large for one session — noted but not scheduled.
+
+The catalog PDF-to-editable conversion (Steps 1 and 2 below) is complete
+and shipped (batch run finished, announcement sent) — remaining follow-ups
+(134 hard failures, DMC-data warnings, Announcement send metrics) are
+optional cleanup, not gating.
 
 **Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26) — agreed plan, 2026-07-27:**
 
@@ -115,13 +192,17 @@ future sends to answer "who did we send X to, who clicked" precisely.
    - Verified end-to-end in the browser: design 744 ("Fox") page → new
      button → editor loads the actual 27×36/9-color pattern from S3
      through the new route, no console errors.
-   - **Not yet done**: running the batch beyond the single test design —
-     next session should decide a batch size/schedule (`--all` is ~5271
-     designs; consider chunking with `--limit`/checking `--report`
-     between runs) and review the `withWarnings` list the script prints
-     (designs whose extraction produced a warning — worth a manual look
-     before trusting them, same as the Fox/Zebra bugs found earlier this
-     session).
+   - **Full batch run completed 2026-07-27** (`--all`, 5271 designs,
+     descending DesignID): 5136 ok / 134 failed / 364 warnings. Failure/
+     warning breakdown written to
+     `docs/web/catalog-pattern-extraction-issues.md` (commit `532bcad`).
+     Not yet investigated: the 134 hard failures (72 no-color-key-page, 44
+     no-chart-page, 17 HTTP 403, 1 HTTP 503) or the dominant warning cause
+     (3 missing DMC numbers — 779, 967, 505 — would resolve ~96% of the
+     364 warnings, per code inspection; not yet fixed or re-run).
+   - Daily editor-analytics summary now also tracks `catalog_pattern_opens`
+     (`editor_opened` events with `source=design_page_catalog`) — commit
+     `832fe15`.
 
 Parser at `web/src/lib/pdf-pattern-extractor.ts` + CLI at
 `web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a
@@ -227,11 +308,12 @@ Full background/algorithm:
    exact send date was never recorded and the new EmailSendLog tracking
    postdates it. Not worth further digging unless the exact send date
    surfaces some other way.
-9. **`EmailSendLog` real-send verification** — built and deployed
-   2026-07-26 (UploaderCli side), but not yet exercised by an actual
-   newsletter send. Verify end-to-end (via
-   `check-email-campaign.ts`/`check-email-recipient.ts`) once the next
-   newsletter goes out.
+9. **`EmailSendLog` real-send verification** — built 2026-07-26, first
+   exercised for real by the 2026-07-27 Announcement send (723 rows via the
+   new `send-announcement` CLI path). Not yet verified end-to-end — run
+   `check-email-campaign.ts`/`check-email-recipient.ts` against that send's
+   `eid` to confirm the rows look right, still also pending for an actual
+   newsletter send.
 10. **AI-tools-scan first real trigger** — built and deployed 2026-07-26
     to the daily Lambda pipeline, gated on day-of-month === 26. Verified
     via manual local test runs only so far; first real scheduled trigger is
@@ -267,6 +349,11 @@ Full background/algorithm:
     it against the known confirmed/false-positive pairs already on file in
     `reports/duplicate-designs-visual.json` before rewiring the real
     pipeline on it.
+13. **2026-07-27 Announcement send follow-up** — sent to 723/723, 0 errors
+    (see Active work above). Not yet checked: GA4 traffic to
+    `/XStitch-Charts.aspx` and `catalog_pattern_opens` in the daily editor
+    summary for a post-send bump; SES complaint/bounce rate for this batch
+    specifically (only the one pre-existing suppression seen so far).
 
 ## Done when
 
@@ -282,3 +369,4 @@ Full background/algorithm:
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
 - [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
+- [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
