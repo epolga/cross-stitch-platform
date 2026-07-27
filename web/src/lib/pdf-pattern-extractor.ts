@@ -128,13 +128,27 @@ function parseChartPage(stream: string): ChartPageData | null {
   const winCols = Math.round(parseFloat(bgMatch[1]) / 100);
   const winRows = Math.round(parseFloat(bgMatch[2]) / 100);
 
-  const stepRe = /([\-\d.]+)\s+([\-\d.]+)\s+cm\s+\/(\d+)\s+Do/g;
-  let x = 0, y = 0, m: RegExpExecArray | null;
+  // The main grid is a flat run of "dx dy cm /N Do" steps with no q/Q between
+  // them. Backstitch decoration markers (small filled French-knot/direction
+  // triangles, each with its own symbol) are drawn later in the same stream
+  // but wrapped in their own nested q ... Q — same "cm ... Do" shape, so a
+  // depth-blind regex mistakes them for extra grid steps and corrupts the
+  // cumulative cursor for every real cell after them (confirmed on Fox1.scc:
+  // its lone "black" cross-stitch cell was actually one of these markers,
+  // black only being used for backstitch in the original). Track q/Q depth
+  // and only accumulate steps at the same depth as the first real one.
+  const tokenRe = /(q|Q)|([\-\d.]+)\s+([\-\d.]+)\s+cm\s+\/(\d+)\s+Do/g;
+  let x = 0, y = 0, depth = 0, baselineDepth: number | null = null;
+  let m: RegExpExecArray | null;
   const cells: ChartPageData['cells'] = [];
-  while ((m = stepRe.exec(stream)) !== null) {
-    x += parseFloat(m[1]);
-    y += parseFloat(m[2]);
-    cells.push({ col: Math.round(x / 100), row: Math.round(y / 100), symbol: parseInt(m[3], 10) });
+  while ((m = tokenRe.exec(stream)) !== null) {
+    if (m[1] === 'q') { depth++; continue; }
+    if (m[1] === 'Q') { depth--; continue; }
+    if (baselineDepth === null) baselineDepth = depth;
+    if (depth !== baselineDepth) continue; // nested decoration marker, not a grid step
+    x += parseFloat(m[2]);
+    y += parseFloat(m[3]);
+    cells.push({ col: Math.round(x / 100), row: Math.round(y / 100), symbol: parseInt(m[4], 10) });
   }
 
   return { pageN, pageM, pageCol, pageRow, winCols, winRows, cells };

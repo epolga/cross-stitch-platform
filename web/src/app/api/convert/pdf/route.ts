@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts, PDFString, degrees } from 'pdf-lib';
 import type { PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { renderSymbolToPng } from '@/lib/server-symbol-renderer';
+import { renderCoverThumbnailPng } from '@/lib/server-cover-thumbnail';
 
 export const dynamic = 'force-dynamic';
 
@@ -210,26 +211,21 @@ export async function POST(request: NextRequest) {
           height: imgH,
         });
       } else {
-        // Fallback: programmatic X-stitch thumbnail
-        const scale = Math.min(coverImgBoxW / cols, coverImgBoxH / rows);
-        const thumbW = cols * scale, thumbH = rows * scale;
+        // Fallback: the same Aida + shadowed-cross + fabric-hole recipe
+        // PatternCanvas.tsx's capturePreview() uses client-side (ported to
+        // @napi-rs/canvas), for when there's no live capture to embed — e.g.
+        // batch-regenerating catalog PDFs from the extractor. Rendered at a
+        // fixed 6-20px/cell resolution independent of the print box, same as
+        // the client; large designs' texture just shrinks past the point of
+        // being visible once scaled to fit, rather than needing a cutoff.
+        const thumbPng = renderCoverThumbnailPng(grid, palette);
+        const thumbImg = await pdf.embedPng(thumbPng);
+        const { width: iw, height: ih } = thumbImg.scale(1);
+        const scale = Math.min(coverImgBoxW / iw, coverImgBoxH / ih);
+        const thumbW = iw * scale, thumbH = ih * scale;
         const tx = (PAGE_W - thumbW) / 2;
         const ty = coverImgTopY - thumbH;
-        p.drawRectangle({ x: tx, y: ty, width: thumbW, height: thumbH, color: rgb(0.96, 0.94, 0.89) });
-        const stitchThick = Math.max(0.3, scale * 0.18);
-        for (let r = 0; r < rows; r++) {
-          for (let c = 0; c < cols; c++) {
-            const ci = grid[r][c];
-            const pal = palette[ci];
-            if (!pal) continue;
-            const cx = tx + c * scale;
-            const cy = ty + (rows - r - 1) * scale;
-            const pad = scale * 0.08;
-            const strokeColor = col(pal.r, pal.g, pal.b);
-            p.drawLine({ start: { x: cx + pad, y: cy + pad }, end: { x: cx + scale - pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
-            p.drawLine({ start: { x: cx + scale - pad, y: cy + pad }, end: { x: cx + pad, y: cy + scale - pad }, thickness: stitchThick, color: strokeColor });
-          }
-        }
+        p.drawImage(thumbImg, { x: tx, y: ty, width: thumbW, height: thumbH });
         p.drawRectangle({ x: tx, y: ty, width: thumbW, height: thumbH, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5 });
       }
     }
@@ -362,54 +358,58 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Intro text for grid — matches the original's two-line explanation verbatim
+      // A single-page design has nothing to map — the original catalog PDFs
+      // skip the "how pages fit together" text and the page-map grid
+      // entirely in that case rather than showing a pointless 1x1 box, so
+      // this whole section (intro text, grid, overlap note) only renders
+      // when there's an actual multi-page layout to explain.
       const hasOverlap = pageCols > 1 || pageRows > 1;
-      const introY = infoStartY - infoLines.length * infoLineH - 28;
-      const introLines = [
-        'Below is a plan showing how the chart pages fit together.',
-        'The page number is shown at the top left of each chart page.',
-      ];
-      const introX = (PAGE_W - Math.max(...introLines.map(l => titleFontRegular.widthOfTextAtSize(l, 9)))) / 2;
-      introLines.forEach((line, i) => p.drawText(line, { x: introX, y: introY - i * 14, size: 9, font: titleFontRegular, color: NAVY }));
-
-      // Grid — cells labeled A:1, B:1, A:2, B:2 …
-      const gridTopY   = introY - (introLines.length - 1) * 14 - 18;
-      const gridAvailH = gridTopY - MARGIN;
-      const gridAvailW = PAGE_W - MARGIN * 2;
-      // Capped well below gridAvailH/gridAvailW — those spans nearly the whole
-      // rest of the page, which stretched the map into a huge block. The
-      // original catalog PDFs use a compact ~53.5x71pt-per-cell map with room
-      // to spare below it; matched here instead of filling all available space.
-      const cellW = Math.min(60, gridAvailW / pageCols);
-      const cellH = Math.min(75, gridAvailH / pageRows);
-      const gridTotalW = cellW * pageCols;
-      const gridX = MARGIN + (gridAvailW - gridTotalW) / 2;
-
-      for (let pr = 0; pr < pageRows; pr++) {
-        for (let pc = 0; pc < pageCols; pc++) {
-          const mx = gridX + pc * cellW;
-          const my = gridTopY - (pr + 1) * cellH;
-          const label = `${String.fromCharCode(65 + pc)}:${pr + 1}`;
-
-          p.drawRectangle({
-            x: mx, y: my, width: cellW, height: cellH,
-            color: rgb(1, 1, 1),
-            borderColor: rgb(0.15, 0.15, 0.15), borderWidth: 1,
-          });
-
-          const lw = titleFontRegular.widthOfTextAtSize(label, 11);
-          p.drawText(label, {
-            x: mx + (cellW - lw) / 2, y: my + cellH / 2 - 5,
-            size: 11, font: titleFontRegular, color: NAVY,
-          });
-        }
-      }
-
-      // Our own addition, with no equivalent in the original catalog PDFs:
-      // a small caption under the map explaining the overlap bands, styled
-      // like the footer legend repeated on every chart page rather than
-      // blended into the borrowed intro text above.
       if (hasOverlap) {
+        const introY = infoStartY - infoLines.length * infoLineH - 28;
+        const introLines = [
+          'Below is a plan showing how the chart pages fit together.',
+          'The page number is shown at the top left of each chart page.',
+        ];
+        const introX = (PAGE_W - Math.max(...introLines.map(l => titleFontRegular.widthOfTextAtSize(l, 9)))) / 2;
+        introLines.forEach((line, i) => p.drawText(line, { x: introX, y: introY - i * 14, size: 9, font: titleFontRegular, color: NAVY }));
+
+        // Grid — cells labeled A:1, B:1, A:2, B:2 …
+        const gridTopY   = introY - (introLines.length - 1) * 14 - 18;
+        const gridAvailH = gridTopY - MARGIN;
+        const gridAvailW = PAGE_W - MARGIN * 2;
+        // Capped well below gridAvailH/gridAvailW — those spans nearly the whole
+        // rest of the page, which stretched the map into a huge block. The
+        // original catalog PDFs use a compact ~53.5x71pt-per-cell map with room
+        // to spare below it; matched here instead of filling all available space.
+        const cellW = Math.min(60, gridAvailW / pageCols);
+        const cellH = Math.min(75, gridAvailH / pageRows);
+        const gridTotalW = cellW * pageCols;
+        const gridX = MARGIN + (gridAvailW - gridTotalW) / 2;
+
+        for (let pr = 0; pr < pageRows; pr++) {
+          for (let pc = 0; pc < pageCols; pc++) {
+            const mx = gridX + pc * cellW;
+            const my = gridTopY - (pr + 1) * cellH;
+            const label = `${String.fromCharCode(65 + pc)}:${pr + 1}`;
+
+            p.drawRectangle({
+              x: mx, y: my, width: cellW, height: cellH,
+              color: rgb(1, 1, 1),
+              borderColor: rgb(0.15, 0.15, 0.15), borderWidth: 1,
+            });
+
+            const lw = titleFontRegular.widthOfTextAtSize(label, 11);
+            p.drawText(label, {
+              x: mx + (cellW - lw) / 2, y: my + cellH / 2 - 5,
+              size: 11, font: titleFontRegular, color: NAVY,
+            });
+          }
+        }
+
+        // Our own addition, with no equivalent in the original catalog PDFs:
+        // a small caption under the map explaining the overlap bands, styled
+        // like the footer legend repeated on every chart page rather than
+        // blended into the borrowed intro text above.
         const gridBottomY = gridTopY - pageRows * cellH;
         const overlapNoteLines = [
           `Orange bands mark a ${OVERLAP}-stitch overlap at touching page edges —`,
@@ -445,8 +445,37 @@ export async function POST(request: NextRequest) {
           size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3),
         });
 
-        const gx = MARGIN + LABEL_LEFT;                        // grid left edge
-        const gy = PAGE_H - MARGIN - HEADER_H - LABEL_TOP;    // grid top edge
+        // Grid position: the original catalog PDFs center the chart on the
+        // page (checked against Fox1.scc's single chart page — background
+        // rect margins came out to 86.3pt top / 86.31pt bottom, 65.3pt left /
+        // 65.1pt right, i.e. centered both ways) rather than anchoring it to
+        // the top-left corner, which left a large empty gap below/right of
+        // small designs. Only safe to do when there's a single page —
+        // independently centering each tile of a multi-page design would
+        // throw off the physical alignment between adjacent printed pages.
+        const isSinglePage = pageCols === 1 && pageRows === 1;
+        // Cell size: fixed CHART_CELL keeps the pagination math (COLS_PER/
+        // ROWS_PER, tile offsets) correct for multi-page designs, but the
+        // original catalog PDFs actually size cells per design to fill the
+        // page — Fox1.scc (single page, 27x36) comes out to ~17.2pt/cell,
+        // noticeably bigger than our fixed 10pt. Safe to enlarge only for a
+        // single page: it's already guaranteed to fit at 10pt, so making
+        // cells bigger (up to a sane cap, and never past what still fits)
+        // can't push it onto a second page.
+        const availW = PAGE_W - MARGIN * 2 - LABEL_LEFT;
+        const availH = (PAGE_H - MARGIN - HEADER_H - LABEL_TOP) - (MARGIN + FOOTER_H);
+        const idealCs = Math.min(availW / (c1 - c0), availH / (r1 - r0));
+        const cs = isSinglePage ? Math.max(CHART_CELL, Math.min(30, idealCs)) : CHART_CELL;
+        const gridW = (c1 - c0) * cs;
+        const gridH = (r1 - r0) * cs;
+        const gx = isSinglePage
+          ? MARGIN + LABEL_LEFT + (PAGE_W - MARGIN * 2 - LABEL_LEFT - gridW) / 2
+          : MARGIN + LABEL_LEFT;                                // grid left edge
+        const availTopY = PAGE_H - MARGIN - HEADER_H - LABEL_TOP;
+        const availBottomY = MARGIN + FOOTER_H;
+        const gy = isSinglePage
+          ? availTopY - (availTopY - availBottomY - gridH) / 2
+          : availTopY;                                          // grid top edge
 
         // Column number labels (every 10, 1-indexed)
         for (let c = c0; c < c1; c++) {
@@ -454,7 +483,7 @@ export async function POST(request: NextRequest) {
             const label = String(c + 1);
             const lw = font.widthOfTextAtSize(label, 6);
             p.drawText(label, {
-              x: gx + (c - c0) * CHART_CELL + (CHART_CELL - lw) / 2,
+              x: gx + (c - c0) * cs + (cs - lw) / 2,
               y: gy + 2,
               size: 6, font, color: rgb(0.35, 0.35, 0.35),
             });
@@ -468,7 +497,7 @@ export async function POST(request: NextRequest) {
             const lw = font.widthOfTextAtSize(label, 6);
             p.drawText(label, {
               x: MARGIN + LABEL_LEFT - lw - 3,
-              y: gy - (r - r0 + 1) * CHART_CELL + 2,
+              y: gy - (r - r0 + 1) * cs + 2,
               size: 6, font, color: rgb(0.35, 0.35, 0.35),
             });
           }
@@ -480,29 +509,27 @@ export async function POST(request: NextRequest) {
             const ci = grid[r][c];
             const pal = palette[ci];
             if (!pal) continue;
-            const cx = gx + (c - c0) * CHART_CELL;
-            const cy = gy - (r - r0 + 1) * CHART_CELL;
+            const cx = gx + (c - c0) * cs;
+            const cy = gy - (r - r0 + 1) * cs;
             if (chartMode === 'color' || chartMode === 'color-symbol') {
-              p.drawRectangle({ x: cx, y: cy, width: CHART_CELL, height: CHART_CELL, color: col(pal.r, pal.g, pal.b) });
+              p.drawRectangle({ x: cx, y: cy, width: cs, height: cs, color: col(pal.r, pal.g, pal.b) });
             }
             if (chartMode !== 'color') {
               const lum = (pal.r * 299 + pal.g * 587 + pal.b * 114) / 1000;
               const imgMap = (chartMode === 'color-symbol' && lum < 128) ? symbolImagesWhite : symbolImages;
               const img = imgMap.get(pal.symbol);
-              if (img) p.drawImage(img, { x: cx + 1, y: cy + 1, width: CHART_CELL - 2, height: CHART_CELL - 2 });
+              if (img) p.drawImage(img, { x: cx + 1, y: cy + 1, width: cs - 2, height: cs - 2 });
             }
           }
         }
 
         // Thin cell grid lines
-        const gridW = (c1 - c0) * CHART_CELL;
-        const gridH = (r1 - r0) * CHART_CELL;
         const thinGray = rgb(0.78, 0.78, 0.78);
         const thickGray = rgb(0.4, 0.4, 0.4);
 
         // Vertical lines
         for (let c = c0; c <= c1; c++) {
-          const lx = gx + (c - c0) * CHART_CELL;
+          const lx = gx + (c - c0) * cs;
           const isBold = (c - c0) % 10 === 0 || c === c1;
           p.drawLine({
             start: { x: lx, y: gy },
@@ -514,7 +541,7 @@ export async function POST(request: NextRequest) {
 
         // Horizontal lines
         for (let r = r0; r <= r1; r++) {
-          const ly = gy - (r - r0) * CHART_CELL;
+          const ly = gy - (r - r0) * cs;
           const isBold = (r - r0) % 10 === 0 || r === r1;
           p.drawLine({
             start: { x: gx, y: ly },
@@ -527,16 +554,16 @@ export async function POST(request: NextRequest) {
         // Overlap bands — mark the OVERLAP-stitch strips shared with a neighboring
         // page (drawn on top of cells/gridlines so they stay visible in every mode)
         if (pc > 0) {
-          drawOverlapBand(p, gx, gy - gridH, OVERLAP * CHART_CELL, gridH, font, true);
+          drawOverlapBand(p, gx, gy - gridH, OVERLAP * cs, gridH, font, true);
         }
         if (pc < pageCols - 1) {
-          drawOverlapBand(p, gx + gridW - OVERLAP * CHART_CELL, gy - gridH, OVERLAP * CHART_CELL, gridH, font, true);
+          drawOverlapBand(p, gx + gridW - OVERLAP * cs, gy - gridH, OVERLAP * cs, gridH, font, true);
         }
         if (pr > 0) {
-          drawOverlapBand(p, gx, gy - OVERLAP * CHART_CELL, gridW, OVERLAP * CHART_CELL, font, false);
+          drawOverlapBand(p, gx, gy - OVERLAP * cs, gridW, OVERLAP * cs, font, false);
         }
         if (pr < pageRows - 1) {
-          drawOverlapBand(p, gx, gy - gridH, gridW, OVERLAP * CHART_CELL, font, false);
+          drawOverlapBand(p, gx, gy - gridH, gridW, OVERLAP * cs, font, false);
         }
 
         // Footer — page number
