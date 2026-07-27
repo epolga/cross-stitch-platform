@@ -24,6 +24,10 @@ interface EventCounts {
   pdf_exported: number;
   feedback_submitted: number;
   editor_error: number;
+  // Not a distinct eventType in DDB — a sub-count of editor_opened events
+  // whose source is "design_page_catalog" (the "Open this pattern in the
+  // editor" button on a catalog design page, added 2026-07-27's Step 2).
+  catalog_pattern_opens: number;
   [key: string]: number;
 }
 
@@ -40,6 +44,7 @@ async function getEventCounts(date: string): Promise<EventCounts> {
     pdf_exported: 0,
     feedback_submitted: 0,
     editor_error: 0,
+    catalog_pattern_opens: 0,
   };
   let lastKey: Record<string, AttributeValue> | undefined;
   do {
@@ -54,6 +59,9 @@ async function getEventCounts(date: string): Promise<EventCounts> {
     for (const item of Items) {
       const et = item.eventType?.S;
       if (et && et in counts) counts[et]++;
+      if (et === "editor_opened" && item.source?.S === "design_page_catalog") {
+        counts.catalog_pattern_opens++;
+      }
     }
     lastKey = LastEvaluatedKey as Record<string, AttributeValue> | undefined;
   } while (lastKey);
@@ -115,7 +123,8 @@ async function getAiObservation(date: string, counts: EventCounts, feedback: Fee
 - Sessions: ${average(baseline.map(b => b.editor_opened)).toFixed(0)}
 - Patterns generated: ${average(baseline.map(b => b.pattern_generated)).toFixed(0)}
 - PDFs exported: ${average(baseline.map(b => b.pdf_exported)).toFixed(0)}
-- Feedback submitted: ${average(baseline.map(b => b.feedback_submitted)).toFixed(1)}`
+- Feedback submitted: ${average(baseline.map(b => b.feedback_submitted)).toFixed(1)}
+- Opened via catalog "Open in editor" button: ${average(baseline.map(b => b.catalog_pattern_opens)).toFixed(1)}`
     : "\nNo baseline history available yet.";
 
   const prompt = `Cross-stitch editor usage for ${date}:
@@ -124,6 +133,7 @@ async function getAiObservation(date: string, counts: EventCounts, feedback: Fee
 - PDFs exported: ${counts.pdf_exported}
 - Feedback submitted: ${counts.feedback_submitted}
 - Errors: ${counts.editor_error}
+- Opened via catalog "Open in editor" button: ${counts.catalog_pattern_opens} (${pct(counts.catalog_pattern_opens, counts.editor_opened)} of sessions)
 ${baselineSection}
 ${feedbackSection}
 
@@ -149,6 +159,7 @@ function buildTextBody(date: string, counts: EventCounts, feedback: FeedbackRow[
   lines.push(`Cross-stitch editor report — ${date}`, "");
   lines.push("Funnel");
   lines.push(`  Sessions:   ${counts.editor_opened}`);
+  lines.push(`    via catalog "Open in editor" button: ${counts.catalog_pattern_opens} (${pct(counts.catalog_pattern_opens, counts.editor_opened)} of sessions)`);
   lines.push(`  Generated:  ${counts.pattern_generated}  (${pct(counts.pattern_generated, counts.editor_opened)} of sessions)`);
   lines.push(`  PDF export: ${counts.pdf_exported}  (${pct(counts.pdf_exported, counts.pattern_generated)} of generated)`);
   lines.push(`  Feedback:   ${counts.feedback_submitted}`);
@@ -172,6 +183,7 @@ function buildHtmlBody(date: string, counts: EventCounts, feedback: FeedbackRow[
 
   const funnelRows = [
     row("Sessions opened",  `<b>${counts.editor_opened}</b>`),
+    row("&nbsp;&nbsp;via catalog \"Open in editor\" button", `${counts.catalog_pattern_opens} <span style="color:#888">(${pct(counts.catalog_pattern_opens, counts.editor_opened)} of sessions)</span>`),
     row("Patterns generated", `${counts.pattern_generated} <span style="color:#888">(${pct(counts.pattern_generated, counts.editor_opened)} of sessions)</span>`),
     row("PDFs exported", `${counts.pdf_exported} <span style="color:#888">(${pct(counts.pdf_exported, counts.pattern_generated)} of generated)</span>`),
     row("Feedback submitted", `${counts.feedback_submitted}`),
@@ -208,6 +220,7 @@ function buildTelegramText(date: string, counts: EventCounts, observation: strin
   const lines = [
     `🧵 <b>Cross-stitch editor report</b> — ${date}`,
     `Sessions: ${counts.editor_opened}`,
+    `  via catalog button: ${counts.catalog_pattern_opens} (${pct(counts.catalog_pattern_opens, counts.editor_opened)} of sessions)`,
     `Generated: ${counts.pattern_generated} (${pct(counts.pattern_generated, counts.editor_opened)} of sessions)`,
     `PDF export: ${counts.pdf_exported} (${pct(counts.pdf_exported, counts.pattern_generated)} of generated)`,
     `Feedback: ${counts.feedback_submitted}`,
