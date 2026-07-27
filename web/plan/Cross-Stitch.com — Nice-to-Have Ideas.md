@@ -56,6 +56,19 @@ recurring) — this is not a backlog to grind through. Split out from
 
 ## SEO backlog
 
+- **"Progress tracker" positioning/landing page** — GSC check 2026-07-27
+  found zero impressions for "progress tracker" (and variants) in 90 days;
+  nothing on the site targets this query at all. Closest existing feature
+  is the editor's save-to-account/resume capability (pitched as "Come back
+  anytime" on `/photo-to-cross-stitch`), but it's not named or positioned
+  as a "progress tracker" anywhere, and there's no dedicated page. Two
+  options if revisited: (a) name/reframe the existing save-and-resume
+  feature as a "progress tracker" with its own landing page, or (b) a
+  real product feature — visual tracking of how many stitches/colors are
+  done out of the total — which the existing save-and-resume doesn't
+  actually provide today. Not scheduled; revisit if the query keeps
+  showing up as a gap or if building (b) becomes cheap for some other
+  reason.
 - **Near-duplicate design families still needing individual review** —
   deliberately deferred from the 2026-07-25 canonicalization pass because
   they need individual judgment calls, not the same automated fix: "99

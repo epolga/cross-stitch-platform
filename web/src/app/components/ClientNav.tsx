@@ -6,8 +6,10 @@ import { AuthControl } from '@/app/components/AuthControl';
 
 export default function ClientNav() {
   const [isArticlesOpenDesktop, setIsArticlesOpenDesktop] = useState(false);
+  const [isToolsOpenDesktop, setIsToolsOpenDesktop] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isArticlesOpenMobile, setIsArticlesOpenMobile] = useState(false);
+  const [isToolsOpenMobile, setIsToolsOpenMobile] = useState(false);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -16,6 +18,7 @@ export default function ClientNav() {
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
     setIsArticlesOpenMobile(false);
+    setIsToolsOpenMobile(false);
   };
 
   const desktopLinkBase =
@@ -52,9 +55,46 @@ export default function ClientNav() {
             My thoughts
           </Link>
           <span className="text-gray-400 text-xl">&middot;</span>
-          <Link href="/photo-to-cross-stitch" className={desktopLinkBase}>
-            Photo to pattern
-          </Link>
+          {/* Desktop Tools dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsToolsOpenDesktop((prev) => !prev)}
+              className={`${desktopLinkBase} focus:outline-none`}
+              type="button"
+            >
+              Tools
+            </button>
+            {isToolsOpenDesktop && (
+              <div
+                style={{ width: '256px' }}
+                className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg z-10"
+              >
+                <Link
+                  href="/photo-to-cross-stitch"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsToolsOpenDesktop(false)}
+                >
+                  Photo to pattern
+                </Link>
+                <hr />
+                <Link
+                  href="/dmc-color-chart"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsToolsOpenDesktop(false)}
+                >
+                  DMC Color Chart
+                </Link>
+                <hr />
+                <Link
+                  href="/cross-stitch-size-calculator"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsToolsOpenDesktop(false)}
+                >
+                  Size Calculator
+                </Link>
+              </div>
+            )}
+          </div>
           <span className="text-gray-400 text-xl">&middot;</span>
 
           {/* Desktop Articles dropdown */}
@@ -191,13 +231,43 @@ export default function ClientNav() {
               >
                 My thoughts
               </Link>
-              <Link
-                href="/photo-to-cross-stitch"
-                className={mobileLinkBase}
-                onClick={closeMobileMenu}
-              >
-                Photo to pattern
-              </Link>
+              {/* Tools as submenu on mobile */}
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsToolsOpenMobile((prev) => !prev)}
+                  className={`${mobileLinkBase} flex items-center justify-between w-full`}
+                >
+                  <span>Tools</span>
+                  <span className="text-gray-500 text-sm">{isToolsOpenMobile ? '▲' : '▼'}</span>
+                </button>
+
+                {isToolsOpenMobile && (
+                  <div className="mt-1 ml-2 border-l border-gray-200 pl-2">
+                    <Link
+                      href="/photo-to-cross-stitch"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      Photo to pattern
+                    </Link>
+                    <Link
+                      href="/dmc-color-chart"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      DMC Color Chart
+                    </Link>
+                    <Link
+                      href="/cross-stitch-size-calculator"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      Size Calculator
+                    </Link>
+                  </div>
+                )}
+              </div>
               {/* Articles as submenu on mobile */}
               <div className="mt-2">
                 <button

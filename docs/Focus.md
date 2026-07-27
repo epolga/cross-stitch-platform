@@ -84,11 +84,21 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
    Actions, Security Issues, AdSense RPM). Check back ~2026-08-07. Reusable
    tools from this investigation: `gsc-explore.ts`, `gsc-compare.ts`,
    `ga4-explore.ts` in `automation/pinterest-agent/scripts/`.
-8. **Newsletter/Announcement send follow-up** — GA4 newsletter-attributed
-   clicks, `LastEmailEntry` updates, SES bounce/complaint rate vs. baseline,
-   for both the 07-24 newsletter and the Announcement email. (Newsletter-
-   attributed downloads already checked 2026-07-26: 41 downloads / 34
-   distinct users since 07-24.)
+8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
+   Perpetual Love", 07-24) checked 2026-07-27 and looks healthy: ~47 GA4
+   sessions with `src=newsletter&medium=email` landing on the design page
+   over 07-24→07-26 (+~16 more newsletter-sourced sessions on other pages),
+   83 `LastEmailEntry` updates since the send, SES complaint rate ~0.12%
+   (1 complaint / 848 delivery attempts, `benoit_stb@yahoo.com` suppressed
+   2026-07-24), 0 bounces from this batch. Matches the previously logged
+   downloads figure (41 downloads / 34 distinct users since 07-24).
+   **Announcement email ("You spoke, I listened") remains unverifiable** —
+   GA4 shows no detectable spike on the changelog page in the plausible
+   send window, and SES `get-send-statistics` only covers a 14-day trailing
+   window (07-13→07-27), too late to catch a ~07-11/13 send. Root cause:
+   exact send date was never recorded and the new EmailSendLog tracking
+   postdates it. Not worth further digging unless the exact send date
+   surfaces some other way.
 9. **`EmailSendLog` real-send verification** — built and deployed
    2026-07-26 (UploaderCli side), but not yet exercised by an actual
    newsletter send. Verify end-to-end (via
@@ -139,7 +149,7 @@ designs, `SYMBOLS[]` overflow untested for >~150-color designs):
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
 - [ ] GSC position softening check-back (~2026-08-07)
-- [ ] Newsletter/Announcement follow-up metrics checked (GA4 clicks, LastEmailEntry, SES bounce/complaint rate)
+- [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
 - [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000

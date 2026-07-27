@@ -1,11 +1,17 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { buildCanonicalUrl } from '@/lib/url-helper';
+import { stitchesToSize } from '@/lib/fabric-size';
 import ConvertClient from './ConvertClient';
 import HeroCta from './HeroCta';
 
-const TITLE = 'Photo to Cross-Stitch Pattern Converter';
+const FABRIC_SIZE_COUNTS = [14, 16, 18];
+const FABRIC_SIZE_STITCHES = [50, 80, 100, 120];
+
+const TITLE = 'Photo to Cross-Stitch Pattern Maker – Free Online Converter';
 const DESCRIPTION =
-  'Convert any photo or image into a custom cross-stitch pattern with DMC thread colors. ' +
+  'Free cross-stitch pattern maker: convert any photo into a custom chart with DMC thread colors, ' +
+  'or start from a blank canvas and design your own from scratch. ' +
   'Use the built-in cross-stitch editor, set your stitch size, choose your palette, and download a print-ready PDF chart — ' +
   'your pet portrait, your garden, your favourite photo, ready to stitch on Aida or linen.';
 
@@ -28,7 +34,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   return {
     title: TITLE,
     description: DESCRIPTION,
-    keywords: 'photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
+    keywords: 'cross stitch pattern maker, photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
     alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
     robots: hasReferrerId ? 'noindex, follow' : 'index, follow',
     openGraph: {
@@ -48,7 +54,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 const structuredData = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
-  name: 'Photo to Cross-Stitch Pattern Converter',
+  name: 'Cross-Stitch Pattern Maker & Photo Converter',
   applicationCategory: 'UtilitiesApplication',
   operatingSystem: 'Web',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
@@ -56,6 +62,7 @@ const structuredData = {
   url: buildCanonicalUrl('/photo-to-cross-stitch'),
   featureList: [
     'Convert any JPEG, PNG or WebP photo to a cross-stitch pattern',
+    'Start from a blank canvas and design a pattern by hand, no photo required',
     'Choose stitch width and height independently',
     'Automatic DMC thread color matching from 454 colors',
     'Reduce palette to 10, 15, 20 or 25 colors',
@@ -68,6 +75,14 @@ const structuredData = {
 };
 
 const FAQ = [
+  {
+    q: 'Is this a free cross-stitch pattern maker?',
+    a: 'Yes. Converting a photo, editing the result, and downloading a print-ready PDF chart are all free — no software to install and no account needed just to try it.',
+  },
+  {
+    q: 'Can I design a pattern without uploading a photo?',
+    a: 'Yes. Choose "New Pattern" in the editor to start from a blank grid and place stitches by hand, one color at a time — the same repaint, fill, rotate and flip tools work whether your pattern started from a photo or from scratch.',
+  },
   {
     q: 'What photo formats are supported?',
     a: 'JPEG, PNG, and WebP up to 5 MB. The converter works best with photos that have clear subjects and good contrast.',
@@ -122,11 +137,12 @@ export default function PhotoToCrossStitchPage() {
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-6 py-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Photo to Cross-Stitch Pattern Converter
+            Free Cross-Stitch Pattern Maker — Turn Any Photo into a Chart
           </h1>
           <p className="text-gray-600 mb-8">
             Upload a photo of your pet, a flower, a favourite place — anything — and I&apos;ll convert it into a
-            counted cross-stitch pattern with DMC thread colors. Choose how many stitches wide, how many colors,
+            counted cross-stitch pattern with DMC thread colors. Or skip the photo and start from a blank canvas
+            to design your own pattern by hand. Choose how many stitches wide, how many colors,
             and edit the result before downloading your printable PDF chart.
             Everything runs in your browser. No software, no account needed to try.
           </p>
@@ -209,29 +225,36 @@ export default function PhotoToCrossStitchPage() {
               <ul className="space-y-2">
                 <li><span className="font-medium text-gray-800">Color chart.</span> The full pattern printed in DMC thread colors — stitch from this when working in good light.</li>
                 <li><span className="font-medium text-gray-800">Symbol chart.</span> The same pattern in black and white, each color shown as a unique symbol. Easier to read under a lamp and cheap to print.</li>
-                <li><span className="font-medium text-gray-800">Thread list.</span> Every DMC color used, with its number, color name, and stitch count — so you know exactly which threads to buy and how much of each you need.</li>
+                <li><span className="font-medium text-gray-800">Thread list.</span> Every DMC color used, with its number, color name, and stitch count — so you know exactly which threads to buy. Cross-check any shade against the full <Link href="/dmc-color-chart" className="text-rose-600 underline hover:text-rose-700">DMC color chart</Link>.</li>
               </ul>
             </div>
           </section>
 
           <section className="mt-8 bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-sm text-gray-600">
             <h2 className="text-base font-semibold text-gray-900 mb-1">Fabric and finished size guide</h2>
-            <p className="mb-4">The size of your finished piece depends on how many stitches your pattern has and the count of your Aida fabric. Higher count = smaller stitches = finer detail. The most popular choice for beginners is 14-count Aida.</p>
+            <p className="mb-4">The size of your finished piece depends on how many stitches your pattern has and the count of your Aida fabric. Higher count = smaller stitches = finer detail. The most popular choice for beginners is 14-count Aida. For any other combination, use the <Link href="/cross-stitch-size-calculator" className="text-rose-600 underline hover:text-rose-700">cross-stitch size calculator</Link>.</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-gray-200 text-gray-700">
                     <th className="text-left py-2 pr-4 font-semibold">Pattern size</th>
-                    <th className="text-left py-2 pr-4 font-semibold">14-count Aida</th>
-                    <th className="text-left py-2 pr-4 font-semibold">16-count Aida</th>
-                    <th className="text-left py-2 font-semibold">18-count Aida</th>
+                    {FABRIC_SIZE_COUNTS.map((count) => (
+                      <th key={count} className="text-left py-2 pr-4 font-semibold">{count}-count Aida</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  <tr><td className="py-2 pr-4 font-medium text-gray-800">50 × 50 stitches</td><td className="py-2 pr-4">9 × 9 cm (3.6&Prime;)</td><td className="py-2 pr-4">8 × 8 cm (3.1&Prime;)</td><td className="py-2">7 × 7 cm (2.8&Prime;)</td></tr>
-                  <tr><td className="py-2 pr-4 font-medium text-gray-800">80 × 80 stitches</td><td className="py-2 pr-4">14 × 14 cm (5.7&Prime;)</td><td className="py-2 pr-4">13 × 13 cm (5.0&Prime;)</td><td className="py-2">11 × 11 cm (4.4&Prime;)</td></tr>
-                  <tr><td className="py-2 pr-4 font-medium text-gray-800">100 × 100 stitches</td><td className="py-2 pr-4">18 × 18 cm (7.1&Prime;)</td><td className="py-2 pr-4">16 × 16 cm (6.3&Prime;)</td><td className="py-2">14 × 14 cm (5.6&Prime;)</td></tr>
-                  <tr><td className="py-2 pr-4 font-medium text-gray-800">120 × 120 stitches</td><td className="py-2 pr-4">22 × 22 cm (8.6&Prime;)</td><td className="py-2 pr-4">19 × 19 cm (7.5&Prime;)</td><td className="py-2">17 × 17 cm (6.7&Prime;)</td></tr>
+                  {FABRIC_SIZE_STITCHES.map((stitches) => (
+                    <tr key={stitches}>
+                      <td className="py-2 pr-4 font-medium text-gray-800">{stitches} × {stitches} stitches</td>
+                      {FABRIC_SIZE_COUNTS.map((count) => {
+                        const size = stitchesToSize(stitches, count);
+                        return (
+                          <td key={count} className="py-2 pr-4">{size.cm.toFixed(0)} × {size.cm.toFixed(0)} cm ({size.inches.toFixed(1)}&Prime;)</td>
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
