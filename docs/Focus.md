@@ -35,31 +35,43 @@ future sends to answer "who did we send X to, who clicked" precisely.
 
 **Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26) — agreed plan, 2026-07-27:**
 
-1. **Step 1 (current step): get the editor's own PDF output (`/api/convert/pdf`)
-   to a quality Olga is happy with.** Olga will review the PDFs the editor
-   currently produces (all 3 chart modes: color+symbol, symbol-only,
-   color-only) and say what needs improving. Do not start Step 2 until
-   she's signed off here.
-   Progress so far (2026-07-27, reviewed against
-   `Stitch26_Kit.pdf`/"Evening Lake" as the reference): cover title switched
-   Helvetica→Times New Roman Bold 30pt + added optional "by {author}" line;
-   cover image resized from ~84%-of-page-height to a contained ~40% box
-   matching the original's proportions; Notes page recolored/refonted to
-   match (Times New Roman, brown info block, blue page-map intro) with the
-   overlap explanation moved to its own caption under the map instead of
-   mixed into the borrowed text; page-map grid cells shrunk from an
-   uncapped fill-all-space size to a fixed ~60×75pt (was stretching almost
-   to the bottom margin); per-chart-page overlap footer reworded to be
-   actionable ("stitch it once") and moved to its own bigger (9pt) centered
-   line above the page number. Not yet tested on a single-page (no
-   overlap/no page-map-grid) design — next step.
-2. **Step 2: batch-run the extractor across all 5000+ catalog designs**,
-   save each design's grid+palette JSON to S3, and add a link/button on
-   each design page that opens that saved representation in the editor —
-   so any existing catalog design (not just a user's own photo upload)
-   becomes editable and re-downloadable as PDF. Every design already has 3
-   published PDFs (color+symbol, symbol, color); each regenerated PDF must
-   look **no worse** than the existing one of the same kind.
+1. **Step 1: get the editor's own PDF output (`/api/convert/pdf`) to a
+   quality Olga is happy with.** Still open — Olga reviews as we go, no
+   formal sign-off yet, but extensively iterated on 2026-07-27 (reviewed
+   against `Stitch26_Kit.pdf`/"Evening Lake" and `Stitch744_Kit.pdf`/"Fox"
+   as references) and looking solid across the size range now (tested 1,
+   2, 4, 6, and 36-page designs — see below).
+   Progress so far: cover title Helvetica→Times New Roman Bold 30pt +
+   optional "by {author}" line; cover image resized from ~84%-of-page-
+   height to a contained ~40% box; Notes page recolored/refonted to match
+   (Times New Roman, brown info block, blue page-map intro), overlap
+   explanation moved to its own caption; page-map grid cells capped at a
+   fixed ~60×75pt instead of stretching to fill the page; per-chart-page
+   overlap footer reworded ("stitch it once") and enlarged to 9pt on its
+   own line. Single-page designs (Fox) specifically: chart cell size now
+   adapts to fill the page (10-30pt, was fixed 10pt) and centers both ways
+   instead of top-left-anchored; the page-map/intro-text section is
+   skipped entirely (matches the original, which shows nothing there for
+   a single page). Fallback cover thumbnail (no live `previewImage`) now
+   ports the client's own Aida+shadow+fabric-hole recipe from
+   `PatternCanvas.tsx`'s `capturePreview()`, as a tiled canvas pattern
+   (a naive per-cell/per-intersection version took 5+ minutes on a large
+   design — fixed). **Decided 2026-07-27: keep the live site's converter
+   sending a client-captured `previewImage` as the primary path — this
+   richer server-side fallback stays fallback-only** (used when no
+   capture is sent, e.g. future batch regeneration), not switched to
+   the default for live users: server-side render costs ~20s for a large
+   design, unacceptable as an always-on tax on every live PDF download
+   when the client already does this work for free.
+2. **Step 2, clarified 2026-07-27 — narrower than earlier drafts of this
+   plan: the batch run does NOT generate or regenerate any PDFs.** It
+   only needs to: (a) run the extractor across all 5000+ catalog designs
+   to produce each one's grid+palette JSON, (b) save those JSON files to
+   a separate S3 bucket, (c) add a link/button on each design's page that
+   opens that saved representation in the editor. Actual PDF
+   generation/export happens later, on demand, only if/when a user opens
+   a design in the editor and chooses to save or download it — not
+   preemptively for all 5000+ designs as part of the batch job.
 
 Parser at `web/src/lib/pdf-pattern-extractor.ts` + CLI at
 `web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a
@@ -81,6 +93,33 @@ both `pdf-pattern-extractor.ts` and `pattern-converter.ts`. Note: no
 catalog design currently in the DB actually exceeds 100 colors, so this
 specific bug couldn't be reproduced live — fixed from code inspection +
 Olga's description, not a confirmed live repro.
+
+**Found and fixed 2026-07-27** (commit `29a6cc0`, pushed+deployed):
+`parseChartPage`'s cumulative step-cursor regex didn't track PDF `q`/`Q`
+graphics-state nesting, so backstitch decoration markers (French-knot/
+direction indicators, drawn via their own "cm ... Do" inside a nested
+q/Q) were mistaken for extra grid steps and corrupted the cursor for
+every real cell after them. Confirmed via Fox1.scc: its one "black"
+cross-stitch cell was actually one of these markers — the original only
+ever uses black for backstitch there (which this converter still doesn't
+render — separate, not-yet-built feature). Fixed by tracking q/Q depth
+and only accumulating steps at the same depth as the first real one; this
+also silently resolved the unrelated-looking "N cell(s) had conflicting
+values" warning seen on the same design — same root cause.
+
+**Found and fixed 2026-07-27** (same session, following up on the "Zebra"
+DesignID 406/AlbumID 37 anomaly found while looking for 6-page test
+designs): extraction warned `PDF declares 4 chart pages but only 2 were
+found/parsed` and reconstructed at 134×91 instead of the true 134×103.
+Root cause: the loop deciding which content streams are chart pages
+gated on `doCount > 100` ("/N Do" placement count) alone — Zebra's last
+two of four chart pages (the mostly-blank bottom row) only had 39 and 58
+Do calls, below the threshold, so they were silently skipped even though
+each one carries an unambiguous `(Page N of M Position X:Y)` label. Fixed
+by checking for that label first, falling back to doCount > 100 only for
+the single-page case where no label exists at all to check. Verified: Zebra
+now reconstructs at the correct 134×103 with no warnings; Fox and Evening
+Lake re-checked clean (no regression).
 
 Full background/algorithm:
 `docs/plan/web/Catalog PDF-to-Editable Conversion — Feasibility Findings.md`.

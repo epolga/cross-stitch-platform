@@ -179,8 +179,18 @@ export function extractPatternFromPdf(pdfBytes: Buffer): ExtractResult {
       rawPalette.push(...parsePaletteFromKeyPage(stream, warnings));
       continue;
     }
+    // A "Page N of M Position X:Y" label unambiguously marks a chart page —
+    // checked first since doCount alone isn't reliable: a tile that's mostly
+    // blank background (e.g. the bottom row of a design that doesn't fill a
+    // whole tile) can have very few "/N Do" calls (confirmed on "Zebra",
+    // DesignID 406 — its last two of four chart pages had only 39 and 58,
+    // silently dropped by a doCount > 100 gate alone, reconstructing a
+    // 134x91 pattern instead of the real 134x103). doCount > 100 stays as
+    // the fallback signal for the single-page case, where there's no label
+    // at all to check.
+    const hasPositionLabel = /\(Page\s+\d+\s+of\s+\d+\s+Position\s+[A-Z]+:\d+\)\s*Tj/.test(stream);
     const doCount = (stream.match(/\/\d+\s+Do/g) || []).length;
-    if (doCount > 100) {
+    if (hasPositionLabel || doCount > 100) {
       const page = parseChartPage(stream);
       if (page) chartPages.push(page);
     }
