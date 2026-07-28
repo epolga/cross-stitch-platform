@@ -46,83 +46,58 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-**Ann persona (noted 2026-07-28 for next session):** today only added one
-practical/SEO-oriented post (`how-to-turn-a-photo-into-a-cross-stitch-pattern`)
-— the personal/recurring persona side of the Current goal above is still
-untouched. Per `web/plan/ann_story_timeline.md`'s "Suggested next-mention
-order": introducing **Nitka as a named character** is the lowest-friction
-next piece (she's already visually established via the favicon, so this is
-a callback, not a cold introduction) — check that file before writing
-anything, so age/Tomáš/Klára don't leak before their own intended first
-mention.
+1. **Ann persona — introduce Nitka next.** Per `web/plan/ann_story_timeline.md`'s
+   "Suggested next-mention order": naming the cat as a character is the
+   lowest-friction next piece (already visually established via the
+   favicon, so it's a callback, not a cold introduction). Check that file
+   before writing anything, so age/Tomáš/Klára don't leak before their own
+   intended first mention. 2026-07-28 only shipped one practical/SEO post
+   (`how-to-turn-a-photo-into-a-cross-stitch-pattern`) — the personal/
+   recurring persona side of the Current goal above is still untouched.
+2. **Milestone S5** — differentiate the homepage "Based on your browsing"
+   personalization (`PersonalizedSection.tsx` / `/api/personalized`) beyond
+   generic embedding-similarity (currently one undifferentiated pool of up
+   to 12 nearest neighbors). Planned categories, not yet built: simpler
+   alternatives, comparable color-palette matches, larger/smaller versions
+   of the same subject. Medium priority, doesn't block anything.
+3. **Milestone S6 first step** — before any prefetch/`content-visibility`
+   work, measure current real navigation performance (PageSpeed, Core Web
+   Vitals) on homepage/design page/albums, so later changes have a real
+   baseline, per the doc's own caution.
 
-**Milestone S5 remaining work (noted 2026-07-27 for next session):**
-differentiate the homepage "Based on your browsing" personalization
-(`PersonalizedSection.tsx` / `/api/personalized`) beyond generic
-embedding-similarity. Today it returns one undifferentiated pool of up to
-12 nearest neighbors (round-robin across the last 5 viewed designs' `getSimilarIds`
-lists). Planned categories, not yet built: simpler alternatives (fewer
-colors/smaller size), comparable color-palette matches, larger/smaller
-versions of the same subject. Priority: medium — doesn't block anything,
-pure quality improvement on an already-live feature.
-
-**Milestone S6 first step (noted 2026-07-27 for next session):** before
-any prefetch/`content-visibility` work, measure current real navigation
-performance — PageSpeed and Core Web Vitals (LCP, INP, CLS) on
-representative pages (homepage, design page, albums) — so later changes
-have a real baseline to compare against, per the doc's own caution
-("introduce only after measuring current navigation performance").
-
-**Quick wins from the `web/plan/*_ChatGPT.md` docs (mined 2026-07-27,
-see below for source-doc note) — all small enough for one session:**
-
-1. **Pattern-quality feedback widget** — after generation, ask "Are you
-   happy with this pattern? Yes/Mostly/No", with a reason picklist on
-   "No". Distinct from the existing `FeatureRequestDialog` (that asks
-   feature *importance*, not output *quality*) — no overlap. Log via the
-   existing `editor-events.ts` pipeline (new event type). **Est. ~2 hours.**
-2. **1-2 new analytics funnel events** — e.g. "generated a second pattern
-   on a return visit". Event infrastructure (`logEditorEvent`, DDB table,
-   admin dashboard) already exists; just add the bounded event + a
-   milestone check.
-3. **Ann story-timeline file** — new `ann_story_timeline.md` companion to
-   `Ann_Persona_and_Newsletter_Content.md`: a dated log of which
-   persona facts/events have already been published, plus a "not yet
-   mentioned" list. Directly serves the Current goal (Ann blog voice).
-4. **PDF footer fingerprint** — one line on generated PDFs, e.g.
-   `cross-stitch.com · Pattern #ID · Download ID`. Forensic only, not DRM.
-   **Implementation: one line of code.**
-5. **Catalog metadata consistency-check script** — one-off script
-   comparing DB metadata vs. rendered page vs. PDF dimensions, flagging
-   mismatches (known issue class: contradicting registration
-   instructions, mismatched sizes). **Done 2026-07-28**:
-   `web/scripts/check-catalog-metadata-consistency.ts` compares DB
-   Width/Height/NColors against the actual grid+palette JSON already
-   extracted from each design's kit PDF by the 2026-07-27 batch job (DB
-   and rendered page are the same field by construction, so the real
-   check is DB vs. PDF). Full run across all 5137 extracted designs:
-   **54 mismatches across 32 designs** — report at
-   `docs/web/catalog-metadata-consistency-issues.md`. Notable clusters:
-   6 designs with `NColors=0` in DB despite the PDF clearly having
-   colors (broken metadata, not a size discrepancy); 7 designs (mostly
-   AlbumID 36/40/8/32, religious/cultural subjects) where DB claims
-   44-50 colors but the PDF extraction found only 2-8 — plausibly the
-   known backstitch-extraction gap (converter doesn't parse backstitch
-   yet) rather than bad DB data, not yet root-caused.
-   **Fixed 2026-07-28**: Olga confirmed the PDF should be treated as
-   ground truth across the board (no exception for the 7 low-color
-   outliers). `web/scripts/fix-catalog-metadata-mismatches.ts` applied
-   all 32 designs' Width/Height/NColors to match their PDF-extracted
-   values (dry-run reviewed first, then `--confirm`). Re-verified via
-   `check-catalog-metadata-consistency.ts` against just those 32
-   DesignIDs: 0 mismatches remaining. Excel export with design-page +
-   kit-PDF URLs for each row also produced at Olga's request
-   (`docs/web/catalog-metadata-consistency-issues.xlsx`, gitignored).
-6. **AI-decision framework as a standing doc** — fold
-   `AI_Product_Decision_Guide_ChatGPT.md`'s checklist (pre-mortem,
-   fact/inference/hypothesis labeling, decision gate) into an existing
-   planning doc as a standing protocol for future product calls.
-   Documentation-only. **Est. under an hour.**
+**Shipped 2026-07-28** (all 6 quick-wins from the 2026-07-27 ChatGPT-doc
+mining, plus same-day follow-ups — full detail in git log / commit messages,
+condensed here per Focus.md's own size-management rule):
+- Pattern-quality feedback widget (Yes/Mostly/No + reason) after generation,
+  logged via `editor-events.ts`; surfaced in `/admin/editor-analytics`.
+- Return-visit pattern-generation analytics event — changed same day from a
+  one-time milestone alert to firing (and emailing) every occurrence, after
+  the first trigger turned out to be Olga's own testing.
+- `web/plan/ann_story_timeline.md` created (dated log of published vs.
+  not-yet-mentioned Ann persona facts).
+- PDF forensic fingerprint — initially only landed on chart pages, fixed
+  same day to appear on every page (cover/key/notes/chart) via a shared
+  `drawFingerprint()` helper.
+- Catalog metadata consistency-check: `web/scripts/check-catalog-metadata-consistency.ts`
+  found 54 mismatches across 32 designs (DB Width/Height/NColors vs. actual
+  PDF content); `fix-catalog-metadata-mismatches.ts` applied all 32
+  (Olga: treat PDF as ground truth throughout), re-verified at 0 mismatches.
+- AI-decision framework folded into `Cross-Stitch.com — Site Technology
+  Milestones.md` as a standing "Standing protocol" section.
+- Homepage notice banner announcing the online editor (links to
+  `/photo-to-cross-stitch` for internal-link SEO).
+- New Ann blog post `how-to-turn-a-photo-into-a-cross-stitch-pattern`
+  (SEO-oriented); fixed two pre-existing blog bugs found while writing it —
+  paragraph spacing (missing `@tailwindcss/typography`) and blog posts
+  never being in `sitemap.xml` (only the `/short-stories` index was).
+- **Real bug found via a live user report (Christa,** `christabythesea@yahoo.co.uk`,
+  **"goes in circles back to the registration form") and fixed same day:**
+  `register-only/verify/route.ts` marked email `Verified` but never
+  created a session cookie, so verifying left the visitor logged out — the
+  next login-gated action bounced them back to registration. Now logs the
+  user in via the same mechanism `/api/auth/login` uses. Deployed; reply
+  sent to Christa suggesting a plain login (account was already verified
+  with a working password) rather than re-registering.
 
 Source note: these came from reviewing 7 untracked `web/plan/*_ChatGPT.md`
 files (ChatGPT-generated recommendations, not yet acted on). Their
