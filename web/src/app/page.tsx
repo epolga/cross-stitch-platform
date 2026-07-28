@@ -247,6 +247,16 @@ export default async function Home({ searchParams }: Props) {
               You have been logged out. The private voting page is only available while you are signed in.
             </div>
           )}
+          <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 shadow-sm flex items-center gap-2">
+            <span className="text-lg">✨</span>
+            <span>
+              <strong>New:</strong> every design can now be opened right in my free{' '}
+              <Link href="/photo-to-cross-stitch" className="underline hover:text-indigo-700">
+                online cross-stitch pattern editor
+              </Link>{' '}
+              — customize colors, resize it, or make any changes you like before downloading your PDF.
+            </span>
+          </div>
           <HeroSearch />
           <p className="text-gray-700 mb-6">
             Browse thousands of free downloadable charts, filter by size or colors, and find your next stitching project.
