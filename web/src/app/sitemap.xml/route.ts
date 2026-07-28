@@ -45,7 +45,7 @@ const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/': '2026-07-27', // src/app/page.tsx
   '/XStitch-Charts.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
-  '/photo-to-cross-stitch': '2026-07-27', // src/app/photo-to-cross-stitch/page.tsx
+  '/photo-to-cross-stitch': '2026-07-28', // src/app/photo-to-cross-stitch/page.tsx
   '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/WhyCrossStitch': '2026-06-01', // src/app/WhyCrossStitch/page.tsx
   '/Article070409.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)

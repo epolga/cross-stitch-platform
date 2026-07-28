@@ -97,6 +97,14 @@ namespace Uploader
         private const string ConverterExePathDefault = @"%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe";
         private static readonly string ConverterExePath =
             ExpandCrossStitchToken(ConfigurationManager.AppSettings["ConverterExePath"] ?? ConverterExePathDefault);
+        // WebProjectPath points at the web/ Next.js project (sibling in the same
+        // monorepo checkout) so a freshly-published design's kit PDF can be run
+        // through the same TS pattern-extractor the catalog batch job uses
+        // (web\scripts\batch-extract-catalog-patterns.ts), stamping
+        // EditorPatternKey immediately instead of waiting for a manual re-run.
+        private const string WebProjectPathDefault = @"%CROSS_STITCH%\cross-stitch-platform\web";
+        private static readonly string WebProjectPath =
+            ExpandCrossStitchToken(ConfigurationManager.AppSettings["WebProjectPath"] ?? WebProjectPathDefault);
         private static readonly string[] RequiredPdfVariants = { "1", "3", "5" };
         private static readonly string[] HtmlEmailTemplateRequiredSections =
             { "Subject", "Greeting", "BeforeImage", "ImageWithLink", "AfterImage", "Unsubscribe", "Closing", "Signature" };
@@ -867,6 +875,15 @@ namespace Uploader
             // 4. Insert item into DynamoDB
             await InsertItemIntoDynamoDbAsync(nGlobalPage, pinResult.LinkType, seoDescription).ConfigureAwait(false);
 
+            // 4b. Make it openable in the online editor right away (best-effort —
+            // see TryExtractEditorPatternAsync; failure here doesn't stop the publish).
+            Dispatcher.BeginInvoke(new Action(() => txtStatus.Text += "Extracting editor pattern...\r\n"));
+            bool editorPatternOk = await TryExtractEditorPatternAsync(PatternInfo.DesignID).ConfigureAwait(false);
+            Dispatcher.BeginInvoke(new Action(() =>
+                txtStatus.Text += editorPatternOk
+                    ? "Editor pattern ready — \"Open in editor\" is live for this design.\r\n"
+                    : "Editor pattern not ready yet (see message above) — will pick up on the next manual batch run.\r\n"));
+
             // 5. Restart Elastic Beanstalk environment (status text is updated via callback which marshals to UI)
             bool restarted = await _elasticBeanstalkHelper.RestartEnvironmentAsync(msg =>
             {
@@ -1218,6 +1235,46 @@ namespace Uploader
                 throw new Exception($"Converter did not produce expected output: {outputPath}");
 
             return outputPath;
+        }
+
+        // Runs the just-published design's kit PDF through the TS pattern-extractor
+        // (same code path the catalog batch job uses) so "Open in editor" is live
+        // immediately, without waiting for a manual batch re-run. Best-effort: any
+        // failure (missing Node, CloudFront not yet propagated, parser edge case)
+        // is logged but does not abort the publish — the design is still fully
+        // published either way, and the batch script's default (skip designs that
+        // already have EditorPatternKey) means a later manual run safely picks up
+        // whatever this step missed.
+        private async Task<bool> TryExtractEditorPatternAsync(int designId)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                ArgumentList = { "/c", "npx", "tsx", "scripts/batch-extract-catalog-patterns.ts", $"--designIds={designId}" },
+                WorkingDirectory = WebProjectPath,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null) return false;
+
+            Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync().ConfigureAwait(false);
+            string stdOut = await stdOutTask.ConfigureAwait(false);
+            string stdErr = await stdErrTask.ConfigureAwait(false);
+
+            bool ok = process.ExitCode == 0 && stdOut.Contains("ok=1");
+            if (!ok)
+            {
+                string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
+                Dispatcher.BeginInvoke(new Action(() =>
+                    txtStatus.Text += $"Editor-pattern extraction failed for DesignID={designId} (will be picked up by the next manual batch run): {details}\r\n"));
+            }
+            return ok;
         }
 
         private Task UploadPdfFileAsync(string filePath, string key)

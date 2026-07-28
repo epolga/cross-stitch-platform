@@ -32,6 +32,7 @@ using UploadPatterns;
 using Uploader.Helpers;
 
 const string ConverterExePathDefault = @"%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe";
+const string WebProjectPathDefault = @"%CROSS_STITCH%\cross-stitch-platform\web";
 const string PhotoPrefix = "photos";
 const string PinterestPhotoFileName = "4_pinterest.jpg";
 
@@ -188,6 +189,15 @@ Console.WriteLine(string.IsNullOrWhiteSpace(seoDescription)
 Console.WriteLine("Inserting item into DynamoDB...");
 await InsertItemIntoDynamoDbAsync(dynamoDbClient, albumId, patternInfo, nGlobalPage, pinResult.LinkType, seoDescription);
 Console.WriteLine("Inserted.");
+
+// ---- 10b. Extract editor pattern (best-effort — mirrors MainWindow.xaml.cs's
+// TryExtractEditorPatternAsync so "Open in editor" is live immediately for
+// designs published via either path) ----
+Console.WriteLine("Extracting editor pattern...");
+bool editorPatternOk = await TryExtractEditorPatternAsync(patternInfo.DesignID);
+Console.WriteLine(editorPatternOk
+    ? "Editor pattern ready — \"Open in editor\" is live for this design."
+    : "Editor pattern not ready yet (see message above) — will pick up on the next manual batch run.");
 
 // ---- 11. Restart Elastic Beanstalk ----
 Console.WriteLine("Restarting Elastic Beanstalk environment...");
@@ -428,6 +438,51 @@ static async Task<string> ConvertPdfForUploadAsync(string inputPath)
         throw new Exception($"Converter did not produce expected output: {outputPath}");
 
     return outputPath;
+}
+
+// Runs the just-published design's kit PDF through the TS pattern-extractor
+// (web/scripts/batch-extract-catalog-patterns.ts — same script the catalog
+// batch job uses) so "Open in editor" is live immediately, without waiting
+// for a manual batch re-run. Best-effort: any failure (missing Node,
+// CloudFront not yet propagated, parser edge case) is logged but does not
+// abort the publish — the batch script's default (skip designs that already
+// have EditorPatternKey) means a later manual run safely picks up whatever
+// this step missed.
+static async Task<bool> TryExtractEditorPatternAsync(int designId)
+{
+    string webProjectPath = ExpandCrossStitchToken(ConfigurationManager.AppSettings["WebProjectPath"] ?? WebProjectPathDefault);
+
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = "cmd.exe",
+        WorkingDirectory = webProjectPath,
+        CreateNoWindow = true,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+    };
+    startInfo.ArgumentList.Add("/c");
+    startInfo.ArgumentList.Add("npx");
+    startInfo.ArgumentList.Add("tsx");
+    startInfo.ArgumentList.Add("scripts/batch-extract-catalog-patterns.ts");
+    startInfo.ArgumentList.Add($"--designIds={designId}");
+
+    using var process = Process.Start(startInfo);
+    if (process == null) return false;
+
+    Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
+    Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+    string stdOut = await stdOutTask;
+    string stdErr = await stdErrTask;
+
+    bool ok = process.ExitCode == 0 && stdOut.Contains("ok=1");
+    if (!ok)
+    {
+        string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
+        Console.WriteLine($"Editor-pattern extraction failed for DesignID={designId} (will be picked up by the next manual batch run): {details}");
+    }
+    return ok;
 }
 
 static Task UploadPdfFileAsync(TransferUtility s3, string bucketName, string filePath, string key)
