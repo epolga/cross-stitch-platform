@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyUserByToken } from '@/lib/users';
 import { sendEmailToAdmin } from '@/lib/email-service';
 import { getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
+import { createSessionToken, setSessionCookie } from '@/lib/session';
 
 function resolveBaseUrl(req: Request): string {
   const host = req.headers.get('host');
@@ -51,6 +52,18 @@ export async function GET(req: Request): Promise<Response> {
 
     const baseUrl = resolveBaseUrl(req);
 
+    // Log the user in immediately — without this, clicking the verification
+    // link marked the account Verified but left the visitor logged out, so
+    // the very next login-gated action (e.g. downloading the design they
+    // registered for) bounced them back to the registration form, which
+    // looked like the whole flow going in circles (reported by a real user,
+    // 2026-07-28: "All it does is go in circles back to the registration
+    // form!").
+    const sessionToken = result.email && result.cid
+      ? await createSessionToken({ userId: result.cid, email: result.email })
+      : null;
+
+    let response: NextResponse;
     if (result.cid) {
       let targetUrl: URL;
       try {
@@ -62,10 +75,13 @@ export async function GET(req: Request): Promise<Response> {
       }
       targetUrl.searchParams.set('cid', result.cid);
       targetUrl.searchParams.set('eid', 'verified');
-      return NextResponse.redirect(targetUrl.toString(), { status: 302 });
+      response = NextResponse.redirect(targetUrl.toString(), { status: 302 });
+    } else {
+      response = NextResponse.json({ ok: true, message: 'Email verified' }, { status: 200 });
     }
 
-    return NextResponse.json({ ok: true, message: 'Email verified' }, { status: 200 });
+    if (sessionToken) setSessionCookie(response, sessionToken);
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
     return NextResponse.json({ error: message }, { status: 500 });

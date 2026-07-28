@@ -46,6 +46,16 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
+**Ann persona (noted 2026-07-28 for next session):** today only added one
+practical/SEO-oriented post (`how-to-turn-a-photo-into-a-cross-stitch-pattern`)
+— the personal/recurring persona side of the Current goal above is still
+untouched. Per `web/plan/ann_story_timeline.md`'s "Suggested next-mention
+order": introducing **Nitka as a named character** is the lowest-friction
+next piece (she's already visually established via the favicon, so this is
+a callback, not a cold introduction) — check that file before writing
+anything, so age/Tomáš/Klára don't leak before their own intended first
+mention.
+
 **Milestone S5 remaining work (noted 2026-07-27 for next session):**
 differentiate the homepage "Based on your browsing" personalization
 (`PersonalizedSection.tsx` / `/api/personalized`) beyond generic
