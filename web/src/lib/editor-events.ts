@@ -89,7 +89,6 @@ interface Milestones {
   firstEditorUsage: boolean;
   firstPdfExport: boolean;
   firstFeedback: boolean;
-  firstReturnGeneration: boolean;
   errorAlertSentDate: string;
   errorCountToday: number;
   errorCountDate: string;
@@ -104,7 +103,6 @@ async function getMilestones(): Promise<Milestones> {
     firstEditorUsage:      Item?.firstEditorUsage?.BOOL      ?? false,
     firstPdfExport:        Item?.firstPdfExport?.BOOL        ?? false,
     firstFeedback:         Item?.firstFeedback?.BOOL         ?? false,
-    firstReturnGeneration: Item?.firstReturnGeneration?.BOOL ?? false,
     errorAlertSentDate:    Item?.errorAlertSentDate?.S       ?? '',
     errorCountToday:       Item?.errorCountToday?.N ? parseInt(Item.errorCountToday.N) : 0,
     errorCountDate:        Item?.errorCountDate?.S           ?? '',
@@ -175,12 +173,11 @@ async function checkAndNotify(event: EditorEvent): Promise<void> {
     return;
   }
 
-  if (event.eventType === 'pattern_generated_return_visit' && !m.firstReturnGeneration) {
+  if (event.eventType === 'pattern_generated_return_visit') {
     await sendAlertEmail(
-      '[cross-stitch] First return-visit pattern generation!',
-      `Someone came back in a new session and generated another pattern for the first time — a real retention signal.\n\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
+      '[cross-stitch] Return-visit pattern generation',
+      `Someone came back in a new session and generated another pattern — a retention signal.\n\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
     );
-    await updateMilestones({ firstReturnGeneration: { BOOL: true } });
     return;
   }
 
