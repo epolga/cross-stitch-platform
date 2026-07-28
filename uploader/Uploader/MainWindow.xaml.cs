@@ -2432,8 +2432,10 @@ namespace Uploader
             if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
                 return;
 
-            string editorUrl      = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
-            string changelogUrl   = $"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
+            string eid             = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+            string editorUrl       = AppendTrackingParameters($"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement");
+            string changelogUrl    = AppendTrackingParameters($"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026", "admin", eid, "announcement");
+            string siteUrl         = AppendTrackingParameters(_linkHelper.SiteBaseUrl, "admin", eid, "announcement");
             string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
 
             RenderedEmailContent content = RenderAnnouncementEmailContent(
@@ -2441,7 +2443,7 @@ namespace Uploader
                 GetActiveAnnouncementTextTemplate(),
                 "Ann",
                 editorUrl,
-                _linkHelper.SiteBaseUrl,
+                siteUrl,
                 unsubscribeUrl,
                 changelogUrl);
 
@@ -2510,12 +2512,18 @@ namespace Uploader
 
             string editorUrl = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
             string changelogUrl = $"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
+            string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+            string sendLogTable = ConfigurationManager.AppSettings["EmailSendLogTableName"] ?? "EmailSendLog";
             int sent = 0;
             int total = eligibleRecipients.Count;
             var stopwatch = Stopwatch.StartNew();
 
             foreach (var recipient in eligibleRecipients)
             {
+                string cid = recipient.Cid ?? string.Empty;
+                string editorUrlWithTracking = AppendTrackingParameters(editorUrl, cid, eid, "announcement");
+                string siteUrlWithTracking = AppendTrackingParameters(_linkHelper.SiteBaseUrl, cid, eid, "announcement");
+                string changelogUrlWithTracking = AppendTrackingParameters(changelogUrl, cid, eid, "announcement");
                 string unsubscribeUrl   = BuildUnsubscribeUrlFromStoredToken(recipient.Email, recipient.UnsubscribeToken);
                 var    unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
 
@@ -2523,12 +2531,12 @@ namespace Uploader
                     GetActiveAnnouncementHtmlTemplate(),
                     GetActiveAnnouncementTextTemplate(),
                     recipient.FirstName,
-                    editorUrl,
-                    _linkHelper.SiteBaseUrl,
+                    editorUrlWithTracking,
+                    siteUrlWithTracking,
                     unsubscribeUrl,
-                    changelogUrl);
+                    changelogUrlWithTracking);
 
-                await _emailHelper.SendEmailAsync(
+                string? messageId = await _emailHelper.SendEmailAsync(
                     _sesClient,
                     sender,
                     new[] { recipient.Email },
@@ -2537,6 +2545,8 @@ namespace Uploader
                     content.HtmlBody,
                     unsubscribeHeaders,
                     configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                await LogEmailSendAsync(sendLogTable, recipient.Email, cid, messageId, "user", 0, eid).ConfigureAwait(false);
 
                 sent++;
 
@@ -2580,6 +2590,7 @@ namespace Uploader
                 ? "New cross stitch pattern"
                 : latestDesign.Title;
             string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+            string sendLogTable = ConfigurationManager.AppSettings["EmailSendLogTableName"] ?? "EmailSendLog";
 
             // Send the same email to admin first.
             if (!string.IsNullOrEmpty(admin))
@@ -2594,7 +2605,7 @@ namespace Uploader
                     altText,
                     null);
 
-                await _emailHelper.SendEmailAsync(
+                string? adminMessageId = await _emailHelper.SendEmailAsync(
                     _sesClient,
                     sender,
                     new[] { admin },
@@ -2602,6 +2613,8 @@ namespace Uploader
                     adminContent.TextBody,
                     adminContent.HtmlBody,
                     configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                await LogEmailSendAsync(sendLogTable, admin, "admin", adminMessageId, "admin", latestDesign.DesignId, eid).ConfigureAwait(false);
             }
 
             var recipients = userRecipients;
@@ -2624,7 +2637,9 @@ namespace Uploader
                 true,
                 usersTable,
                 emailAttribute,
-                userIdAttribute).ConfigureAwait(false);
+                userIdAttribute,
+                sendLogTable,
+                latestDesign.DesignId).ConfigureAwait(false);
 
             Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -2786,7 +2801,7 @@ namespace Uploader
                 .Replace('/', '_');
         }
 
-        private static string AppendTrackingParameters(string url, string? cid, string? eid)
+        private static string AppendTrackingParameters(string url, string? cid, string? eid, string utmSource = "newsletter")
         {
             if (string.IsNullOrWhiteSpace(url))
                 return url;
@@ -2801,10 +2816,10 @@ namespace Uploader
                 ? url
                 : AppendQueryParameters(url, queryParts);
 
-            return AppendUtmParameters(trackedUrl);
+            return AppendUtmParameters(trackedUrl, utmSource);
         }
 
-        private static string AppendUtmParameters(string url)
+        private static string AppendUtmParameters(string url, string utmSource = "newsletter")
         {
             if (string.IsNullOrWhiteSpace(url))
                 return url;
@@ -2812,7 +2827,7 @@ namespace Uploader
             var queryParts = new List<string>();
 
             if (!HasQueryParameter(url, "utm_source"))
-                queryParts.Add("utm_source=newsletter");
+                queryParts.Add($"utm_source={Uri.EscapeDataString(utmSource)}");
             if (!HasQueryParameter(url, "utm_medium"))
                 queryParts.Add("utm_medium=email");
             if (!HasQueryParameter(url, "utm_campaign"))
@@ -2867,6 +2882,36 @@ namespace Uploader
 
             string separator = baseUrl.Contains("?") ? "&" : "?";
             return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
+        }
+
+        // Persists one row per send to EmailSendLog (PK eid, SK email) so it survives
+        // past this machine and can be joined against EmailEntryEvents to compute real
+        // per-user send/engagement history — mirrors UploaderCli/Program.cs's LogSendAsync,
+        // which until now was the only send path that wrote this table.
+        private async Task LogEmailSendAsync(string sendLogTable, string email, string cid, string? messageId, string recipientType, int designId, string eid)
+        {
+            var item = new Dictionary<string, AttributeValue>
+            {
+                ["eid"] = new AttributeValue { S = eid },
+                ["email"] = new AttributeValue { S = email.Trim().ToLowerInvariant() },
+                ["recipientType"] = new AttributeValue { S = recipientType },
+                ["designId"] = new AttributeValue { N = designId.ToString(CultureInfo.InvariantCulture) },
+                ["sentAtUtc"] = new AttributeValue { S = DateTime.UtcNow.ToString("o") },
+            };
+            if (!string.IsNullOrWhiteSpace(cid)) item["cid"] = new AttributeValue { S = cid };
+            if (!string.IsNullOrWhiteSpace(messageId)) item["messageId"] = new AttributeValue { S = messageId };
+
+            try
+            {
+                await _dynamoDbClient.PutItemAsync(new PutItemRequest { TableName = sendLogTable, Item = item }).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    txtStatus.Text += $"Failed to write EmailSendLog row for {email} (eid {eid}): {ex.Message}\r\n";
+                }));
+            }
         }
 
         private static Dictionary<string, string> BuildUnsubscribeHeaders(string unsubscribeUrl, string sender)
@@ -3011,7 +3056,9 @@ namespace Uploader
             bool updateLastEmailDate,
             string usersTable,
             string emailAttribute,
-            string userIdAttribute)
+            string userIdAttribute,
+            string sendLogTable,
+            int designId)
         {
             if (recipients == null || recipients.Count == 0)
             {
@@ -3068,7 +3115,7 @@ namespace Uploader
                     altText,
                     unsubscribeUrl);
 
-                await _emailHelper.SendEmailAsync(
+                string? messageId = await _emailHelper.SendEmailAsync(
                     _sesClient,
                     sender,
                     new[] { recipient.Email },
@@ -3077,6 +3124,8 @@ namespace Uploader
                     content.HtmlBody,
                     unsubscribeHeaders,
                     configurationSetName: _sesConfigurationSetName).ConfigureAwait(false);
+
+                await LogEmailSendAsync(sendLogTable, recipient.Email, cid, messageId, "user", designId, eid).ConfigureAwait(false);
 
                 if (updateLastEmailDate)
                 {

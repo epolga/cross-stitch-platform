@@ -711,21 +711,21 @@ static RenderedEmailContent RenderHtmlEmailContent(
     return new RenderedEmailContent(subject, textBody, htmlBody);
 }
 
-static string AppendTrackingParameters(string url, string? cid, string? eid)
+static string AppendTrackingParameters(string url, string? cid, string? eid, string utmSource = "newsletter")
 {
     if (string.IsNullOrWhiteSpace(url)) return url;
     var queryParts = new List<string>();
     if (!string.IsNullOrWhiteSpace(cid)) queryParts.Add($"cid={Uri.EscapeDataString(cid)}");
     if (!string.IsNullOrWhiteSpace(eid)) queryParts.Add($"eid={Uri.EscapeDataString(eid)}");
     string trackedUrl = queryParts.Count == 0 ? url : AppendQueryParameters(url, queryParts);
-    return AppendUtmParameters(trackedUrl);
+    return AppendUtmParameters(trackedUrl, utmSource);
 }
 
-static string AppendUtmParameters(string url)
+static string AppendUtmParameters(string url, string utmSource = "newsletter")
 {
     if (string.IsNullOrWhiteSpace(url)) return url;
     var queryParts = new List<string>();
-    if (!HasQueryParameter(url, "utm_source")) queryParts.Add("utm_source=newsletter");
+    if (!HasQueryParameter(url, "utm_source")) queryParts.Add($"utm_source={Uri.EscapeDataString(utmSource)}");
     if (!HasQueryParameter(url, "utm_medium")) queryParts.Add("utm_medium=email");
     if (!HasQueryParameter(url, "utm_campaign"))
         queryParts.Add($"utm_campaign={Uri.EscapeDataString(DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}");
@@ -822,10 +822,14 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
     int sent = 0;
     foreach (var recipient in eligibleRecipients)
     {
+        string cid = recipient.Cid ?? string.Empty;
+        string editorUrlWithTracking = AppendTrackingParameters(editorUrl, cid, eid, "announcement");
+        string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, cid, eid, "announcement");
+        string changelogUrlWithTracking = AppendTrackingParameters(changelogUrl, cid, eid, "announcement");
         string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, recipient.UnsubscribeToken!);
         var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
 
-        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrl, linkHelper.SiteBaseUrl, unsubscribeUrl, changelogUrl);
+        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrlWithTracking, siteUrlWithTracking, unsubscribeUrl, changelogUrlWithTracking);
         string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
         await LogSendAsync(dynamoDbClient, sendLogTable, logPath, recipient.Email, recipient.Cid ?? string.Empty, messageId, "user", 0, eid);
 
