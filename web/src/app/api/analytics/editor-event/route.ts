@@ -10,6 +10,8 @@ const SERVER_SIDE_EVENTS = new Set([
   'pdf_exported',
   'feedback_submitted',
   'editor_error',
+  'pattern_quality_feedback',
+  'pattern_generated_return_visit',
 ]);
 
 // Rate limit: one write per sessionId+eventType per minute
@@ -66,6 +68,8 @@ export async function POST(req: NextRequest) {
       errorCode:     typeof params.errorCode     === 'string' ? params.errorCode     : undefined,
       step:          typeof params.step          === 'string' ? params.step          : undefined,
       importance:    typeof params.importance    === 'string' ? params.importance    : undefined,
+      rating:        typeof params.rating        === 'string' ? params.rating        : undefined,
+      qualityReason: typeof params.qualityReason === 'string' ? params.qualityReason : undefined,
     });
 
     return NextResponse.json({ ok: true });

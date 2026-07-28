@@ -74,6 +74,8 @@ export interface EditorEvent {
   errorCode?: string;
   step?: string;
   importance?: string;
+  rating?: string;
+  qualityReason?: string;
 }
 
 export interface EditorEventRecord extends EditorEvent {
@@ -87,6 +89,7 @@ interface Milestones {
   firstEditorUsage: boolean;
   firstPdfExport: boolean;
   firstFeedback: boolean;
+  firstReturnGeneration: boolean;
   errorAlertSentDate: string;
   errorCountToday: number;
   errorCountDate: string;
@@ -98,12 +101,13 @@ async function getMilestones(): Promise<Milestones> {
     Key: { id: { S: MILESTONES_ID } },
   }));
   return {
-    firstEditorUsage:   Item?.firstEditorUsage?.BOOL  ?? false,
-    firstPdfExport:     Item?.firstPdfExport?.BOOL    ?? false,
-    firstFeedback:      Item?.firstFeedback?.BOOL     ?? false,
-    errorAlertSentDate: Item?.errorAlertSentDate?.S   ?? '',
-    errorCountToday:    Item?.errorCountToday?.N ? parseInt(Item.errorCountToday.N) : 0,
-    errorCountDate:     Item?.errorCountDate?.S        ?? '',
+    firstEditorUsage:      Item?.firstEditorUsage?.BOOL      ?? false,
+    firstPdfExport:        Item?.firstPdfExport?.BOOL        ?? false,
+    firstFeedback:         Item?.firstFeedback?.BOOL         ?? false,
+    firstReturnGeneration: Item?.firstReturnGeneration?.BOOL ?? false,
+    errorAlertSentDate:    Item?.errorAlertSentDate?.S       ?? '',
+    errorCountToday:       Item?.errorCountToday?.N ? parseInt(Item.errorCountToday.N) : 0,
+    errorCountDate:        Item?.errorCountDate?.S           ?? '',
   };
 }
 
@@ -171,6 +175,15 @@ async function checkAndNotify(event: EditorEvent): Promise<void> {
     return;
   }
 
+  if (event.eventType === 'pattern_generated_return_visit' && !m.firstReturnGeneration) {
+    await sendAlertEmail(
+      '[cross-stitch] First return-visit pattern generation!',
+      `Someone came back in a new session and generated another pattern for the first time — a real retention signal.\n\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
+    );
+    await updateMilestones({ firstReturnGeneration: { BOOL: true } });
+    return;
+  }
+
   if (event.eventType === 'editor_error') {
     const isNewDay  = m.errorCountDate !== today;
     const newCount  = isNewDay ? 1 : m.errorCountToday + 1;
@@ -211,6 +224,8 @@ export async function logEditorEvent(event: EditorEvent): Promise<void> {
   if (event.errorCode)           item.errorCode    = { S: event.errorCode };
   if (event.step)                item.step         = { S: event.step };
   if (event.importance)          item.importance   = { S: event.importance };
+  if (event.rating)              item.rating       = { S: event.rating };
+  if (event.qualityReason)       item.qualityReason = { S: event.qualityReason };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
 
@@ -234,6 +249,8 @@ function itemToRecord(item: Record<string, AttributeValue>): EditorEventRecord {
     errorCode:     item.errorCode?.S,
     step:          item.step?.S,
     importance:    item.importance?.S,
+    rating:        item.rating?.S,
+    qualityReason: item.qualityReason?.S,
   };
 }
 

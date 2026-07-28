@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, rgb, StandardFonts, PDFString, degrees } from 'pdf-lib';
+import { randomUUID } from 'crypto';
 import type { PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { renderSymbolToPng } from '@/lib/server-symbol-renderer';
@@ -108,6 +109,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid pattern data' }, { status: 400 });
     }
 
+    // Forensic-only fingerprint (not DRM) so a leaked/shared chart page can be
+    // traced back to which download produced it.
+    const downloadId = randomUUID().slice(0, 8);
+    const fingerprint = `cross-stitch.com · ${title} · dl-${downloadId}`;
+
     const rows = grid.length;
     const cols = grid[0].length;
 
@@ -126,6 +132,18 @@ export async function POST(request: NextRequest) {
     // for the rest of this document (key/chart pages) — left as-is for now.
     const titleFont = await pdf.embedFont(StandardFonts.TimesRomanBold);
     const titleFontRegular = await pdf.embedFont(StandardFonts.TimesRoman);
+
+    // Forensic-only fingerprint, tucked in the bottom-right corner of every
+    // page (cover, key, notes, and every chart page) — not just the chart
+    // pages — so a leaked/screenshotted page of any kind can be traced back
+    // to which download produced it.
+    function drawFingerprint(p: PDFPage) {
+      const fpw = font.widthOfTextAtSize(fingerprint, 6);
+      p.drawText(fingerprint, {
+        x: PAGE_W - MARGIN - fpw, y: MARGIN / 2 + 2,
+        size: 6, font, color: rgb(0.75, 0.75, 0.75),
+      });
+    }
 
     // Rasterize every unique symbol — black always, white only for color-symbol mode
     const uniqueSymbols = [...new Set(usedPalette.map(c => c.symbol))];
@@ -152,6 +170,7 @@ export async function POST(request: NextRequest) {
     // ── Page 1: Cover ──────────────────────────────────────────────────────────
     {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
+      drawFingerprint(p);
 
       // Title — Times New Roman Bold, matching the existing catalog kit PDFs
       // (e.g. https://d2o1uvvg91z7o4.cloudfront.net/pdfs/8/Stitch26_Kit.pdf:
@@ -235,6 +254,7 @@ export async function POST(request: NextRequest) {
 
     for (let pageIdx = 0; pageIdx < keyPagesCount; pageIdx++) {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
+      drawFingerprint(p);
 
       // "Key" title — centered, large navy
       const keyTitleW = fontBold.widthOfTextAtSize('Key', 20);
@@ -323,6 +343,7 @@ export async function POST(request: NextRequest) {
     // of mixed into the borrowed intro text.
     {
       const p = pdf.addPage([PAGE_W, PAGE_H]);
+      drawFingerprint(p);
 
       // Title — regular weight in the original, not bold (unlike the cover title)
       centerText(p, 'Notes', PAGE_H - MARGIN - 20, 20, titleFontRegular, NAVY);
@@ -573,6 +594,8 @@ export async function POST(request: NextRequest) {
           x: (PAGE_W - fw) / 2, y: MARGIN / 2 + 2,
           size: 8, font, color: rgb(0.5, 0.5, 0.5),
         });
+
+        drawFingerprint(p);
 
         // Footer legend, repeated on every chart page (not just the Notes page)
         // so the reminder is right where the orange band actually appears.

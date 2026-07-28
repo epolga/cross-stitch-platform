@@ -70,7 +70,7 @@ see below for source-doc note) — all small enough for one session:**
    happy with this pattern? Yes/Mostly/No", with a reason picklist on
    "No". Distinct from the existing `FeatureRequestDialog` (that asks
    feature *importance*, not output *quality*) — no overlap. Log via the
-   existing `editor-events.ts` pipeline (new event type).
+   existing `editor-events.ts` pipeline (new event type). **Est. ~2 hours.**
 2. **1-2 new analytics funnel events** — e.g. "generated a second pattern
    on a return visit". Event infrastructure (`logEditorEvent`, DDB table,
    admin dashboard) already exists; just add the bounded event + a
@@ -81,15 +81,38 @@ see below for source-doc note) — all small enough for one session:**
    mentioned" list. Directly serves the Current goal (Ann blog voice).
 4. **PDF footer fingerprint** — one line on generated PDFs, e.g.
    `cross-stitch.com · Pattern #ID · Download ID`. Forensic only, not DRM.
+   **Implementation: one line of code.**
 5. **Catalog metadata consistency-check script** — one-off script
    comparing DB metadata vs. rendered page vs. PDF dimensions, flagging
    mismatches (known issue class: contradicting registration
-   instructions, mismatched sizes).
+   instructions, mismatched sizes). **Done 2026-07-28**:
+   `web/scripts/check-catalog-metadata-consistency.ts` compares DB
+   Width/Height/NColors against the actual grid+palette JSON already
+   extracted from each design's kit PDF by the 2026-07-27 batch job (DB
+   and rendered page are the same field by construction, so the real
+   check is DB vs. PDF). Full run across all 5137 extracted designs:
+   **54 mismatches across 32 designs** — report at
+   `docs/web/catalog-metadata-consistency-issues.md`. Notable clusters:
+   6 designs with `NColors=0` in DB despite the PDF clearly having
+   colors (broken metadata, not a size discrepancy); 7 designs (mostly
+   AlbumID 36/40/8/32, religious/cultural subjects) where DB claims
+   44-50 colors but the PDF extraction found only 2-8 — plausibly the
+   known backstitch-extraction gap (converter doesn't parse backstitch
+   yet) rather than bad DB data, not yet root-caused.
+   **Fixed 2026-07-28**: Olga confirmed the PDF should be treated as
+   ground truth across the board (no exception for the 7 low-color
+   outliers). `web/scripts/fix-catalog-metadata-mismatches.ts` applied
+   all 32 designs' Width/Height/NColors to match their PDF-extracted
+   values (dry-run reviewed first, then `--confirm`). Re-verified via
+   `check-catalog-metadata-consistency.ts` against just those 32
+   DesignIDs: 0 mismatches remaining. Excel export with design-page +
+   kit-PDF URLs for each row also produced at Olga's request
+   (`docs/web/catalog-metadata-consistency-issues.xlsx`, gitignored).
 6. **AI-decision framework as a standing doc** — fold
    `AI_Product_Decision_Guide_ChatGPT.md`'s checklist (pre-mortem,
    fact/inference/hypothesis labeling, decision gate) into an existing
    planning doc as a standing protocol for future product calls.
-   Documentation-only.
+   Documentation-only. **Est. under an hour.**
 
 Source note: these came from reviewing 7 untracked `web/plan/*_ChatGPT.md`
 files (ChatGPT-generated recommendations, not yet acted on). Their

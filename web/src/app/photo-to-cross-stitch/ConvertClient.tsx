@@ -13,6 +13,7 @@ import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
 import SavePatternDialog from '@/app/components/SavePatternDialog';
 import OpenPatternDialog from '@/app/components/OpenPatternDialog';
 import FeatureRequestDialog from '@/app/components/FeatureRequestDialog';
+import PatternQualityWidget from '@/app/components/PatternQualityWidget';
 import MirrorDialog, { type MirrorDirection, type MirrorAxis, type MirrorResize } from '@/app/components/MirrorDialog';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
@@ -20,7 +21,7 @@ import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-c
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
 
-import { trackEvent, postEditorEvent } from '@/lib/track-event';
+import { trackEvent, postEditorEvent, checkReturnPatternGeneration } from '@/lib/track-event';
 
 const DRAFT_KEY = 'converterDraft';
 
@@ -146,6 +147,8 @@ export default function ConvertPage() {
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
   const [showFeatureRequest, setShowFeatureRequest] = useState(false);
   const [showWishHint, setShowWishHint] = useState(false);
+  const [showQualityFeedback, setShowQualityFeedback] = useState(false);
+  const qualityFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorStartRef = useRef(Date.now());
   const editCountRef = useRef(0);
   const hasExportedPdfRef = useRef(false);
@@ -200,6 +203,12 @@ export default function ConvertPage() {
     const t = setTimeout(() => setShowWishHint(false), 14000);
     return () => clearTimeout(t);
   }, [showWishHint]);
+
+  useEffect(() => {
+    return () => {
+      if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const applyPaletteHeight = () => {
@@ -316,6 +325,16 @@ export default function ConvertPage() {
       patternHeight: paddedGrid.length,
       colorCount: data.palette.length,
     });
+    if (checkReturnPatternGeneration()) {
+      trackEvent('pattern_generated_return_visit', {});
+      postEditorEvent('pattern_generated_return_visit', {});
+    }
+
+    // Ask for a quality rating a few seconds after generation, once the
+    // user has had a moment to actually look at the result.
+    if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
+    setShowQualityFeedback(false);
+    qualityFeedbackTimerRef.current = setTimeout(() => setShowQualityFeedback(true), 4000);
   }
 
   // Download PDF from current (edited) grid
@@ -2062,6 +2081,15 @@ export default function ConvertPage() {
           exportedPdf:              hasExportedPdfRef.current,
         }}
         onClose={() => setShowFeatureRequest(false)}
+      />
+
+      <PatternQualityWidget
+        open={showQualityFeedback}
+        onSubmit={(rating, reason) => {
+          trackEvent('pattern_quality_feedback', { rating, reason });
+          postEditorEvent('pattern_quality_feedback', { rating, qualityReason: reason });
+        }}
+        onClose={() => setShowQualityFeedback(false)}
       />
 
       {showNamePrompt && (

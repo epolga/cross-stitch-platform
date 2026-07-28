@@ -8,6 +8,37 @@ These are distinct from the Pinterest AI Agent pipeline milestones (see `Pintere
 
 Source analysis: `docs/technology_opportunities_for_cross_stitch_com.md`.
 
+## Standing protocol: AI-assisted product decisions
+
+Before starting any milestone/task here estimated at more than a couple of
+days, run it through this decision gate (full reasoning and examples in
+`AI_Product_Decision_Guide_ChatGPT.md`):
+
+1. **Label claims explicitly** — FACT (backed by data) / INFERENCE (reasonable
+   read of the facts) / HYPOTHESIS (untested) / UNKNOWN (no data yet). Don't
+   let a plausible hypothesis get treated as an established fact.
+2. **Pre-mortem** — assume the task shipped and turned out to be a waste of
+   time six months later; list the likely reasons why, *before* building.
+3. **Strongest argument against** — ask for it explicitly, don't rely on it
+   surfacing unprompted.
+4. **Cheapest test first** — don't build the full feature before its value
+   can be checked more cheaply (a limited rollout, a manual version, a
+   single-metric proxy).
+5. **Success/failure criteria set in advance** — decide what "working" and
+   "not working" look like *before* the data comes in, not after.
+6. **Opportunity cost** — what does this task displace this week, and is
+   that trade worth it.
+7. **Competitor-has-it is not evidence** — a competitor shipping X only
+   means "investigate whether our users have the same problem," not "build
+   X."
+8. **Don't let sunk cost argue for continuing** — "already a week in" isn't
+   a reason; "the remaining work is worth it" is.
+
+Standing instruction for the AI side of this loop: don't default to agreeing
+with the proposed idea — surface the strongest case against it, label
+fact vs. inference vs. hypothesis, and say "we don't know" rather than
+inventing a probability when the data isn't there.
+
 ---
 
 # Milestone S1 — Image SEO & Modern Delivery
