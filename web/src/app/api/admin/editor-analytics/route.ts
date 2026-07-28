@@ -58,7 +58,21 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 20);
 
-    return NextResponse.json({ dailyCounts, recentErrors, recentFeedback, topSources });
+    const qualityEvents = allEvents.filter(e => e.eventType === 'pattern_quality_feedback');
+    const qualityCounts = { yes: 0, mostly: 0, no: 0 };
+    for (const e of qualityEvents) {
+      if (e.rating === 'yes' || e.rating === 'mostly' || e.rating === 'no') qualityCounts[e.rating]++;
+    }
+    const recentQualityReasons = qualityEvents
+      .filter(e => e.rating === 'no' && e.qualityReason)
+      .sort((a, b) => b.ts.localeCompare(a.ts))
+      .slice(0, 20)
+      .map(e => ({ ts: e.ts, reason: e.qualityReason! }));
+
+    return NextResponse.json({
+      dailyCounts, recentErrors, recentFeedback, topSources,
+      qualityCounts, recentQualityReasons,
+    });
   } catch (e) {
     console.error('[admin/editor-analytics] GET error:', e);
     return NextResponse.json({ error: 'Failed to load analytics' }, { status: 500 });

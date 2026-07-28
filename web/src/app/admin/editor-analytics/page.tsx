@@ -17,6 +17,8 @@ interface AnalyticsData {
   recentErrors: EditorEventRecord[];
   recentFeedback: FeatureRequest[];
   topSources: { source: string; count: number }[];
+  qualityCounts: { yes: number; mostly: number; no: number };
+  recentQualityReasons: { ts: string; reason: string }[];
 }
 
 const IMPORTANCE_COLORS: Record<string, string> = {
@@ -141,6 +143,38 @@ export default function EditorAnalyticsPage() {
               </table>
             </section>
           )}
+
+          {/* Pattern quality feedback */}
+          <section>
+            <h2 className="text-lg font-semibold text-gray-800 mb-3">Pattern quality</h2>
+            {(() => {
+              const { yes, mostly, no } = data.qualityCounts;
+              const total = yes + mostly + no;
+              if (total === 0) return <p className="text-sm text-gray-400">No responses yet.</p>;
+              return (
+                <>
+                  <div className="flex gap-6 mb-4">
+                    <div><span className="text-2xl font-semibold text-emerald-600">{yes}</span> <span className="text-sm text-gray-500">😍 Yes ({pct(yes, total)})</span></div>
+                    <div><span className="text-2xl font-semibold text-amber-600">{mostly}</span> <span className="text-sm text-gray-500">🙂 Mostly ({pct(mostly, total)})</span></div>
+                    <div><span className="text-2xl font-semibold text-rose-600">{no}</span> <span className="text-sm text-gray-500">😕 No ({pct(no, total)})</span></div>
+                  </div>
+                  {data.recentQualityReasons.length > 0 && (
+                    <>
+                      <h3 className="text-sm font-medium text-gray-600 mb-2">Recent &quot;No&quot; reasons ({data.recentQualityReasons.length})</h3>
+                      <div className="space-y-1.5">
+                        {data.recentQualityReasons.map((r, i) => (
+                          <div key={i} className="bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 text-sm flex items-center gap-3">
+                            <span className="font-mono text-xs text-gray-400 shrink-0">{fmt(r.ts)}</span>
+                            <span className="text-gray-800">{r.reason}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </section>
 
           {/* Recent errors */}
           <section>
