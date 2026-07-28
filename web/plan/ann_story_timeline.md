@@ -8,6 +8,15 @@ Update this file every time a new piece of Ann content ships.
 
 ## Published, dated
 
+- **2026-07-28 — blog post `how-to-turn-a-photo-into-a-cross-stitch-pattern`**
+  (`/short-stories/how-to-turn-a-photo-into-a-cross-stitch-pattern`): practical
+  how-to for the photo-to-cross-stitch converter (SEO-oriented, targets
+  "photo to cross stitch pattern" and similar queries). Briefly references the
+  arthritis origin story as a callback to `why-i-built-this` (no new facts
+  introduced) and links to `/photo-to-cross-stitch` and, in passing, the
+  "open any catalog design in the editor" feature. Does not introduce Nitka,
+  age, Tomáš, or Klára — still open for a future post per the suggested order
+  below.
 - **2026-07-08 — blog post `why-i-built-this`** (`/short-stories/why-i-built-this`):
   - Arthritis: ~6 years standing, doctor called it "the ordinary kind", worse
     in winter / after ~20 minutes of stitching.

@@ -5,9 +5,42 @@ export interface BlogPost {
   excerpt: string;
   body: string[]; // paragraphs
   keywords?: string[];
+  ctaHref?: string;
+  ctaLabel?: string;
 }
 
 export const blogPosts: BlogPost[] = [
+  {
+    slug: 'how-to-turn-a-photo-into-a-cross-stitch-pattern',
+    title: 'How to turn a photo into a cross-stitch pattern',
+    date: '2026-07-28',
+    excerpt:
+      "The question I get asked more than any other: \"Can you turn this photo into a pattern like your others?\" Here's exactly how to do it yourself, free, in a few minutes.",
+    keywords: [
+      'photo to cross stitch pattern',
+      'convert photo to cross stitch',
+      'turn a picture into a cross stitch pattern',
+      'custom cross stitch pattern from photo',
+      'free photo to cross stitch converter',
+      'cross stitch pattern maker from photo',
+      'image to cross stitch pattern generator',
+      'make your own cross stitch pattern',
+      'pet photo cross stitch pattern',
+      'DMC color matching from photo',
+      'personalized cross stitch pattern from picture',
+      'cross stitch pattern from picture free',
+    ],
+    body: [
+      "The question I get asked more than any other, by a wide margin, is some version of: \"I have this photo — my dog, my granddaughter, our wedding — can you turn it into a pattern like the ones in your catalog?\" For a long time my honest answer was \"not easily.\" Now it is — you can make your own cross-stitch pattern from any picture in a few minutes, free, no software to install.",
+      "I built a free photo-to-cross-stitch converter right into the site. You upload a picture, and it reduces it down to a limited palette matched against real DMC thread numbers — the same numbers printed on the floss you'd actually buy — and lays it out as a stitchable grid, symbols and all, ready to export as a printable PDF chart.",
+      "The steps are simple. Open the converter, drag in your photo (or click to upload), and it does the color-matching and grid-reduction for you automatically. From there you land in the same online editor that powers every design in the catalog: resize the pattern, change or merge colors, hide colors you're not stitching yet so you can focus on one thread at a time, and undo anything you don't like. Nothing is final until you export.",
+      "A few things I've learned from watching which photos turn into patterns people are actually happy with. Simple, high-contrast subjects work best — a pet portrait, a single flower, a clear silhouette against a plain background. A busy photo with a cluttered background will convert, technically, but you'll often get a better result if you crop tightly to the subject first, or accept a larger stitch count so fine detail has somewhere to go. And don't chase perfect photo-realism: cross-stitch has always been a translation, not a copy, and the charm is in that translation.",
+      "If you'd rather start from something already made than a blank photo, this works both ways now, too — every design already in the catalog can be opened in the same editor and customized: swap a color, resize it for different fabric, make it yours before you stitch it.",
+      "I built this tool for myself first, on the evenings my own hands needed a bigger screen and fewer fiddly paper charts (I've written about why, if you're curious). It genuinely makes me happy every time someone uses it to stitch something of their own — send me a photo of the finished piece if you do. I mean that; I read every one.",
+    ],
+    ctaHref: '/photo-to-cross-stitch',
+    ctaLabel: 'Try the free photo-to-cross-stitch converter →',
+  },
   {
     slug: 'editor-updates-july-2026',
     title: "Everything that changed, in detail",

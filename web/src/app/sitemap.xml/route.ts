@@ -12,6 +12,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from 
 import { getAllAlbumCaptions, fetchAllDesigns } from '@/lib/data-access';
 import { Design } from '../types/design';
 import { CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } from '@/lib/url-helper';
+import { getSortedBlogPosts } from '@/lib/blog-posts';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,7 @@ const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 // as an approximation (commit date, not confirmed deploy date) — good enough
 // for pages that rarely change; keep it exact for anything edited from here on.
 const STATIC_PAGE_LASTMOD: Record<string, string> = {
-  '/': '2026-07-27', // src/app/page.tsx
+  '/': '2026-07-28', // src/app/page.tsx
   '/XStitch-Charts.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/photo-to-cross-stitch': '2026-07-28', // src/app/photo-to-cross-stitch/page.tsx
   '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
@@ -126,9 +127,21 @@ async function generateAndUploadSitemap(baseUrl: string) {
     };
   });
 
+  // Individual blog posts (/short-stories/[slug]) — the index page itself
+  // was already in staticUrls, but each post has its own URL and never had
+  // a sitemap entry until now. lastmod comes straight from each post's own
+  // `date` field, so no hand-maintained STATIC_PAGE_LASTMOD entry is needed.
+  const blogPostUrls = getSortedBlogPosts().map(post => ({
+    url: `/short-stories/${post.slug}`,
+    changefreq: 'monthly' as const,
+    priority: 0.4,
+    lastmod: post.date,
+  }));
+
   // Create sitemap stream (single file since total URLs are manageable)
   const smStream = new SitemapStream({ hostname: baseUrl, xmlns: { image: true, news: false, xhtml: false, video: false } });
   staticUrls.forEach(url => smStream.write(url));
+  blogPostUrls.forEach(url => smStream.write(url));
   albumUrls.forEach(url =>  smStream.write(url));
   designUrls.forEach(url => smStream.write(url));
   smStream.end();

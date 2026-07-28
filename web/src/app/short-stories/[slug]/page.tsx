@@ -44,8 +44,16 @@ export default async function ShortStoryPost({ params }: Props) {
         <h1 className="text-3xl font-bold text-gray-800 mt-2">{post.title}</h1>
 
         {post.body.map((paragraph, i) => (
-          <p key={i}>{paragraph}</p>
+          <p key={i} className="mt-4 leading-relaxed">{paragraph}</p>
         ))}
+
+        {post.ctaHref && (
+          <p className="mt-4">
+            <Link href={post.ctaHref} className="text-rose-600 hover:underline font-medium">
+              {post.ctaLabel ?? 'Learn more'}
+            </Link>
+          </p>
+        )}
 
         <BlogReaction slug={post.slug} />
       </div>
