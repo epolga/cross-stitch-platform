@@ -20,6 +20,7 @@ import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
+import { rleEncode, rleDecode } from '@/lib/rle';
 
 import { trackEvent, postEditorEvent, checkReturnPatternGeneration } from '@/lib/track-event';
 
@@ -287,6 +288,15 @@ export default function ConvertPage() {
   const blinkSwatchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blinkCellsTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Stitch progress tracking ("keep place while stitching")
+  const [stitchMode, setStitchMode] = useState(false);
+  const [stitchedCells, setStitchedCells] = useState<Set<string>>(new Set());
+  const stitchedRef = useRef<Set<string>>(new Set());
+  const [focusColorIndex, setFocusColorIndex] = useState<number | null>(null);
+  const progressSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedPatternIdRef = useRef<string | null>(null);
+  const stitchModeTrackedRef = useRef(false);
+
   function updateGrid(g: number[][]) {
     gridRef.current = g;
     setGrid(g);
@@ -295,6 +305,11 @@ export default function ConvertPage() {
   function updatePalette(p: PatternPalette[]) {
     paletteRef.current = p;
     setPalette(p);
+  }
+
+  function updateStitched(s: Set<string>) {
+    stitchedRef.current = s;
+    setStitchedCells(s);
   }
 
   function snap(): Snapshot { return { grid: gridRef.current, palette: paletteRef.current }; }
@@ -533,6 +548,16 @@ export default function ConvertPage() {
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
         setCellSize(12);
+        if (typeof data.progress === 'string' && data.progress.length > 0) {
+          const boolGrid = rleDecode(data.progress, data.width, data.height);
+          const next = new Set<string>();
+          for (let r = 0; r < boolGrid.length; r++)
+            for (let c = 0; c < boolGrid[r].length; c++)
+              if (boolGrid[r][c] === 1) next.add(`${r},${c}`);
+          updateStitched(next);
+        } else {
+          updateStitched(new Set());
+        }
         window.history.replaceState(null, '', `?pattern=${id}`);
         trackEvent('project_reopened', {
           patternId: id,
@@ -757,6 +782,95 @@ export default function ConvertPage() {
     return url;
   }
 
+  useEffect(() => { savedPatternIdRef.current = savedPatternId; }, [savedPatternId]);
+
+  // ── Stitch progress tracking ("keep place while stitching") ──────────────
+  const stitchTotal = useMemo(() => grid.flat().filter(v => v >= 0).length, [grid]);
+  const stitchDone  = useMemo(() => {
+    let n = 0;
+    for (let r = 0; r < grid.length; r++)
+      for (let c = 0; c < (grid[r]?.length ?? 0); c++)
+        if (grid[r][c] >= 0 && stitchedCells.has(`${r},${c}`)) n++;
+    return n;
+  }, [grid, stitchedCells]);
+  const remainingCounts = useMemo(() => {
+    if (!stitchMode) return undefined;
+    const counts = palette.map(p => p.stitchCount);
+    for (let r = 0; r < grid.length; r++)
+      for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+        const ci = grid[r][c];
+        if (ci >= 0 && stitchedCells.has(`${r},${c}`) && counts[ci] != null) counts[ci]--;
+      }
+    return counts;
+  }, [stitchMode, grid, palette, stitchedCells]);
+
+  function handleMarkCell(row: number, col: number, marked: boolean) {
+    const next = new Set(stitchedRef.current);
+    const key = `${row},${col}`;
+    if (marked) next.add(key); else next.delete(key);
+    updateStitched(next);
+  }
+
+  function handleMarkStrokeEnd() {
+    if (progressSaveTimer.current) clearTimeout(progressSaveTimer.current);
+    progressSaveTimer.current = setTimeout(() => { flushProgressSave(); }, 2000);
+  }
+
+  async function flushProgressSave() {
+    if (progressSaveTimer.current) { clearTimeout(progressSaveTimer.current); progressSaveTimer.current = null; }
+    const id = savedPatternIdRef.current;
+    if (!id) return;
+    const g = gridRef.current;
+    if (!g.length) return;
+    const width = g[0].length, height = g.length;
+    const boolGrid: number[][] = Array.from({ length: height }, (_, r) =>
+      Array.from({ length: width }, (_, c) => stitchedRef.current.has(`${r},${c}`) ? 1 : 0)
+    );
+    try {
+      await fetch(`/api/converter/patterns/${id}/progress`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: rleEncode(boolGrid) }),
+      });
+    } catch {
+      postEditorEvent('editor_error', { errorCode: 'progress_save_failed', step: 'stitch_progress' });
+    }
+  }
+
+  // Silent — used both by the explicit "Clear progress" button and internally
+  // whenever the grid's dimensions/content shift (resize/mirror/size-to-design),
+  // since old marks would no longer line up with the right cells.
+  function clearStitchProgress() {
+    if (stitchedRef.current.size === 0 && focusColorIndex === null) return;
+    updateStitched(new Set());
+    setFocusColorIndex(null);
+    flushProgressSave();
+  }
+
+  function handleClearProgressClick() {
+    if (!window.confirm('Clear all stitch-progress marks on this pattern?')) return;
+    clearStitchProgress();
+  }
+
+  function toggleStitchMode() {
+    if (stitchMode) {
+      setStitchMode(false);
+      flushProgressSave();
+      return;
+    }
+    if (!savedPatternIdRef.current) return;
+    if (!stitchModeTrackedRef.current) {
+      stitchModeTrackedRef.current = true;
+      trackEvent('stitch_mode_opened', {});
+    }
+    setStitchMode(true);
+  }
+
+  // Flush any pending progress save if the user navigates away mid-debounce.
+  useEffect(() => {
+    return () => { flushProgressSave(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Clear selection when switching away from select tool
   useEffect(() => {
     if (activeTool !== 'select') setSelection(null);
@@ -864,6 +978,7 @@ export default function ConvertPage() {
     if (!b) return;
     const g = gridRef.current;
     if (!g.length) return;
+    clearStitchProgress();
     const newGrid: number[][] = [];
     for (let r = b.rMin; r <= b.rMax; r++) {
       const row: number[] = [];
@@ -918,6 +1033,7 @@ export default function ConvertPage() {
   function applyMirror(dir: MirrorDirection, axis: MirrorAxis, resize: MirrorResize) {
     const g = gridRef.current;
     if (!g.length) return;
+    clearStitchProgress();
     const rows = g.length, cols = g[0].length;
     const b = selectionBounds();
 
@@ -1341,6 +1457,9 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     setSavedPatternId(null);
+    setStitchMode(false);
+    updateStitched(new Set());
+    setFocusColorIndex(null);
     window.history.replaceState(null, '', window.location.pathname);
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
   }
@@ -1348,6 +1467,7 @@ export default function ConvertPage() {
   function handleResize(newW: number, newH: number, mode: ResizeMode, anchor: ResizeAnchor) {
     const g = gridRef.current;
     if (!g.length) return;
+    clearStitchProgress();
     const srcH = g.length, srcW = g[0].length;
     let newGrid: number[][];
     if (mode === 'scale') {
@@ -1562,6 +1682,7 @@ export default function ConvertPage() {
                     const g = gridRef.current;
                     const next = sizeToDesign(g);
                     if (!next) return;
+                    clearStitchProgress();
                     setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
                     setRedoStack([]);
                     updateGrid(next);
@@ -1626,14 +1747,19 @@ export default function ConvertPage() {
 
           <div className="mb-4" />
 
-          {/* Editor: sidebar + canvas */}
-          <div className="flex gap-3">
+          {/* Editor: sidebar + canvas — stacked on narrow screens (palette's
+              fixed min-width otherwise squeezes the canvas/toolbar column
+              down to almost nothing), side by side from md up */}
+          <div className="flex flex-col md:flex-row gap-3">
 
             {/* Canvas column */}
             <div className="flex-1 flex flex-col gap-2 min-w-0">
 
-              {/* Draw toolbar — single row; pen/eraser cell is internally split */}
-              <div className="flex items-start gap-1 px-1 pb-1 border-b border-gray-100">
+              {/* Draw toolbar — single row; pen/eraser cell is internally split.
+                  Scrolls horizontally on narrow screens instead of clipping. */}
+              <div className="flex items-start flex-nowrap gap-1 px-1 pb-1 border-b border-gray-100 overflow-x-auto">
+
+                {!stitchMode && <>
 
                 {/* Undo / Redo */}
                 <button type="button" onClick={undo} disabled={!undoStack.length}
@@ -1796,6 +1922,8 @@ export default function ConvertPage() {
                   ><span>⎙</span><span>Paste</span></button>
                 )}
 
+                </>}
+
                 <div className="self-stretch w-px bg-gray-200 mx-0.5" />
 
                 {/* View mode segmented control */}
@@ -1812,7 +1940,54 @@ export default function ConvertPage() {
                     </button>
                   ))}
                 </div>
+
+                <div className="self-stretch w-px bg-gray-200 mx-0.5" />
+
+                {/* Stitch Mode toggle */}
+                <button
+                  type="button"
+                  onClick={toggleStitchMode}
+                  disabled={!stitchMode && !savedPatternId}
+                  title={stitchMode ? 'Exit Stitch Mode' : savedPatternId ? 'Stitch Mode — mark cells as stitched while you work through the chart' : 'Save your pattern first to track stitching progress'}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
+                    stitchMode
+                      ? 'bg-rose-500 text-white border-rose-500'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  <span>🧵</span><span>{stitchMode ? 'Exit Stitch Mode' : 'Stitch Mode'}</span>
+                </button>
               </div>
+
+              {stitchMode && (
+                <div className="flex items-center flex-wrap gap-x-3 gap-y-1 px-1 py-1.5 border-b border-gray-100 text-xs">
+                  <div className="flex items-center gap-2 min-w-0 basis-full sm:basis-auto sm:flex-1">
+                    <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden max-w-xs">
+                      <div
+                        className="h-full bg-rose-500 transition-all"
+                        style={{ width: `${stitchTotal > 0 ? Math.round((stitchDone / stitchTotal) * 100) : 0}%` }}
+                      />
+                    </div>
+                    <span className="text-gray-600 font-medium">
+                      {stitchDone} / {stitchTotal} stitched{stitchTotal > 0 ? ` (${Math.round((stitchDone / stitchTotal) * 100)}%)` : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearProgressClick}
+                    disabled={stitchDone === 0}
+                    className="text-gray-500 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Clear all stitch-progress marks on this pattern"
+                  >
+                    Clear progress
+                  </button>
+                  {focusColorIndex !== null && (
+                    <button type="button" onClick={() => setFocusColorIndex(null)} className="text-gray-500 hover:text-gray-800">
+                      Clear focus
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Zoom bar */}
               <div className="flex items-center gap-3 px-1">
@@ -1906,13 +2081,15 @@ export default function ConvertPage() {
                 mode={viewMode}
                 cellSize={cellSize}
                 editable
-                activeTool={activeTool === 'eraser' ? 'pencil' : activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
+                activeTool={stitchMode ? 'mark' : activeTool === 'eraser' ? 'pencil' : activeTool === 'fill' && fillMode === 'erase' ? 'erase-fill' : activeTool}
                 drawMode={drawMode}
                 activeColorIndex={activeTool === 'eraser' ? -1 : selectedColor}
                 penWidth={penWidth}
                 blinkColorIndex={blinkCells}
                 hiddenColors={hiddenColors}
                 selection={selection}
+                stitchedCells={stitchedCells}
+                focusColorIndex={focusColorIndex}
                 onPaint={handlePaint}
                 onFill={fillMode === 'erase' ? handleEraseFill : handleFill}
                 onStrokeStart={handleStrokeStart}
@@ -1920,6 +2097,8 @@ export default function ConvertPage() {
                 onShapePaint={handleShapePaint}
                 onRightClick={handleRightClickCell}
                 onSelectionChange={handleSelectionChange}
+                onMarkCell={handleMarkCell}
+                onMarkStrokeEnd={handleMarkStrokeEnd}
               />
             </div>
             </div>{/* end canvas column */}
@@ -1932,7 +2111,12 @@ export default function ConvertPage() {
               maxHeight={paletteMaxHeight}
               blinkIndex={blinkSwatch}
               hiddenColors={hiddenColors}
+              remainingCounts={remainingCounts}
               onSelect={i => {
+                if (stitchMode) {
+                  setFocusColorIndex(prev => prev === i ? null : i);
+                  return;
+                }
                 setSelectedColor(i);
                 if (activeTool === 'eraser') setActiveTool('pencil');
                 if (activeTool === 'fill' && fillMode === 'erase') setFillMode('flood');

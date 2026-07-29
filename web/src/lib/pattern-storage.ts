@@ -11,39 +11,14 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { randomUUID } from 'crypto';
 import type { PatternPalette } from './pattern-converter';
+import { rleEncode, rleDecode } from './rle';
+
+export { rleEncode, rleDecode };
 
 const TABLE  = process.env.DDB_PATTERNS_TABLE || 'ConverterPatterns';
 const REGION = process.env.AWS_REGION || 'us-east-1';
 
 const client = new DynamoDBClient({ region: REGION });
-
-// ── RLE codec ────────────────────────────────────────────────────────────────
-
-export function rleEncode(grid: number[][]): string {
-  const flat = grid.flat();
-  if (flat.length === 0) return '';
-  const parts: string[] = [];
-  let cur = flat[0], count = 1;
-  for (let i = 1; i < flat.length; i++) {
-    if (flat[i] === cur) { count++; }
-    else { parts.push(`${count}:${cur}`); cur = flat[i]; count = 1; }
-  }
-  parts.push(`${count}:${cur}`);
-  return parts.join(',');
-}
-
-export function rleDecode(rle: string, width: number, height: number): number[][] {
-  const flat: number[] = [];
-  for (const part of rle.split(',')) {
-    const colon = part.indexOf(':');
-    const n = parseInt(part.slice(0, colon));
-    const v = parseInt(part.slice(colon + 1));
-    for (let i = 0; i < n; i++) flat.push(v);
-  }
-  return Array.from({ length: height }, (_, y) =>
-    flat.slice(y * width, (y + 1) * width)
-  );
-}
 
 // ── DDB table bootstrap (once per process) ───────────────────────────────────
 
@@ -104,6 +79,7 @@ export interface SavedPattern {
   createdAt: string;
   modifiedAt: string;
   ownerID?: string;
+  progress?: string;
 }
 
 export async function savePattern(
@@ -190,6 +166,25 @@ export async function updatePattern(
   }));
 }
 
+// Lightweight partial update for stitch-progress marks — unlike
+// updatePattern(), never touches grid/palette/thumbnail, so marking a
+// cell doesn't re-serialize the whole pattern.
+export async function saveProgress(id: string, progressRle: string): Promise<void> {
+  await ensureTable();
+  if (progressRle.length > 350_000)
+    throw new Error('Progress too large to save (exceeds 350 KB compressed)');
+
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { patternId: { S: id } },
+    UpdateExpression: 'SET progress = :p, progressUpdatedAt = :t',
+    ExpressionAttributeValues: {
+      ':p': { S: progressRle },
+      ':t': { S: new Date().toISOString() },
+    },
+  }));
+}
+
 export interface PatternSummary {
   id: string;
   name: string;
@@ -249,5 +244,6 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     createdAt,
     modifiedAt:   Item.modifiedAt?.S ?? createdAt,
     ownerID:      Item.ownerID?.S,
+    progress:     Item.progress?.S,
   };
 }

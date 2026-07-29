@@ -13,6 +13,7 @@ interface Props {
   blinkIndex?: number | null;
   hiddenColors: Set<number>;
   maxHeight?: number;
+  remainingCounts?: number[]; // stitches left per palette entry — shown only in Stitch Mode
   onSelect: (index: number) => void;
   onBlink: (index: number) => void;
   onToggleColor: (index: number) => void;
@@ -29,7 +30,7 @@ type EditMenu = { index: number; top: number; right: number };
 
 const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
-  hiddenColors, maxHeight, onSelect, onBlink, onToggleColor, onToggleAll,
+  hiddenColors, maxHeight, remainingCounts, onSelect, onBlink, onToggleColor, onToggleAll,
   onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onDeleteColor, onAddColor,
 }: Props, ref) {
   const sel = palette[selectedIndex];
@@ -184,6 +185,17 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                   : <span style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold', color: '#000' }}>{c.symbol}</span>
                 }
               </span>
+
+              {/* Remaining-stitches badge (Stitch Mode only) */}
+              {remainingCounts && (
+                <span
+                  title={`${remainingCounts[i] ?? c.stitchCount} of ${c.stitchCount} stitches left`}
+                  className="flex-none text-[9px] font-mono text-gray-500 px-1"
+                  style={{ minWidth: 20, textAlign: 'right' }}
+                >
+                  {remainingCounts[i] ?? c.stitchCount}
+                </span>
+              )}
 
               {/* Edit button */}
               <button

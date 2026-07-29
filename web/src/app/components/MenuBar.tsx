@@ -84,7 +84,7 @@ export default function MenuBar({ menus }: Props) {
   const close = () => setOpen(null);
 
   return (
-    <div ref={barRef} className="relative flex items-center gap-0.5 bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-sm select-none">
+    <div ref={barRef} className="relative flex items-center flex-nowrap gap-0.5 bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-sm select-none overflow-x-auto">
       {menus.map((menu, mi) => (
         <div key={menu.label} className="relative">
           <button

@@ -99,13 +99,15 @@ interface Props {
   mode: 'color' | 'symbol' | 'both' | 'simulation';
   cellSize?: number;
   editable?: boolean;
-  activeTool?: 'pencil' | 'fill' | 'erase-fill' | 'select';
+  activeTool?: 'pencil' | 'fill' | 'erase-fill' | 'select' | 'mark';
   drawMode?: DrawMode;
   activeColorIndex?: number;
   penWidth?: number;
   blinkColorIndex?: number | null;
   hiddenColors?: Set<number>;
   selection?: SelectionRect | null;
+  stitchedCells?: Set<string>;      // key `${row},${col}` — cells marked as stitched
+  focusColorIndex?: number | null;  // spotlight this palette color, dim the rest
   onPaint?: (row: number, col: number) => void;
   onFill?: (row: number, col: number) => void;
   onStrokeStart?: () => void;
@@ -113,6 +115,8 @@ interface Props {
   onShapePaint?: (cells: [number, number][]) => void;
   onRightClick?: (row: number, col: number) => void;
   onSelectionChange?: (sel: SelectionRect | null) => void;
+  onMarkCell?: (row: number, col: number, marked: boolean) => void;
+  onMarkStrokeEnd?: () => void;
 }
 
 // ── Shape algorithms ────────────────────────────────────────────
@@ -277,7 +281,9 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   grid, palette, mode, cellSize = 12,
   editable, activeTool, drawMode = 'point',
   activeColorIndex = 0, penWidth = 1, blinkColorIndex = null, hiddenColors, selection = null,
+  stitchedCells, focusColorIndex = null,
   onPaint, onFill, onStrokeStart, onStrokeEnd, onShapePaint, onRightClick, onSelectionChange,
+  onMarkCell, onMarkStrokeEnd,
 }: Props, ref: React.Ref<PatternCanvasHandle>) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const drawing     = useRef(false);
@@ -316,6 +322,9 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const lastCellRef    = useRef<[number, number] | null>(null); // last mouse cell during shape drag
   const hoverCellRef   = useRef<[number, number] | null>(null); // for eraser width > 1 preview
   const shiftRef       = useRef(false);
+  const stitchedRef    = useRef(stitchedCells);
+  const focusColorRef  = useRef(focusColorIndex);
+  const markTargetRef  = useRef(false); // whether the in-progress mark drag is marking or unmarking
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
@@ -326,6 +335,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   penWidthRef.current  = penWidth;
   blinkColorRef.current = blinkColorIndex;
   selRef.current        = selection;
+  stitchedRef.current   = stitchedCells;
+  focusColorRef.current = focusColorIndex;
 
   function draw() {
     const canvas = canvasRef.current;
@@ -540,6 +551,39 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       ctx.globalAlpha = 1;
     }
 
+    // Stitch-mode focus spotlight — dim every colored cell that isn't the
+    // focused palette color, so it reads brighter by contrast.
+    const focusIdx = focusColorRef.current;
+    if (focusIdx != null) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#000';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const ci = g[r][c];
+          if (ci >= 0 && ci !== focusIdx) {
+            ctx.fillRect(c * cs + ML, r * cs + MT, cs, cs);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Stitch-mode marked overlay — dim cells the user has marked as
+    // physically stitched already, on top of any focus dimming.
+    const stitched = stitchedRef.current;
+    if (stitched && stitched.size > 0) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#fff';
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (stitched.has(`${r},${c}`)) {
+            ctx.fillRect(c * cs + ML, r * cs + MT, cs, cs);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // Selection overlay (dashed rect + tint)
     const sel = selRef.current;
     if (sel) {
@@ -627,7 +671,7 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
     }
   }
 
-  useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors]);
+  useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors, stitchedCells, focusColorIndex]);
 
   useEffect(() => {
     if (!selection) { marchingAntsRef.current = 0; return; }
@@ -758,6 +802,16 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       onSelectionChange?.(sel);
       return;
     }
+    if (activeTool === 'mark') {
+      const g = gridRef.current;
+      if (g[cell[0]][cell[1]] < 0) return; // empty cells aren't stitchable
+      const key = `${cell[0]},${cell[1]}`;
+      const willMark = !(stitchedRef.current?.has(key) ?? false);
+      markTargetRef.current = willMark;
+      drawing.current = true;
+      onMarkCell?.(cell[0], cell[1], willMark);
+      return;
+    }
     if (activeTool === 'fill' || activeTool === 'erase-fill') {
       onFill?.(cell[0], cell[1]);
     } else if (drawMode === 'point') {
@@ -809,6 +863,12 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       onSelectionChange?.(sel);
       return;
     }
+    if (activeTool === 'mark') {
+      const g = gridRef.current;
+      if (g[cell[0]][cell[1]] < 0) return;
+      onMarkCell?.(cell[0], cell[1], markTargetRef.current);
+      return;
+    }
     if (activeTool !== 'pencil') return;
 
     if (drawMode === 'point') {
@@ -849,6 +909,10 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       draw();
       return;
     }
+    if (activeTool === 'mark') {
+      onMarkStrokeEnd?.();
+      return;
+    }
     if (activeTool === 'pencil' && drawMode !== 'point' && startCell.current) {
       const cell = cellAt(e);
       const [r0, c0] = startCell.current;
@@ -887,6 +951,11 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
     if (activeTool === 'select') {
       drawing.current = false;
       startCell.current = null;
+      return;
+    }
+    if (activeTool === 'mark') {
+      drawing.current = false;
+      onMarkStrokeEnd?.();
       return;
     }
     // Cancel shape preview on leave; stroke continues if mouse re-enters
