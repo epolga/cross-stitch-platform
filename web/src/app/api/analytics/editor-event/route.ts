@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logEditorEvent } from '@/lib/editor-events';
 import { getSession } from '@/lib/session';
+import { getClientIp } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest) {
     await logEditorEvent({
       eventType,
       sessionId,
+      ip:            getClientIp(req),
+      userEmail:     session?.email,
       patternId:     typeof params.patternId    === 'string' ? params.patternId    : undefined,
       patternWidth:  typeof params.patternWidth  === 'number' ? params.patternWidth  : undefined,
       patternHeight: typeof params.patternHeight === 'number' ? params.patternHeight : undefined,
@@ -70,6 +73,7 @@ export async function POST(req: NextRequest) {
       importance:    typeof params.importance    === 'string' ? params.importance    : undefined,
       rating:        typeof params.rating        === 'string' ? params.rating        : undefined,
       qualityReason: typeof params.qualityReason === 'string' ? params.qualityReason : undefined,
+      gapHours:      typeof params.gapHours      === 'number' ? params.gapHours      : undefined,
     });
 
     return NextResponse.json({ ok: true });

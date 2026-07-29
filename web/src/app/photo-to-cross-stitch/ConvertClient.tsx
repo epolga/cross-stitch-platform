@@ -325,9 +325,10 @@ export default function ConvertPage() {
       patternHeight: paddedGrid.length,
       colorCount: data.palette.length,
     });
-    if (checkReturnPatternGeneration()) {
-      trackEvent('pattern_generated_return_visit', {});
-      postEditorEvent('pattern_generated_return_visit', {});
+    const returnCheck = checkReturnPatternGeneration();
+    if (returnCheck.isReturn) {
+      trackEvent('pattern_generated_return_visit', { gapHours: returnCheck.gapHours });
+      postEditorEvent('pattern_generated_return_visit', { gapHours: returnCheck.gapHours });
     }
 
     // Ask for a quality rating a few seconds after generation, once the

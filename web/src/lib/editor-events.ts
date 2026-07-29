@@ -66,6 +66,8 @@ export interface EditorEvent {
   eventType: string;
   sessionId: string;
   userId?: string;
+  userEmail?: string;
+  ip?: string;
   patternId?: string;
   patternWidth?: number;
   patternHeight?: number;
@@ -76,6 +78,7 @@ export interface EditorEvent {
   importance?: string;
   rating?: string;
   qualityReason?: string;
+  gapHours?: number;
 }
 
 export interface EditorEventRecord extends EditorEvent {
@@ -174,9 +177,11 @@ async function checkAndNotify(event: EditorEvent): Promise<void> {
   }
 
   if (event.eventType === 'pattern_generated_return_visit') {
+    const who = event.userEmail || 'not logged in';
+    const gap = event.gapHours != null ? `${event.gapHours}h` : 'unknown';
     await sendAlertEmail(
       '[cross-stitch] Return-visit pattern generation',
-      `Someone came back in a new session and generated another pattern — a retention signal.\n\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
+      `Someone came back in a new session and generated another pattern — a retention signal.\n\nuser: ${who}\nip: ${event.ip ?? 'unknown'}\ngap since last generation: ${gap}\nsessionId: ${event.sessionId}\ntime: ${new Date().toISOString()}`,
     );
     return;
   }
@@ -213,6 +218,8 @@ export async function logEditorEvent(event: EditorEvent): Promise<void> {
   };
 
   if (event.userId)              item.userId       = { S: event.userId };
+  if (event.userEmail)           item.userEmail    = { S: event.userEmail };
+  if (event.ip)                  item.ip           = { S: event.ip };
   if (event.patternId)           item.patternId    = { S: event.patternId };
   if (event.patternWidth  != null) item.patternWidth  = { N: String(event.patternWidth) };
   if (event.patternHeight != null) item.patternHeight = { N: String(event.patternHeight) };
@@ -223,6 +230,7 @@ export async function logEditorEvent(event: EditorEvent): Promise<void> {
   if (event.importance)          item.importance   = { S: event.importance };
   if (event.rating)              item.rating       = { S: event.rating };
   if (event.qualityReason)       item.qualityReason = { S: event.qualityReason };
+  if (event.gapHours      != null) item.gapHours      = { N: String(event.gapHours) };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
 
@@ -238,6 +246,8 @@ function itemToRecord(item: Record<string, AttributeValue>): EditorEventRecord {
     sessionId:     item.sessionId.S!,
     ttl:           parseInt(item.ttl?.N ?? '0'),
     userId:        item.userId?.S,
+    userEmail:     item.userEmail?.S,
+    ip:            item.ip?.S,
     patternId:     item.patternId?.S,
     patternWidth:  item.patternWidth  ? parseInt(item.patternWidth.N!)  : undefined,
     patternHeight: item.patternHeight ? parseInt(item.patternHeight.N!) : undefined,
@@ -248,6 +258,7 @@ function itemToRecord(item: Record<string, AttributeValue>): EditorEventRecord {
     importance:    item.importance?.S,
     rating:        item.rating?.S,
     qualityReason: item.qualityReason?.S,
+    gapHours:      item.gapHours ? parseFloat(item.gapHours.N!) : undefined,
   };
 }
 
