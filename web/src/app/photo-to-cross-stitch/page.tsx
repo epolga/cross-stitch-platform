@@ -71,6 +71,7 @@ const structuredData = {
     'Click any palette color to flash all its stitches on the chart',
     'Hide individual colors to stitch one thread at a time',
     'Use the chart on laptop, tablet, or phone — no printing required',
+    'Stitch Mode: mark cells as stitched and pick up exactly where you left off, synced across devices',
   ],
 };
 
@@ -105,7 +106,7 @@ const FAQ = [
   },
   {
     q: 'Can I use the chart on my phone or laptop while stitching — without printing?',
-    a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen. Click any color in the palette to make all its stitches flash on the chart so you can find your place instantly. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
+    a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen, or click any color in the palette to flash all its stitches on the chart when you need to locate where a shade goes. Turn on Stitch Mode to mark cells as you stitch them — the chart remembers, so you always know exactly where you left off, even if you pick it back up on a different device. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
   },
   {
     q: 'Do I need an account?',
@@ -156,10 +157,17 @@ export default function PhotoToCrossStitchPage() {
           {/* Editor feature highlights */}
           <div className="mb-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
-              <span className="text-lg flex-none leading-none mt-0.5">✨</span>
+              <span className="text-lg flex-none leading-none mt-0.5">🧵</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Never lose your place</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click any thread color and all its stitches light up on the chart at once.</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Turn on Stitch Mode to mark cells as you stitch them — the chart remembers where you left off, even on a different device.</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+              <span className="text-lg flex-none leading-none mt-0.5">✨</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-xs">Find any color instantly</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click any thread color and every one of its stitches flashes on the chart, so you can see exactly where it goes.</p>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
@@ -180,7 +188,7 @@ export default function PhotoToCrossStitchPage() {
               <span className="text-lg flex-none leading-none mt-0.5">💾</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Come back anytime</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Save your cross-stitch pattern to a free account and pick up right where you left off — no need to finish in one sitting.</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Save your cross-stitch pattern to a free account so you can keep editing the design later — no need to finish in one sitting.</p>
               </div>
             </div>
             <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
