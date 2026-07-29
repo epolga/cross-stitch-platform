@@ -77,40 +77,54 @@ const structuredData = {
 
 const FAQ = [
   {
+    id: 'faq-free',
     q: 'Is this a free cross-stitch pattern maker?',
     a: 'Yes. Converting a photo, editing the result, and downloading a print-ready PDF chart are all free — no software to install and no account needed just to try it.',
   },
   {
+    id: 'faq-blank',
     q: 'Can I design a pattern without uploading a photo?',
     a: 'Yes. Choose "New Pattern" in the editor to start from a blank grid and place stitches by hand, one color at a time — the same repaint, fill, rotate and flip tools work whether your pattern started from a photo or from scratch.',
   },
   {
+    id: 'faq-formats',
     q: 'What photo formats are supported?',
     a: 'JPEG, PNG, and WebP up to 5 MB. The converter works best with photos that have clear subjects and good contrast.',
   },
   {
+    id: 'faq-size',
     q: 'How do I choose the stitch count?',
     a: 'Set width and height in stitches independently. A 50×50 pattern stitched on 14-count Aida measures about 9×9 cm; an 80×80 pattern measures about 14×14 cm. Larger counts preserve more detail.',
   },
   {
+    id: 'faq-colors',
     q: 'Which DMC colors will be used?',
     a: 'The converter picks the closest DMC floss color from a library of 454 standard shades for each part of your photo. If you set a color limit, the rarest shades are swapped for the nearest remaining one until your chosen number of colors is reached.',
   },
   {
+    id: 'faq-pdf',
     q: 'What does the PDF include?',
     a: 'Three pages: a colored grid showing each stitch in its DMC color, a symbol grid for black-and-white printing, and a color key table listing the symbol, DMC number, color name and stitch count for every thread.',
   },
   {
+    id: 'faq-edit',
     q: 'Can I edit the pattern after converting?',
     a: 'Yes. The built-in editor lets you repaint individual stitches, change colors, fill whole areas, rotate, flip, and resize the pattern before you download the PDF. You can also re-import the same photo with different settings at any time.',
   },
   {
+    id: 'faq-device',
     q: 'Can I use the chart on my phone or laptop while stitching — without printing?',
     a: 'Yes. The pattern editor works on any device. You can hide all colors except the one you are currently stitching, so only those stitches are visible on screen, or click any color in the palette to flash all its stitches on the chart when you need to locate where a shade goes. Turn on Stitch Mode to mark cells as you stitch them — the chart remembers, so you always know exactly where you left off, even if you pick it back up on a different device. Many stitchers keep the chart open on a laptop or tablet propped beside their hoop instead of printing.',
   },
   {
+    id: 'faq-account',
     q: 'Do I need an account?',
     a: 'Yes. You need a free account to save your pattern or download the PDF. Your patterns belong to you — once saved, only you can access, edit, or re-download them.',
+  },
+  {
+    id: 'faq-share',
+    q: 'Can I share my pattern with someone else?',
+    a: 'Yes. Once you’ve saved a pattern, click "Copy link" to get a shareable URL — send it to anyone, no account needed on their end, great for showing a gift design before you stitch it.',
   },
 ];
 
@@ -154,50 +168,50 @@ export default function PhotoToCrossStitchPage() {
             Built by a cross-stitch designer who has spent more hours than she&apos;d like to admit counting stitches from a paper chart.
           </p>
 
-          {/* Editor feature highlights */}
+          {/* Editor feature highlights — each links to the matching FAQ answer for more detail */}
           <div className="mb-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            <a href="#faq-device" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">🧵</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Never lose your place</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Turn on Stitch Mode to mark cells as you stitch them — the chart remembers where you left off, even on a different device.</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            </a>
+            <a href="#faq-device" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">✨</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Find any color instantly</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Click any thread color and every one of its stitches flashes on the chart, so you can see exactly where it goes.</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            </a>
+            <a href="#faq-device" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">👁</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Work one thread at a time</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Hide all other colors so only the thread you&apos;re stitching is visible.</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            </a>
+            <a href="#faq-device" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">📱</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Your chart on any device</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Keep the chart open on a tablet or phone propped beside your hoop. No printing, no paper to lose.</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            </a>
+            <a href="#faq-account" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">💾</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Come back anytime</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Save your cross-stitch pattern to a free account so you can keep editing the design later — no need to finish in one sitting.</p>
               </div>
-            </div>
-            <div className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start">
+            </a>
+            <a href="#faq-share" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">🔗</span>
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Share with a friend</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Copy a link to your saved pattern and send it to anyone — great for showing a gift design before you stitch it.</p>
               </div>
-            </div>
+            </a>
           </div>
 
           <ConvertClient />
@@ -208,8 +222,8 @@ export default function PhotoToCrossStitchPage() {
               Frequently Asked Questions
             </h2>
             <dl className="space-y-5">
-              {FAQ.map(({ q, a }) => (
-                <div key={q}>
+              {FAQ.map(({ id, q, a }) => (
+                <div key={id} id={id} className="scroll-mt-6">
                   <dt className="font-semibold text-gray-800">{q}</dt>
                   <dd className="mt-1 text-gray-600 text-sm">{a}</dd>
                 </div>
