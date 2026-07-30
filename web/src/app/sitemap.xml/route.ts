@@ -13,6 +13,7 @@ import { getAllAlbumCaptions, fetchAllDesigns } from '@/lib/data-access';
 import { Design } from '../types/design';
 import { CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } from '@/lib/url-helper';
 import { getSortedBlogPosts } from '@/lib/blog-posts';
+import { comparisons } from '@/lib/compare-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,8 @@ const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/privacy-policy': '2026-06-01', // src/app/privacy-policy/page.tsx
   '/dmc-color-chart': '2026-07-27', // src/app/dmc-color-chart/page.tsx
   '/cross-stitch-size-calculator': '2026-07-27', // src/app/cross-stitch-size-calculator/page.tsx
+  '/compare': '2026-07-30', // src/app/compare/page.tsx
+  '/best-cross-stitch-pattern-makers': '2026-07-30', // src/app/best-cross-stitch-pattern-makers/page.tsx
 };
 
 // Function to generate the sitemap XML
@@ -66,6 +69,8 @@ async function generateAndUploadSitemap(baseUrl: string) {
     { url: '/photo-to-cross-stitch', changefreq: 'monthly', priority: 0.8, lastmod: STATIC_PAGE_LASTMOD['/photo-to-cross-stitch'] },
     { url: '/dmc-color-chart', changefreq: 'monthly', priority: 0.6, lastmod: STATIC_PAGE_LASTMOD['/dmc-color-chart'] },
     { url: '/cross-stitch-size-calculator', changefreq: 'monthly', priority: 0.6, lastmod: STATIC_PAGE_LASTMOD['/cross-stitch-size-calculator'] },
+    { url: '/compare', changefreq: 'monthly', priority: 0.6, lastmod: STATIC_PAGE_LASTMOD['/compare'] },
+    { url: '/best-cross-stitch-pattern-makers', changefreq: 'monthly', priority: 0.7, lastmod: STATIC_PAGE_LASTMOD['/best-cross-stitch-pattern-makers'] },
     { url: '/Embroidery_History.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Embroidery_History.aspx'] },
     { url: '/WhyCrossStitch', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/WhyCrossStitch'] },
     { url: '/Article070409.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Article070409.aspx'] },
@@ -138,10 +143,20 @@ async function generateAndUploadSitemap(baseUrl: string) {
     lastmod: post.date,
   }));
 
+  // Individual "vs [Competitor]" pages (/compare/[slug]) — lastmod comes
+  // from each entry's own verifiedDate, same pattern as blog posts above.
+  const compareUrls = comparisons.map(c => ({
+    url: `/compare/${c.slug}`,
+    changefreq: 'monthly' as const,
+    priority: 0.5,
+    lastmod: c.verifiedDate,
+  }));
+
   // Create sitemap stream (single file since total URLs are manageable)
   const smStream = new SitemapStream({ hostname: baseUrl, xmlns: { image: true, news: false, xhtml: false, video: false } });
   staticUrls.forEach(url => smStream.write(url));
   blogPostUrls.forEach(url => smStream.write(url));
+  compareUrls.forEach(url => smStream.write(url));
   albumUrls.forEach(url =>  smStream.write(url));
   designUrls.forEach(url => smStream.write(url));
   smStream.end();

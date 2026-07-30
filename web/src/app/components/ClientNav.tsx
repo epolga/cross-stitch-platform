@@ -140,6 +140,22 @@ export default function ClientNav() {
                 >
                   Exercises for cross-stitchers
                 </Link>
+                <hr />
+                <Link
+                  href="/best-cross-stitch-pattern-makers"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsArticlesOpenDesktop(false)}
+                >
+                  Best Pattern Makers 2026
+                </Link>
+                <hr />
+                <Link
+                  href="/compare"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsArticlesOpenDesktop(false)}
+                >
+                  Compare Pattern Makers
+                </Link>
               </div>
             )}
           </div>
@@ -308,6 +324,20 @@ export default function ClientNav() {
                       onClick={closeMobileMenu}
                     >
                       Exercises for cross-stitchers
+                    </Link>
+                    <Link
+                      href="/best-cross-stitch-pattern-makers"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      Best Pattern Makers 2026
+                    </Link>
+                    <Link
+                      href="/compare"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      Compare Pattern Makers
                     </Link>
                   </div>
                 )}

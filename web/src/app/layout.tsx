@@ -131,6 +131,24 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 Pinterest API app details
               </Link>
             </p>
+            <p className="mt-2">
+              <Link
+                href="/best-cross-stitch-pattern-makers"
+                className="text-blue-600 hover:underline"
+                aria-label="Best cross-stitch pattern makers 2026"
+              >
+                Best Pattern Makers 2026
+              </Link>
+            </p>
+            <p className="mt-2">
+              <Link
+                href="/compare"
+                className="text-blue-600 hover:underline"
+                aria-label="Compare Cross-Stitch.com to other pattern makers"
+              >
+                Compare Pattern Makers
+              </Link>
+            </p>
             <PrivacyPolicyFooterLink />
 
             <p className="mt-3 text-xs text-gray-400">

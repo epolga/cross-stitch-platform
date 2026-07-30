@@ -229,6 +229,12 @@ export default function PhotoToCrossStitchPage() {
                 </div>
               ))}
             </dl>
+            <p className="mt-6 pt-5 border-t border-gray-100 text-sm text-gray-600">
+              Wondering how this stacks up against other pattern makers?{' '}
+              <Link href="/compare" className="text-rose-600 underline hover:text-rose-700">
+                See honest, fact-checked comparisons
+              </Link>.
+            </p>
           </section>
 
           <section className="mt-8 grid gap-6 sm:grid-cols-2 text-sm text-gray-600">
