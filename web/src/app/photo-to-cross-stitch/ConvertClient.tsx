@@ -266,6 +266,16 @@ export default function ConvertPage() {
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [afterSaveAction, setAfterSaveAction] = useState<'copyLink' | null>(null);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
+  // Set when the pattern came from ?catalogPatternId= — a read-only catalog
+  // design, not yet the user's own saved copy. Lets Stitch Mode work
+  // immediately (progress tracked separately, see catalog-progress-storage)
+  // without forcing an explicit Save first.
+  const [catalogDesignId, setCatalogDesignId] = useState<number | null>(null);
+  const catalogDesignIdRef = useRef<number | null>(null);
+  // Snapshot of the grid/palette exactly as loaded from the catalog, so a
+  // later Save can tell whether the user actually changed anything before
+  // deciding to create a personal copy.
+  const catalogOriginalRef = useRef<{ grid: number[][]; palette: PatternPalette[] } | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(() => isUserLoggedIn());
   const [patternName, setPatternName] = useState('');
   const [saveToast, setSaveToast] = useState<string | null>(null);
@@ -639,6 +649,18 @@ export default function ConvertPage() {
         setHiddenColors(new Set<number>());
         setPatternName(data.title ?? '');
         setCellSize(12);
+        setCatalogDesignId(parseInt(designId, 10));
+        catalogOriginalRef.current = { grid: data.grid, palette: data.palette };
+        if (typeof data.progress === 'string' && data.progress.length > 0) {
+          const boolGrid = rleDecode(data.progress, data.width, data.height);
+          const next = new Set<string>();
+          for (let r = 0; r < boolGrid.length; r++)
+            for (let c = 0; c < boolGrid[r].length; c++)
+              if (boolGrid[r][c] === 1) next.add(`${r},${c}`);
+          updateStitched(next);
+        } else {
+          updateStitched(new Set());
+        }
         trackEvent('project_reopened', {
           catalogDesignId: designId,
           patternWidth: data.width,
@@ -724,6 +746,29 @@ export default function ConvertPage() {
     saveToastTimer.current = setTimeout(() => setSaveToast(null), 2000);
   }
 
+  // True if the current grid/palette still match exactly what was loaded
+  // from the catalog — i.e. the user hasn't actually edited the design,
+  // just (maybe) tracked stitching progress on it.
+  function isCatalogUnmodified(): boolean {
+    const orig = catalogOriginalRef.current;
+    if (!orig) return false;
+    const g = gridRef.current;
+    if (g.length !== orig.grid.length) return false;
+    for (let r = 0; r < g.length; r++) {
+      const row = g[r], origRow = orig.grid[r];
+      if (row.length !== origRow.length) return false;
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== origRow[c]) return false;
+      }
+    }
+    const pal = paletteRef.current;
+    if (pal.length !== orig.palette.length) return false;
+    for (let i = 0; i < pal.length; i++) {
+      if (pal[i].number !== orig.palette[i].number || pal[i].symbol !== orig.palette[i].symbol) return false;
+    }
+    return true;
+  }
+
   function handleSave() {
     if (savedPatternId) {
       // Already saved — silent re-save
@@ -732,6 +777,11 @@ export default function ConvertPage() {
         return;
       }
       handleSavePattern(patternName || 'Untitled').then(() => showToast('Saved ✓')).catch(() => {});
+    } else if (catalogDesignId && isCatalogUnmodified()) {
+      // Nothing of the user's own to save yet — the design matches the
+      // catalog original, and stitch progress already tracks separately
+      // without needing a personal copy.
+      showToast("Matches the original design — nothing to save");
     } else {
       setSaveDialogOpen(true);
     }
@@ -777,6 +827,22 @@ export default function ConvertPage() {
     const { id } = await resp.json();
     setPatternName(name);
     setSavedPatternId(id);
+    // Was tracking progress against the catalog design directly (no copy
+    // yet) — carry those marks over to the new personal copy so nothing
+    // is lost now that a stable savedPatternId exists to attach them to.
+    if (!existingId && catalogDesignIdRef.current && stitchedRef.current.size > 0) {
+      const width = g[0]?.length ?? 0, height = g.length;
+      const boolGrid: number[][] = Array.from({ length: height }, (_, r) =>
+        Array.from({ length: width }, (_, c) => stitchedRef.current.has(`${r},${c}`) ? 1 : 0)
+      );
+      fetch(`/api/converter/patterns/${id}/progress`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: rleEncode(boolGrid) }),
+      }).catch(() => {
+        postEditorEvent('editor_error', { errorCode: 'progress_save_failed', step: 'stitch_progress_transfer' });
+      });
+    }
     const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${id}`;
     window.history.replaceState(null, '', `?pattern=${id}`);
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
@@ -785,6 +851,7 @@ export default function ConvertPage() {
   }
 
   useEffect(() => { savedPatternIdRef.current = savedPatternId; }, [savedPatternId]);
+  useEffect(() => { catalogDesignIdRef.current = catalogDesignId; }, [catalogDesignId]);
 
   // ── Stitch progress tracking ("keep place while stitching") ──────────────
   const stitchTotal = useMemo(() => grid.flat().filter(v => v >= 0).length, [grid]);
@@ -820,16 +887,22 @@ export default function ConvertPage() {
 
   async function flushProgressSave() {
     if (progressSaveTimer.current) { clearTimeout(progressSaveTimer.current); progressSaveTimer.current = null; }
+    // Prefer the saved-pattern endpoint once the user has their own copy;
+    // fall back to the lightweight catalog-progress endpoint otherwise.
     const id = savedPatternIdRef.current;
-    if (!id) return;
+    const catalogId = catalogDesignIdRef.current;
+    if (!id && !catalogId) return;
     const g = gridRef.current;
     if (!g.length) return;
     const width = g[0].length, height = g.length;
     const boolGrid: number[][] = Array.from({ length: height }, (_, r) =>
       Array.from({ length: width }, (_, c) => stitchedRef.current.has(`${r},${c}`) ? 1 : 0)
     );
+    const url = id
+      ? `/api/converter/patterns/${id}/progress`
+      : `/api/converter/catalog-pattern/${catalogId}/progress`;
     try {
-      await fetch(`/api/converter/patterns/${id}/progress`, {
+      await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ progress: rleEncode(boolGrid) }),
@@ -860,7 +933,13 @@ export default function ConvertPage() {
       flushProgressSave();
       return;
     }
-    if (!savedPatternIdRef.current) return;
+    if (!savedPatternIdRef.current && !catalogDesignIdRef.current) return;
+    // A catalog design's progress is personal, synced data — same login
+    // requirement as saving a pattern, just without forcing a save first.
+    if (!savedPatternIdRef.current && catalogDesignIdRef.current && !isUserLoggedIn()) {
+      window.dispatchEvent(new CustomEvent('openRegisterModal', { detail: { source: 'converter-stitch-mode', label: 'Stitch Mode' } }));
+      return;
+    }
     if (!stitchModeTrackedRef.current) {
       stitchModeTrackedRef.current = true;
       trackEvent('stitch_mode_opened', {});
@@ -1970,8 +2049,14 @@ export default function ConvertPage() {
                 <button
                   type="button"
                   onClick={toggleStitchMode}
-                  disabled={!stitchMode && !savedPatternId}
-                  title={stitchMode ? 'Exit Stitch Mode' : savedPatternId ? 'Stitch Mode — mark cells as stitched while you work through the chart' : 'Save your pattern first to track stitching progress'}
+                  disabled={!stitchMode && !savedPatternId && !catalogDesignId}
+                  title={
+                    stitchMode
+                      ? 'Exit Stitch Mode'
+                      : savedPatternId || catalogDesignId
+                        ? 'Stitch Mode — mark cells as stitched while you work through the chart'
+                        : 'Save your pattern first to track stitching progress'
+                  }
                   className={`flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${
                     stitchMode
                       ? 'bg-rose-500 text-white border-rose-500'

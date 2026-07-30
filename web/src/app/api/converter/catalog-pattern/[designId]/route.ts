@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getDesignById } from '@/lib/data-access';
+import { getSession } from '@/lib/session';
+import { getCatalogProgress } from '@/lib/catalog-progress-storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +36,21 @@ export async function GET(
       return NextResponse.json({ error: 'Pattern data missing in storage' }, { status: 500 });
 
     const json = await obj.Body.transformToString();
-    return new NextResponse(json, { headers: { 'Content-Type': 'application/json' } });
+    const data = JSON.parse(json);
+
+    // Best-effort — an anonymous viewer just gets no progress bundled in,
+    // not an error; the design itself is still fully viewable/loadable.
+    const session = await getSession(request);
+    if (session) {
+      try {
+        const prog = await getCatalogProgress(session.userId, designId);
+        if (prog && prog.progress) data.progress = prog.progress;
+      } catch (e) {
+        console.error('[converter/catalog-pattern] progress lookup failed:', e);
+      }
+    }
+
+    return NextResponse.json(data);
   } catch (e) {
     console.error('[converter/catalog-pattern] GET error:', e);
     return NextResponse.json({ error: 'Failed to load catalog pattern' }, { status: 500 });
