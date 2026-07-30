@@ -25,7 +25,7 @@ const faqEntries: FAQEntry[] = [
   {
     question: 'Are the cross-stitch patterns really free?',
     answer:
-      "Yes. Every chart on Cross Stitch Pattern is offered as a free PDF — no subscriptions, no hidden fees. You'll just need a free account (see below) to download.",
+      "Right now, every chart is free to download with a free account. Premium unlimited access is coming soon with extra features.",
   },
   {
     question: 'Do I need to create an account to download the PDFs?',
@@ -288,8 +288,8 @@ export default async function Home({ searchParams }: Props) {
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
             <p className="text-gray-800">
               All charts here are full, printable PDFs with color keys and stitch counts. Every listing includes stitch width, height,
-              and color totals so you can judge effort quickly. New patterns are published weekly and older designs stay free forever,
-              making this library a reliable place to bookmark for future projects.
+              and color totals so you can judge effort quickly. New patterns are published weekly, so it's worth bookmarking this
+              library for future projects.
             </p>
           </div>
           {adsEnabled && adSlotTop && (
