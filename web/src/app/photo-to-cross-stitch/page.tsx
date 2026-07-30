@@ -230,7 +230,10 @@ export default function PhotoToCrossStitchPage() {
               ))}
             </dl>
             <p className="mt-6 pt-5 border-t border-gray-100 text-sm text-gray-600">
-              Wondering how this stacks up against other pattern makers?{' '}
+              Want a full walkthrough of the editor?{' '}
+              <Link href="/tutorial" className="text-rose-600 underline hover:text-rose-700">
+                See the step-by-step guide
+              </Link>. Wondering how this stacks up against other pattern makers?{' '}
               <Link href="/compare" className="text-rose-600 underline hover:text-rose-700">
                 See honest, fact-checked comparisons
               </Link>.

@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 
 export type HelpTab = 'about' | 'howto';
 
@@ -140,6 +141,13 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
               <Section title="Download">
                 <p>Click <b>↓ Download PDF</b> (top right) to export the current pattern as a print-ready PDF with a color key showing each DMC thread number and stitch count.</p>
               </Section>
+
+              <p className="text-xs text-gray-400 pt-1">
+                Want more detail on any of this?{' '}
+                <Link href="/tutorial" className="text-rose-600 underline hover:text-rose-700" onClick={onClose}>
+                  See the full editor guide
+                </Link>.
+              </p>
             </>
           )}
         </div>

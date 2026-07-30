@@ -133,6 +133,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </p>
             <p className="mt-2">
               <Link
+                href="/tutorial"
+                className="text-blue-600 hover:underline"
+                aria-label="How to use the cross-stitch pattern editor"
+              >
+                Editor Guide
+              </Link>
+            </p>
+            <p className="mt-2">
+              <Link
                 href="/best-cross-stitch-pattern-makers"
                 className="text-blue-600 hover:underline"
                 aria-label="Best cross-stitch pattern makers 2026"

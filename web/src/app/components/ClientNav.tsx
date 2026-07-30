@@ -142,6 +142,14 @@ export default function ClientNav() {
                 </Link>
                 <hr />
                 <Link
+                  href="/tutorial"
+                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
+                  onClick={() => setIsArticlesOpenDesktop(false)}
+                >
+                  Editor Guide
+                </Link>
+                <hr />
+                <Link
                   href="/best-cross-stitch-pattern-makers"
                   className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
                   onClick={() => setIsArticlesOpenDesktop(false)}
@@ -324,6 +332,13 @@ export default function ClientNav() {
                       onClick={closeMobileMenu}
                     >
                       Exercises for cross-stitchers
+                    </Link>
+                    <Link
+                      href="/tutorial"
+                      className={mobileSubLinkBase}
+                      onClick={closeMobileMenu}
+                    >
+                      Editor Guide
                     </Link>
                     <Link
                       href="/best-cross-stitch-pattern-makers"

@@ -255,6 +255,10 @@ export default async function Home({ searchParams }: Props) {
                 online cross-stitch pattern editor
               </Link>{' '}
               — customize colors, resize it, or make any changes you like before downloading your PDF.
+              New to the editor?{' '}
+              <Link href="/tutorial" className="underline hover:text-indigo-700">
+                See the step-by-step guide
+              </Link>.
             </span>
           </div>
           <HeroSearch />
