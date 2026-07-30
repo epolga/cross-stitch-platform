@@ -993,6 +993,17 @@ export default function ConvertPage() {
     setSelection(null);
   }
 
+  function handleRemoveConfetti() {
+    const g = gridRef.current;
+    const result = removeConfetti(g);
+    if (!result.changed) return;
+    // Grid dimensions and cell coordinates are unchanged (unlike resize/crop) —
+    // stitch progress stays valid, no need to clear it.
+    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setRedoStack([]);
+    updateGrid(result.grid);
+  }
+
   function handleFlipH() {
     const g = gridRef.current;
     if (!g.length) return;
@@ -1691,16 +1702,7 @@ export default function ConvertPage() {
                     setSelection(null);
                   }},
                   { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
-                  { type: 'item', label: 'Remove Confetti', disabled: !hasDesign, onClick: () => {
-                    const g = gridRef.current;
-                    const result = removeConfetti(g);
-                    if (!result.changed) return;
-                    // Grid dimensions and cell coordinates are unchanged (unlike
-                    // resize/crop) — stitch progress stays valid, no need to clear it.
-                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
-                    setRedoStack([]);
-                    updateGrid(result.grid);
-                  }},
+                  { type: 'item', label: 'Remove Confetti', disabled: !hasDesign, onClick: handleRemoveConfetti },
                 ],
               },
               {
@@ -1894,6 +1896,15 @@ export default function ConvertPage() {
                   }`}
                 >
                   <span>⬜</span><span>Fill Erase</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveConfetti}
+                  disabled={!hasDesign}
+                  title="Remove Confetti — folds any isolated single stitch into the most common color around it"
+                  className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>🧹</span><span>Remove Confetti</span>
                 </button>
 
                 <div className="self-stretch w-px bg-gray-200 mx-0.5" />
