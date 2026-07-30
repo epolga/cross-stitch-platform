@@ -35,7 +35,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const downloadMode = resolveServerDownloadMode();
   const requestHeaders = await headers();
   const pathname = requestHeaders.get('x-pathname') ?? '';
-  const adsEnabled = downloadMode !== 'paid' && !pathname.startsWith('/admin');
+  const adsEnabled = downloadMode !== 'paid' && !pathname.startsWith('/admin') && !pathname.startsWith('/photo-to-cross-stitch');
   const dntEnabled = requestHeaders.get('dnt') === '1';
   const gpcEnabled = requestHeaders.get('sec-gpc') === '1';
   const trackingDisabled = dntEnabled || gpcEnabled;

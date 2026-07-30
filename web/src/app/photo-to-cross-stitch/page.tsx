@@ -2,8 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import { stitchesToSize } from '@/lib/fabric-size';
-import { isPaidDownloadMode } from '@/lib/download-mode';
-import AdSlot from '@/app/components/AdSlot';
 import ConvertClient from './ConvertClient';
 import HeroCta from './HeroCta';
 
@@ -147,13 +145,6 @@ const faqStructuredData = {
 };
 
 export default function PhotoToCrossStitchPage() {
-  const adsEnabled = !isPaidDownloadMode();
-  // Desktop-only for now — the working editor area (canvas/toolbar/palette)
-  // never gets an ad slot; these only appear in the static info sections
-  // below it, once the user has scrolled past the interactive part.
-  const adSlotMid = process.env.NEXT_PUBLIC_AD_SLOT_CONVERTER_MID ?? process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_TOP ?? '';
-  const adSlotBottom = process.env.NEXT_PUBLIC_AD_SLOT_CONVERTER_BOTTOM ?? process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ?? '';
-
   return (
     <>
       <script
@@ -255,12 +246,6 @@ export default function PhotoToCrossStitchPage() {
             </p>
           </section>
 
-          {adsEnabled && adSlotMid && (
-            <div className="hidden md:block mt-8">
-              <AdSlot slot={adSlotMid} minHeight={250} minHeightDesktop={280} />
-            </div>
-          )}
-
           <section className="mt-8 grid gap-6 sm:grid-cols-2 text-sm text-gray-600">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-3">Tips for the best result</h2>
@@ -325,12 +310,6 @@ export default function PhotoToCrossStitchPage() {
               <li className="flex gap-3"><span className="flex-none w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex items-center justify-center">6</span><span><span className="font-medium text-gray-800">Stitch one color at a time.</span> Work through all the stitches of one color before moving to the next — it is faster, uses less thread, and keeps the back tidy. In the editor, click any color to see its stitches flash on the chart, or hide all other colors so only the active one is visible.</span></li>
             </ol>
           </section>
-
-          {adsEnabled && adSlotBottom && (
-            <div className="hidden md:block mt-8">
-              <AdSlot slot={adSlotBottom} minHeight={250} minHeightDesktop={280} />
-            </div>
-          )}
         </div>
       </div>
     </>
