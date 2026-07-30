@@ -58,15 +58,16 @@ const VIEW_MODES: { id: ViewMode; label: string; title: string }[] = [
   { id: 'both',       label: 'Both',    title: 'Color + Symbol — see both at once, useful when editing' },
 ];
 
-// Ensure every colored cell has at least one 8-neighbor of the same color.
-// Isolated cells are replaced with the most common adjacent color.
-// Iterates until stable (max 8 passes).
-function enforceNeighborConnectivity(grid: number[][]): number[][] {
+// Ensure every colored cell has at least one 8-neighbor of the same color
+// ("confetti" — isolated single stitches). Isolated cells are replaced with
+// the most common adjacent color. Iterates until stable (max 8 passes).
+function removeConfetti(grid: number[][]): { grid: number[][]; changed: boolean } {
   const rows = grid.length;
-  if (!rows) return grid;
+  if (!rows) return { grid, changed: false };
   const cols = grid[0].length;
   const DIRS: [number, number][] = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
   const g = grid.map(r => [...r]);
+  let anyChanged = false;
 
   for (let pass = 0; pass < 8; pass++) {
     let changed = false;
@@ -90,9 +91,10 @@ function enforceNeighborConnectivity(grid: number[][]): number[][] {
         if (best) { g[r][c] = Number(best[0]); changed = true; }
       }
     }
+    if (changed) anyChanged = true;
     if (!changed) break;
   }
-  return g;
+  return { grid: g, changed: anyChanged };
 }
 
 // Trim grid to content bounding box + exactly 1 empty border on each side.
@@ -320,7 +322,7 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     updatePalette(data.palette);
-    updateGrid(enforceNeighborConnectivity(paddedGrid));
+    updateGrid(removeConfetti(paddedGrid).grid);
     setUndoStack([]);
     setRedoStack([]);
     setSelectedColor(0);
@@ -1689,6 +1691,16 @@ export default function ConvertPage() {
                     setSelection(null);
                   }},
                   { type: 'item', label: 'Crop to Selection', disabled: !selection, onClick: handleCrop },
+                  { type: 'item', label: 'Remove Confetti', disabled: !hasDesign, onClick: () => {
+                    const g = gridRef.current;
+                    const result = removeConfetti(g);
+                    if (!result.changed) return;
+                    // Grid dimensions and cell coordinates are unchanged (unlike
+                    // resize/crop) — stitch progress stays valid, no need to clear it.
+                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+                    setRedoStack([]);
+                    updateGrid(result.grid);
+                  }},
                 ],
               },
               {

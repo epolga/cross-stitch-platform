@@ -122,7 +122,7 @@ export const tutorials: TutorialGuide[] = [
         heading: 'Confetti cleanup',
         paragraphs: [
           '"Confetti" is the term for the stray, isolated single stitches that photo-to-pattern conversion tends to scatter across a design — a lone odd-colored cell surrounded by a completely different color, annoying to stitch because you have to jump the needle for just one stitch. Every pattern generated here runs an automatic confetti cleanup pass before you even see the result: any stitch with no same-color neighbor gets folded into the most common color around it.',
-          "This catches true one-cell confetti automatically, with nothing to click. Occasional small clumps of a few stray stitches can still slip through on busy photos — the editor's pencil and fill tools clean those up in seconds if you spot any, see Drawing Tools.",
+          "This catches true one-cell confetti automatically, with nothing to click. If manual editing reintroduces any later — a stray pencil click, an undone fill — Chart → Remove Confetti runs the same cleanup again on demand, on the pattern as it currently stands.",
         ],
       },
       {
@@ -146,7 +146,7 @@ export const tutorials: TutorialGuide[] = [
       },
       {
         q: 'Does the converter remove stray "confetti" stitches automatically?',
-        a: "Yes — every generated pattern runs an automatic confetti cleanup pass before you see it, folding any isolated single stitch into the most common surrounding color. No extra click needed.",
+        a: "Yes — every generated pattern runs an automatic confetti cleanup pass before you see it, folding any isolated single stitch into the most common surrounding color, no extra click needed. If editing brings any back, Chart → Remove Confetti re-runs the same cleanup on demand.",
       },
       {
         q: 'Is converting a photo free?',
@@ -243,6 +243,10 @@ export const tutorials: TutorialGuide[] = [
         heading: 'Crop to selection',
         paragraphs: ['With a selection active, Edit → Crop to Selection (or the Crop button that appears) trims the whole canvas down to just that rectangle, discarding everything outside it.'],
       },
+      {
+        heading: 'Remove confetti',
+        paragraphs: ["Chart → Remove Confetti re-runs the same isolated-stitch cleanup that already ran automatically when the pattern was first generated — useful if manual editing has left any stray single stitches behind. It always works on the whole pattern, not just a selection."],
+      },
     ],
     faq: [
       {
@@ -252,6 +256,10 @@ export const tutorials: TutorialGuide[] = [
       {
         q: 'Does flipping or rotating affect the whole pattern or just part of it?',
         a: 'It applies to your current selection if you have one active; otherwise it applies to the entire pattern.',
+      },
+      {
+        q: 'Can I run confetti cleanup again after editing?',
+        a: 'Yes — Chart → Remove Confetti re-runs it on the pattern as it currently stands, any time.',
       },
     ],
     updatedDate: '2026-07-30',
