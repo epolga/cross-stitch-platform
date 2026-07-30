@@ -92,7 +92,7 @@ export const tutorials: TutorialGuide[] = [
     title: 'Converting a Photo to a Pattern',
     h1: 'Converting a Photo to a Cross-Stitch Pattern',
     metaDescription:
-      'How photo-to-pattern conversion works on Cross-Stitch.com: choosing size and color count, supported formats, and tips for a cleaner result.',
+      'How photo-to-pattern conversion works on Cross-Stitch.com: choosing size and color count, automatic confetti cleanup, supported formats, and tips for a cleaner result.',
     intro:
       'Photo conversion turns any picture into a stitchable grid matched against real DMC thread numbers. Here is exactly what each setting does.',
     image: {
@@ -119,13 +119,19 @@ export const tutorials: TutorialGuide[] = [
         ],
       },
       {
+        heading: 'Confetti cleanup',
+        paragraphs: [
+          '"Confetti" is the term for the stray, isolated single stitches that photo-to-pattern conversion tends to scatter across a design — a lone odd-colored cell surrounded by a completely different color, annoying to stitch because you have to jump the needle for just one stitch. Every pattern generated here runs an automatic confetti cleanup pass before you even see the result: any stitch with no same-color neighbor gets folded into the most common color around it.',
+          "This catches true one-cell confetti automatically, with nothing to click. Occasional small clumps of a few stray stitches can still slip through on busy photos — the editor's pencil and fill tools clean those up in seconds if you spot any, see Drawing Tools.",
+        ],
+      },
+      {
         heading: 'Getting a cleaner result',
         paragraphs: ['A few things that consistently make the automatic conversion look better:'],
         list: [
           'Crop tightly to your subject before uploading if the background is busy.',
           'Good contrast between the subject and background converts more cleanly than a low-contrast photo.',
           "Don't chase photo-realism — cross-stitch has always been a translation, not a copy. A slightly stylized result usually stitches up better than a maximally detailed one.",
-          "If the automatic result has scattered single stray stitches, the editor's pencil and fill tools clean those up in seconds — see Drawing Tools.",
         ],
       },
     ],
@@ -137,6 +143,10 @@ export const tutorials: TutorialGuide[] = [
       {
         q: 'Can I convert the same photo more than once with different settings?',
         a: 'Yes — open Import → From Photo… again at any time and generate a fresh result without leaving the editor.',
+      },
+      {
+        q: 'Does the converter remove stray "confetti" stitches automatically?',
+        a: "Yes — every generated pattern runs an automatic confetti cleanup pass before you see it, folding any isolated single stitch into the most common surrounding color. No extra click needed.",
       },
       {
         q: 'Is converting a photo free?',

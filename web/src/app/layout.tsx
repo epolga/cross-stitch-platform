@@ -142,6 +142,24 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </p>
             <p className="mt-2">
               <Link
+                href="/easy-cross-stitch-patterns-for-beginners"
+                className="text-blue-600 hover:underline"
+                aria-label="Easy cross-stitch patterns for beginners"
+              >
+                Easy Patterns for Beginners
+              </Link>
+            </p>
+            <p className="mt-2">
+              <Link
+                href="/small-cross-stitch-patterns"
+                className="text-blue-600 hover:underline"
+                aria-label="Small cross-stitch patterns"
+              >
+                Small Patterns
+              </Link>
+            </p>
+            <p className="mt-2">
+              <Link
                 href="/best-cross-stitch-pattern-makers"
                 className="text-blue-600 hover:underline"
                 aria-label="Best cross-stitch pattern makers 2026"

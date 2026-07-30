@@ -42,6 +42,7 @@ export const comparisons: ComparisonEntry[] = [
       "Cross-stitch only, but everything is free right now: the photo-to-pattern converter, the full editor, generating as many patterns as you like, and real (non-watermarked) PDF downloads, with no paid tier live yet. A free account is only needed to save a pattern or download the PDF, and the catalog already has thousands of free, print-ready patterns to browse without touching the editor at all.",
     tableRows: [
       { label: 'Pattern-quality scoring', them: '✅ FLOW Score (0-100, predicts how enjoyable a pattern is to stitch)', us: 'Not offered' },
+      { label: 'Confetti cleanup (stray single-stitch removal)', them: '✅ One-click cleanup tool', us: '✅ Automatic — runs on every generated pattern, no click needed' },
       { label: 'Photo → pattern', them: '✅', us: '✅' },
       { label: 'Free pattern catalog to browse', them: '❌', us: '✅ Thousands, free', usWins: true },
       { label: 'Real (non-watermarked) PDF export', them: '$3.99/pattern or $99 lifetime — not on the free tier', us: '✅ Free right now (account required)', usWins: true },
@@ -50,7 +51,7 @@ export const comparisons: ComparisonEntry[] = [
       { label: 'Pricing model', them: 'Free editor, pay-per-export ($3.99/pattern or $99 lifetime), no subscription', us: '✅ Everything free right now, no paid tier live yet', usWins: true },
     ],
     whereTheyWin:
-      "FLOW Score is a genuinely useful idea we don't have an equivalent of — knowing before you commit whether a pattern will be a smooth stitch or a confetti nightmare is valuable, and their one-click confetti cleanup is well-regarded. Pay-per-export with no subscription is also an honest, simple model if you only need the occasional pattern and don't mind paying per download.",
+      "FLOW Score is a genuinely useful idea we don't have an equivalent of — knowing before you commit whether a pattern will be a smooth stitch or a confetti nightmare is valuable. Pay-per-export with no subscription is also an honest, simple model if you only need the occasional pattern and don't mind paying per download.",
     whereWeDiffer:
       "This site started as one stitcher's workaround, not a startup roadmap. I've had mild arthritis in my hands for years — nothing dramatic, just stiffness that made holding a paper chart flat and squinting at tiny grid squares genuinely uncomfortable by evening. Every feature that lets you hide colors while you stitch, save your place, or read a chart on a tablet propped against the kettle, I built for myself first, on the evenings my hands needed the help. That's also why a real, finished PDF isn't locked behind a per-pattern fee here — just cross-stitch, free to try and free to take home right now.",
     bottomLine:
@@ -63,6 +64,10 @@ export const comparisons: ComparisonEntry[] = [
       {
         q: 'Does Cross-Stitch.com have anything like Stitchmate\'s FLOW Score?',
         a: "Not currently — Stitchmate's 0-100 pattern-quality prediction is a feature we don't offer. What we do have is Stitch Mode, a free progress-tracking system for once you're actually stitching.",
+      },
+      {
+        q: 'Does Cross-Stitch.com clean up confetti stitches like Stitchmate does?',
+        a: "Yes — every pattern generated here runs an automatic confetti cleanup pass before you see it, folding stray isolated stitches into the surrounding color. Stitchmate's version is a one-click tool; ours runs automatically with no extra step.",
       },
       {
         q: 'Do I have to pay per pattern to get a usable PDF?',

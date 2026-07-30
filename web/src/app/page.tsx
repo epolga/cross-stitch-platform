@@ -104,21 +104,41 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   }
 
   const ogImage = designs[0]?.ImageUrl || 'https://d2o1uvvg91z7o4.cloudfront.net/images/default.jpg';
-  const canonicalUrl = buildCanonicalUrl('/');
+
+  // Facet-filtered variants of the homepage (?sizeCategory=, ?isBeginnerFriendly=,
+  // ?subject=, etc.) are thin duplicates of the same design grid under different
+  // query strings — noindex them so they don't compete with the homepage itself.
+  // The two facets that now have a dedicated, properly-authored landing page
+  // (/small-cross-stitch-patterns, /easy-cross-stitch-patterns-for-beginners)
+  // canonicalize there instead of just being suppressed.
+  const hasWidthFilter = filters.widthFrom > 0 || filters.widthTo < 10000;
+  const hasHeightFilter = filters.heightFrom > 0 || filters.heightTo < 10000;
+  const hasColorFilter = filters.ncolorsFrom > 0 || filters.ncolorsTo < 10000;
+  const hasOtherFilters = Boolean(subject) || Boolean(filters.orientation) || hasWidthFilter || hasHeightFilter || hasColorFilter || Boolean(filters.semanticIds?.length);
+  const isIsolatedSmallFacet = filters.sizeCategory === 'small' && !hasOtherFilters && !searchText;
+  const isIsolatedBeginnerFacet = filters.isBeginnerFriendly === true && !hasOtherFilters && !searchText;
+  const hasAnyFacetFilter = hasOtherFilters || Boolean(filters.sizeCategory) || filters.isBeginnerFriendly === true || Boolean(searchText);
+
+  const canonicalUrl = isIsolatedSmallFacet
+    ? buildCanonicalUrl('/small-cross-stitch-patterns')
+    : isIsolatedBeginnerFacet
+      ? buildCanonicalUrl('/easy-cross-stitch-patterns-for-beginners')
+      : buildCanonicalUrl('/');
   const title = searchText ? `Search Results for "${searchText}" - Cross Stitch Designs` : 'Cross Stitch Designs';
   const description = searchText 
     ? `Search results for "${searchText}". Explore thousands of free cross-stitch PDF patterns with instant downloads.` 
     : 'Explore thousands of free cross-stitch PDF patterns with instant downloads.';
 
+  const homeUrl = buildCanonicalUrl('/');
   const websiteStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "Cross Stitch Pattern",
     "description": description,
-    "url": canonicalUrl,
+    "url": homeUrl,
     "potentialAction": {
       "@type": "SearchAction",
-      "target": `${canonicalUrl}?searchText={search_term_string}`,
+      "target": `${homeUrl}?searchText={search_term_string}`,
       "query-input": "required name=search_term_string"
     }
   };
@@ -143,7 +163,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     alternates: {
       canonical: canonicalUrl,
     },
-    robots: searchText ? 'noindex, follow' : 'index, follow',
+    robots: hasAnyFacetFilter ? 'noindex, follow' : 'index, follow',
     openGraph: {
       title,
       description,

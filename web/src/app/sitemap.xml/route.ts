@@ -46,7 +46,7 @@ const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 // as an approximation (commit date, not confirmed deploy date) — good enough
 // for pages that rarely change; keep it exact for anything edited from here on.
 const STATIC_PAGE_LASTMOD: Record<string, string> = {
-  '/': '2026-07-28', // src/app/page.tsx
+  '/': '2026-07-30', // src/app/page.tsx
   '/XStitch-Charts.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/photo-to-cross-stitch': '2026-07-30', // src/app/photo-to-cross-stitch/page.tsx
   '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
@@ -60,6 +60,8 @@ const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/compare': '2026-07-30', // src/app/compare/page.tsx
   '/best-cross-stitch-pattern-makers': '2026-07-30', // src/app/best-cross-stitch-pattern-makers/page.tsx
   '/tutorial': '2026-07-30', // src/app/tutorial/page.tsx
+  '/easy-cross-stitch-patterns-for-beginners': '2026-07-30', // src/app/easy-cross-stitch-patterns-for-beginners/page.tsx
+  '/small-cross-stitch-patterns': '2026-07-30', // src/app/small-cross-stitch-patterns/page.tsx
 };
 
 // Function to generate the sitemap XML
@@ -74,6 +76,8 @@ async function generateAndUploadSitemap(baseUrl: string) {
     { url: '/compare', changefreq: 'monthly', priority: 0.6, lastmod: STATIC_PAGE_LASTMOD['/compare'] },
     { url: '/best-cross-stitch-pattern-makers', changefreq: 'monthly', priority: 0.7, lastmod: STATIC_PAGE_LASTMOD['/best-cross-stitch-pattern-makers'] },
     { url: '/tutorial', changefreq: 'monthly', priority: 0.7, lastmod: STATIC_PAGE_LASTMOD['/tutorial'] },
+    { url: '/easy-cross-stitch-patterns-for-beginners', changefreq: 'weekly', priority: 0.7, lastmod: STATIC_PAGE_LASTMOD['/easy-cross-stitch-patterns-for-beginners'] },
+    { url: '/small-cross-stitch-patterns', changefreq: 'weekly', priority: 0.7, lastmod: STATIC_PAGE_LASTMOD['/small-cross-stitch-patterns'] },
     { url: '/Embroidery_History.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Embroidery_History.aspx'] },
     { url: '/WhyCrossStitch', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/WhyCrossStitch'] },
     { url: '/Article070409.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/Article070409.aspx'] },

@@ -34,7 +34,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   return {
     title: TITLE,
     description: DESCRIPTION,
-    keywords: 'cross stitch pattern maker, photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account',
+    keywords: 'cross stitch pattern maker, photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account, stitchable cross stitch pattern, confetti cleanup cross stitch',
     alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
     robots: hasReferrerId ? 'noindex, follow' : 'index, follow',
     openGraph: {
@@ -65,6 +65,7 @@ const structuredData = {
     'Start from a blank canvas and design a pattern by hand, no photo required',
     'Choose stitch width and height independently',
     'Automatic DMC thread color matching from 454 colors',
+    'Automatic confetti cleanup — removes stray single-color stitches after conversion',
     'Reduce palette to 10, 15, 20 or 25 colors',
     'Color preview and symbol grid views',
     'Download printable PDF with color grid, symbol grid and color key',
@@ -100,6 +101,11 @@ const FAQ = [
     id: 'faq-colors',
     q: 'Which DMC colors will be used?',
     a: 'The converter picks the closest DMC floss color from a library of 454 standard shades for each part of your photo. If you set a color limit, the rarest shades are swapped for the nearest remaining one until your chosen number of colors is reached.',
+  },
+  {
+    id: 'faq-confetti',
+    q: 'Does the converter clean up stray "confetti" stitches automatically?',
+    a: 'Yes. Photo conversion can scatter stray, isolated single stitches ("confetti") across a pattern — a lone odd-colored cell surrounded by a different color, annoying to stitch on its own. Every pattern generated here runs an automatic confetti cleanup pass before you see the result, folding any isolated stitch into the most common color around it. No extra click needed.',
   },
   {
     id: 'faq-pdf',
@@ -246,6 +252,7 @@ export default function PhotoToCrossStitchPage() {
               <ul className="space-y-2">
                 <li><span className="font-medium text-gray-800">Choose a simple subject.</span> A pet portrait cross-stitch pattern comes out best from a photo with a single animal against a plain background. A single flower, a bird, or a landscape with a clear focal point also converts well. Busy group photos rarely make good patterns.</li>
                 <li><span className="font-medium text-gray-800">Good contrast helps.</span> Photos with a clear difference between the subject and background give cleaner, more stitchable patterns.</li>
+                <li><span className="font-medium text-gray-800">Confetti gets cleaned up automatically.</span> Stray, isolated single stitches are folded into the surrounding color as soon as your pattern is generated — no extra click needed.</li>
                 <li><span className="font-medium text-gray-800">Start with fewer colors.</span> 10–15 thread colors is a lovely, manageable project. Add more if you want a portrait with fine detail.</li>
                 <li><span className="font-medium text-gray-800">Try different sizes.</span> 50×50 stitches on 14-count Aida makes a 9×9 cm piece — a great quick project. 80×80 gives a 14×14 cm result with more detail.</li>
               </ul>
