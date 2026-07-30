@@ -288,7 +288,7 @@ export default async function Home({ searchParams }: Props) {
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 mb-6">
             <p className="text-gray-800">
               All charts here are full, printable PDFs with color keys and stitch counts. Every listing includes stitch width, height,
-              and color totals so you can judge effort quickly. New patterns are published weekly, so it's worth bookmarking this
+              and color totals so you can judge effort quickly. New patterns are published weekly, so it&apos;s worth bookmarking this
               library for future projects.
             </p>
           </div>
