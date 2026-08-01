@@ -280,8 +280,24 @@ export default function ConvertPage() {
   // preventDefault() on the KEYDOWN event (as the old handler did) actually
   // suppresses the browser's native paste action, so the 'paste' event
   // (needed to read clipboard image data at all) would never fire.
+  //
+  // The in-app stitch clipboard takes priority over an OS-clipboard image
+  // when both are present: the OS clipboard can hold a stale image from any
+  // earlier copy (a screenshot from ages ago, "Copy image" on some other
+  // page) and just sits there indefinitely, whereas `clipboard` only gets
+  // set by an explicit Ctrl+C/Ctrl+X the user just did on this page — so
+  // it's the far more likely thing they mean by "paste" right now.
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const inTextField = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+
+      if (!inTextField && clipboard && clipboard.length) {
+        e.preventDefault();
+        handlePaste();
+        return;
+      }
+
       const items = e.clipboardData?.items;
       if (items) {
         for (let i = 0; i < items.length; i++) {
@@ -296,15 +312,6 @@ export default function ConvertPage() {
             return;
           }
         }
-      }
-      // No image on the clipboard — fall back to the in-app stitch
-      // clipboard, same as the old Ctrl+V shortcut, but only outside text
-      // fields (native text paste there is untouched).
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      if (clipboard && clipboard.length) {
-        e.preventDefault();
-        handlePaste();
       }
     }
     document.addEventListener('paste', onPaste);
