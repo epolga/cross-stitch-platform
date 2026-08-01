@@ -12,6 +12,7 @@ import DesignViewTracker from '@/app/components/DesignViewTracker';
 import EditorCTAButton from '@/app/components/EditorCTAButton';
 import AdSlot from '@/app/components/AdSlot';
 import PinterestSaveLink from '@/app/components/PinterestSaveLink';
+import ShareButtons from '@/app/components/ShareButtons';
 import DesignLikeButton from '@/app/components/DesignLikeButton';
 import { getDesignById } from '@/lib/data-access';
 import { getStitchPlanningTips, getFinishingTips } from '@/lib/pattern-tips';
@@ -270,6 +271,11 @@ export default async function DesignPage({ params }: Props) {
                   className="h-8 w-8 shrink-0"
                 />
                 <DesignLikeButton designId={design.DesignID} />
+                <ShareButtons
+                  pageUrl={canonicalUrl}
+                  designId={design.DesignID}
+                  designCaption={design.Caption}
+                />
               </div>
             </div>
 
