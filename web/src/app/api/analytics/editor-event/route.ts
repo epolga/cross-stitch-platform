@@ -18,6 +18,13 @@ const SERVER_SIDE_EVENTS = new Set([
 // Rate limit: one write per sessionId+eventType per minute
 const rateLimitMap = new Map<string, number>();
 
+// Known crawlers/link-preview fetchers that render JS and would otherwise
+// fire editor_opened on every page they visit — e.g. Googlebot and Meta's
+// crawler both render /photo-to-cross-stitch pages reached via the catalog
+// "Open in editor" CTA links (added 2026-07-27), inflating the daily
+// editor-analytics session count with non-human traffic.
+const BOT_UA_PATTERN = /bot|crawl|spider|slurp|facebookexternalhit|meta-externalagent|ia_archiver|whatsapp|telegrambot|discordbot|slackbot|redditbot|linkedinbot/i;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as Record<string, unknown>;
@@ -34,6 +41,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (req.cookies.get('no_track')?.value === '1') {
+      return NextResponse.json({ ok: true });
+    }
+
+    const userAgent = req.headers.get('user-agent') ?? '';
+    if (BOT_UA_PATTERN.test(userAgent)) {
       return NextResponse.json({ ok: true });
     }
 

@@ -822,6 +822,20 @@ export default function ConvertPage() {
     );
     if (!resp.ok) {
       const { error } = await resp.json().catch(() => ({ error: 'Save failed' }));
+      if (resp.status === 401) {
+        // localStorage's isLoggedIn flag never expires on its own, unlike the
+        // 30-day session cookie — a stale flag makes the client think we're
+        // logged in right up until a save attempt hits the server's real
+        // check. Clear it and prompt to log back in instead of surfacing an
+        // opaque "Save failed".
+        try { localStorage.removeItem('isLoggedIn'); } catch { /* ignore */ }
+        window.dispatchEvent(new Event('authStateChange'));
+        setSaveDialogOpen(false);
+        window.dispatchEvent(new CustomEvent('openRegisterModal', {
+          detail: { source: 'converter-save', label: 'Save pattern' },
+        }));
+        throw Object.assign(new Error('login required'), { silent: true });
+      }
       trackEvent('editor_error', { errorCode: 'save_failed', step: 'pattern_save' });
       postEditorEvent('editor_error', { errorCode: 'save_failed', step: 'pattern_save' });
       throw new Error(error);
