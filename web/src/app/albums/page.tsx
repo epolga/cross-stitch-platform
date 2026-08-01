@@ -51,6 +51,25 @@ export default async function AlbumsPage() {
           <AdSlot slot={adSlotTop} minHeight={250} minHeightDesktop={280} />
         </div>
       )}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 text-center">
+          Browse by size or difficulty
+        </h2>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link
+            href="/small-cross-stitch-patterns"
+            className="px-4 py-2 border border-gray-300 rounded-lg shadow-sm hover:shadow-lg hover:border-rose-300 text-sm font-medium text-gray-800"
+          >
+            Small Patterns
+          </Link>
+          <Link
+            href="/easy-cross-stitch-patterns-for-beginners"
+            className="px-4 py-2 border border-gray-300 rounded-lg shadow-sm hover:shadow-lg hover:border-rose-300 text-sm font-medium text-gray-800"
+          >
+            Easy Patterns for Beginners
+          </Link>
+        </div>
+      </div>
       <div className="overflow-hidden">
         {albums.map((album) => {
           const slug = album.Caption.replace(/\s+/g, '-');

@@ -150,22 +150,6 @@ export default function ClientNav() {
                 </Link>
                 <hr />
                 <Link
-                  href="/easy-cross-stitch-patterns-for-beginners"
-                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
-                  onClick={() => setIsArticlesOpenDesktop(false)}
-                >
-                  Easy Patterns for Beginners
-                </Link>
-                <hr />
-                <Link
-                  href="/small-cross-stitch-patterns"
-                  className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
-                  onClick={() => setIsArticlesOpenDesktop(false)}
-                >
-                  Small Patterns
-                </Link>
-                <hr />
-                <Link
                   href="/best-cross-stitch-pattern-makers"
                   className="block px-4 py-2 text-gray-800 hover:bg-gray-100 hover:underline"
                   onClick={() => setIsArticlesOpenDesktop(false)}
@@ -355,20 +339,6 @@ export default function ClientNav() {
                       onClick={closeMobileMenu}
                     >
                       Editor Guide
-                    </Link>
-                    <Link
-                      href="/easy-cross-stitch-patterns-for-beginners"
-                      className={mobileSubLinkBase}
-                      onClick={closeMobileMenu}
-                    >
-                      Easy Patterns for Beginners
-                    </Link>
-                    <Link
-                      href="/small-cross-stitch-patterns"
-                      className={mobileSubLinkBase}
-                      onClick={closeMobileMenu}
-                    >
-                      Small Patterns
                     </Link>
                     <Link
                       href="/best-cross-stitch-pattern-makers"
