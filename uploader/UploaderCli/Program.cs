@@ -31,7 +31,6 @@ using CrossStitch.Shared.Pinterest;
 using UploadPatterns;
 using Uploader.Helpers;
 
-const string ConverterExePathDefault = @"%CROSS_STITCH%\cross-stitch-platform\uploader\Converter\bin\Release\net9.0\Converter.exe";
 const string WebProjectPathDefault = @"%CROSS_STITCH%\cross-stitch-platform\web";
 const string PhotoPrefix = "photos";
 const string PinterestPhotoFileName = "4_pinterest.jpg";
@@ -98,12 +97,12 @@ var pinterestUploader = HelperFactory.CreatePinterestUploader();
 
 Console.WriteLine($"=== Folder: {batchFolderPath} ===\n");
 
-// ---- 1. Required PDFs present? ----
-string[] requiredPdfs = { "1.pdf", "3.pdf", "5.pdf" };
-var missing = requiredPdfs.Where(name => !File.Exists(Path.Combine(batchFolderPath, name))).ToList();
+// ---- 1. Required source PDF present? ----
+string[] requiredSourcePdfs = { "1_src.pdf" };
+var missing = requiredSourcePdfs.Where(name => !File.Exists(Path.Combine(batchFolderPath, name))).ToList();
 if (missing.Count > 0)
 {
-    Console.Error.WriteLine($"Missing required PDFs: {string.Join(", ", missing)}");
+    Console.Error.WriteLine($"Missing required source PDF: {string.Join(", ", missing)}");
     return 2;
 }
 
@@ -111,16 +110,24 @@ if (missing.Count > 0)
 int albumId = LoadAlbumIdFromTxt(batchFolderPath);
 Console.WriteLine($"AlbumID: {albumId}");
 
-// ---- 3. Parse PatternInfo from 1.pdf ----
-string pdf1Path = Path.Combine(batchFolderPath, "1.pdf");
-var patternInfo = new PatternInfo(pdf1Path) { AlbumId = albumId };
+// ---- 3. Parse PatternInfo from 1_src.pdf (the operator-provided source —
+// 1.pdf/3.pdf/5.pdf are generated from it below and carry no reliable
+// metadata text of their own) ----
+string srcPdfPath = Path.Combine(batchFolderPath, "1_src.pdf");
+var patternInfo = new PatternInfo(srcPdfPath) { AlbumId = albumId };
 Console.WriteLine($"Title: {patternInfo.Title}");
 Console.WriteLine($"Size: {patternInfo.Width} x {patternInfo.Height} stitches, {patternInfo.NColors} colors");
 
-// ---- 4. Extract preview image from PDF -> 4.jpg / 4_pinterest.jpg ----
+// ---- 3b. Generate 1.pdf/3.pdf/5.pdf (color+symbol / symbol / color) from
+// 1_src.pdf via our own algorithm ----
+Console.WriteLine("Generating kit PDFs from 1_src.pdf...");
+await GenerateKitPdfsAsync(batchFolderPath, srcPdfPath, patternInfo.Title);
+
+// ---- 4. Extract preview image from the SOURCE PDF -> 4.jpg / 4_pinterest.jpg
+// (the original artwork, not our chart-only regenerated PDFs) ----
 string imageFilePath = Path.Combine(batchFolderPath, "4.jpg");
 string pinterestImageFilePath = Path.Combine(batchFolderPath, PinterestPhotoFileName);
-ExtractAndSaveImages(pdf1Path, imageFilePath, pinterestImageFilePath);
+ExtractAndSaveImages(srcPdfPath, imageFilePath, pinterestImageFilePath);
 Console.WriteLine($"Saved {imageFilePath} and {pinterestImageFilePath}");
 
 // ---- 5. NPage + DesignID (same DDB queries as MainWindow) ----
@@ -140,7 +147,7 @@ string sccFile = Directory.GetFiles(batchFolderPath, "*.scc").FirstOrDefault()
 Console.WriteLine("\nUploading chart (.scc) to S3...");
 await UploadChartToS3Async(s3TransferUtility, bucketName, patternInfo.DesignID, sccFile, patternInfo.Title);
 
-Console.WriteLine("Converting + uploading PDFs to S3...");
+Console.WriteLine("Uploading PDFs to S3...");
 await UploadPdfToS3Async(s3TransferUtility, bucketName, batchFolderPath, albumId, patternInfo.DesignID);
 
 Console.WriteLine("Uploading images to S3...");
@@ -190,14 +197,14 @@ Console.WriteLine("Inserting item into DynamoDB...");
 await InsertItemIntoDynamoDbAsync(dynamoDbClient, albumId, patternInfo, nGlobalPage, pinResult.LinkType, seoDescription);
 Console.WriteLine("Inserted.");
 
-// ---- 10b. Extract editor pattern (best-effort — mirrors MainWindow.xaml.cs's
-// TryExtractEditorPatternAsync so "Open in editor" is live immediately for
+// ---- 10b. Stamp editor pattern (best-effort — mirrors MainWindow.xaml.cs's
+// TryStampEditorPatternAsync so "Open in editor" is live immediately for
 // designs published via either path) ----
-Console.WriteLine("Extracting editor pattern...");
-bool editorPatternOk = await TryExtractEditorPatternAsync(patternInfo.DesignID);
+Console.WriteLine("Stamping editor pattern...");
+bool editorPatternOk = await TryStampEditorPatternAsync(batchFolderPath, patternInfo.DesignID, albumId, patternInfo.NPage, patternInfo.Title);
 Console.WriteLine(editorPatternOk
     ? "Editor pattern ready — \"Open in editor\" is live for this design."
-    : "Editor pattern not ready yet (see message above) — will pick up on the next manual batch run.");
+    : "Editor pattern not ready yet (see message above).");
 
 // ---- 11. Restart Elastic Beanstalk ----
 Console.WriteLine("Restarting Elastic Beanstalk environment...");
@@ -392,63 +399,23 @@ static async Task UploadPdfToS3Async(TransferUtility s3, string bucketName, stri
     string key3 = $"{designFolder}/Stitch{designId}_3_Kit.pdf";
     string key5 = $"{designFolder}/Stitch{designId}_5_Kit.pdf";
 
-    string convertedPdf1 = await ConvertPdfForUploadAsync(pdf1Path);
-    string convertedPdf3 = await ConvertPdfForUploadAsync(pdf3Path);
-    string convertedPdf5 = await ConvertPdfForUploadAsync(pdf5Path);
-
-    await UploadPdfFileAsync(s3, bucketName, convertedPdf1, mainKey);
-    await UploadPdfFileAsync(s3, bucketName, convertedPdf1, key1);
-    await UploadPdfFileAsync(s3, bucketName, convertedPdf3, key3);
-    await UploadPdfFileAsync(s3, bucketName, convertedPdf5, key5);
+    // No Converter.exe debranding pass here: 1.pdf/3.pdf/5.pdf are our own
+    // freshly-generated output (see GenerateKitPdfsAsync), not an
+    // externally-authored file that needs stripping — upload as-is.
+    await UploadPdfFileAsync(s3, bucketName, pdf1Path, mainKey);
+    await UploadPdfFileAsync(s3, bucketName, pdf1Path, key1);
+    await UploadPdfFileAsync(s3, bucketName, pdf3Path, key3);
+    await UploadPdfFileAsync(s3, bucketName, pdf5Path, key5);
 }
 
-static async Task<string> ConvertPdfForUploadAsync(string inputPath)
-{
-    string ConverterExePath = ExpandCrossStitchToken(ConfigurationManager.AppSettings["ConverterExePath"] ?? ConverterExePathDefault);
-
-    if (!File.Exists(inputPath)) throw new FileNotFoundException("Input PDF not found.", inputPath);
-    if (!File.Exists(ConverterExePath)) throw new FileNotFoundException("Converter.exe not found.", ConverterExePath);
-
-    string? folder = Path.GetDirectoryName(inputPath);
-    string outputPath = Path.Combine(folder ?? string.Empty, $"{Path.GetFileNameWithoutExtension(inputPath)}.converted.pdf");
-
-    var startInfo = new ProcessStartInfo
-    {
-        FileName = ConverterExePath,
-        CreateNoWindow = true,
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-    };
-    startInfo.ArgumentList.Add(inputPath);
-
-    using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start PDF converter process.");
-    Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
-    Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
-    await process.WaitForExitAsync();
-    string stdOut = await stdOutTask;
-    string stdErr = await stdErrTask;
-
-    if (process.ExitCode != 0)
-    {
-        string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
-        throw new Exception($"Converter failed for {Path.GetFileName(inputPath)} (exit {process.ExitCode}). {details}".Trim());
-    }
-    if (!File.Exists(outputPath))
-        throw new Exception($"Converter did not produce expected output: {outputPath}");
-
-    return outputPath;
-}
-
-// Runs the just-published design's kit PDF through the TS pattern-extractor
-// (web/scripts/batch-extract-catalog-patterns.ts — same script the catalog
-// batch job uses) so "Open in editor" is live immediately, without waiting
-// for a manual batch re-run. Best-effort: any failure (missing Node,
-// CloudFront not yet propagated, parser edge case) is logged but does not
-// abort the publish — the batch script's default (skip designs that already
-// have EditorPatternKey) means a later manual run safely picks up whatever
-// this step missed.
-static async Task<bool> TryExtractEditorPatternAsync(int designId)
+// Generates 1.pdf/3.pdf/5.pdf (color+symbol / symbol / color) from 1_src.pdf
+// via the web project's own reverse-parser + chart renderer
+// (scripts/generate-kit-pdfs.ts) — invoked as an external process the same
+// way this used to shell out to Converter.exe (now removed; these are our
+// own output, nothing to debrand). Not best-effort: without these three
+// files the rest of the publish flow has nothing to upload, so a failure
+// here aborts the run.
+static async Task GenerateKitPdfsAsync(string batchFolderPath, string srcPdfPath, string title)
 {
     string webProjectPath = ExpandCrossStitchToken(ConfigurationManager.AppSettings["WebProjectPath"] ?? WebProjectPathDefault);
 
@@ -464,8 +431,67 @@ static async Task<bool> TryExtractEditorPatternAsync(int designId)
     startInfo.ArgumentList.Add("/c");
     startInfo.ArgumentList.Add("npx");
     startInfo.ArgumentList.Add("tsx");
-    startInfo.ArgumentList.Add("scripts/batch-extract-catalog-patterns.ts");
-    startInfo.ArgumentList.Add($"--designIds={designId}");
+    startInfo.ArgumentList.Add("scripts/generate-kit-pdfs.ts");
+    startInfo.ArgumentList.Add(srcPdfPath);
+    startInfo.ArgumentList.Add(batchFolderPath);
+    startInfo.ArgumentList.Add(title);
+
+    using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start kit-PDF generator process.");
+    Task<string> stdOutTask = process.StandardOutput.ReadToEndAsync();
+    Task<string> stdErrTask = process.StandardError.ReadToEndAsync();
+    await process.WaitForExitAsync();
+    string stdOut = await stdOutTask;
+    string stdErr = await stdErrTask;
+
+    if (process.ExitCode != 0 || !stdOut.Contains("ok=1"))
+    {
+        string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
+        throw new Exception($"Kit-PDF generation failed (exit {process.ExitCode}). {details}".Trim());
+    }
+
+    foreach (var name in new[] { "1.pdf", "3.pdf", "5.pdf" })
+    {
+        if (!File.Exists(Path.Combine(batchFolderPath, name)))
+            throw new Exception($"Kit-PDF generator did not produce expected output: {name}");
+    }
+}
+
+// Uploads the pattern.json that GenerateKitPdfsAsync already produced (from
+// the same in-memory extraction, no re-fetch/re-parse of the just-uploaded
+// kit PDF — that used to fail here, since our own generated PDF doesn't
+// have the external chart program's "Cat No." color-key page the extractor
+// looks for) so "Open in editor" is live immediately. Best-effort: any
+// failure (missing Node, S3/DDB hiccup) is logged but does not abort the
+// publish — the design is still fully published either way.
+static async Task<bool> TryStampEditorPatternAsync(string batchFolderPath, int designId, int albumId, string nPage, string title)
+{
+    string patternJsonPath = Path.Combine(batchFolderPath, "pattern.json");
+    if (!File.Exists(patternJsonPath))
+    {
+        Console.WriteLine($"Editor-pattern stamp skipped for DesignID={designId}: {patternJsonPath} not found.");
+        return false;
+    }
+
+    string webProjectPath = ExpandCrossStitchToken(ConfigurationManager.AppSettings["WebProjectPath"] ?? WebProjectPathDefault);
+
+    var startInfo = new ProcessStartInfo
+    {
+        FileName = "cmd.exe",
+        WorkingDirectory = webProjectPath,
+        CreateNoWindow = true,
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+    };
+    startInfo.ArgumentList.Add("/c");
+    startInfo.ArgumentList.Add("npx");
+    startInfo.ArgumentList.Add("tsx");
+    startInfo.ArgumentList.Add("scripts/stamp-editor-pattern.ts");
+    startInfo.ArgumentList.Add(patternJsonPath);
+    startInfo.ArgumentList.Add(designId.ToString());
+    startInfo.ArgumentList.Add(albumId.ToString());
+    startInfo.ArgumentList.Add(nPage);
+    startInfo.ArgumentList.Add(title);
 
     using var process = Process.Start(startInfo);
     if (process == null) return false;
@@ -480,7 +506,7 @@ static async Task<bool> TryExtractEditorPatternAsync(int designId)
     if (!ok)
     {
         string details = string.IsNullOrWhiteSpace(stdErr) ? stdOut : stdErr;
-        Console.WriteLine($"Editor-pattern extraction failed for DesignID={designId} (will be picked up by the next manual batch run): {details}");
+        Console.WriteLine($"Editor-pattern stamp failed for DesignID={designId}: {details}");
     }
     return ok;
 }
