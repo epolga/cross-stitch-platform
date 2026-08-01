@@ -248,7 +248,11 @@ export default function ConvertPage() {
       if (code === 'KeyY' || (code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); }
       if (code === 'KeyC') { e.preventDefault(); handleCopy(); }
       if (code === 'KeyX') { e.preventDefault(); handleCut(); }
-      if (code === 'KeyV') { e.preventDefault(); handlePaste(); }
+      // KeyV (paste) is deliberately NOT handled here — see the 'paste'
+      // event listener below. preventDefault() on this keydown would
+      // suppress the browser's native paste action entirely, which means
+      // the 'paste' ClipboardEvent (needed to read an OS-clipboard image)
+      // would never fire.
       if (code === 'KeyS') { e.preventDefault(); handleSaveRef.current(); }
       if (code === 'KeyA') {
         e.preventDefault();
@@ -265,34 +269,47 @@ export default function ConvertPage() {
     return () => document.removeEventListener('keydown', onKey, { capture: true });
   }, [undoStack, redoStack, selection, clipboard]);
 
-  // Paste an image from the OS clipboard (screenshot, copied photo, etc.)
-  // straight into the import dialog — same entry point as drag-and-drop and
-  // Upload Your Photo. Listening to the native 'paste' event rather than a
-  // Ctrl/Cmd+V keydown check makes this work the same on Windows/Linux
-  // (Ctrl+V) and macOS (Cmd+V): the browser normalizes both into the same
-  // ClipboardEvent regardless of platform. Only acts when the clipboard
-  // actually contains image data, so pasting text (e.g. into the pattern
-  // name field) is completely unaffected — no INPUT/TEXTAREA guard needed.
+  // Handles Ctrl/Cmd+V for both cases — an image from the OS clipboard
+  // (screenshot, copied photo, etc.), which goes to the import dialog same
+  // as drag-and-drop/Upload Your Photo, and the in-app stitch-selection
+  // clipboard (Select → Ctrl+C → Ctrl+V), which was previously handled from
+  // the keydown effect above. Both live here, on the native 'paste' event,
+  // rather than a keydown check, for two reasons: (1) it makes image-paste
+  // work identically on Windows/Linux (Ctrl+V) and macOS (Cmd+V) — the
+  // browser normalizes both into the same ClipboardEvent — and (2) calling
+  // preventDefault() on the KEYDOWN event (as the old handler did) actually
+  // suppresses the browser's native paste action, so the 'paste' event
+  // (needed to read clipboard image data at all) would never fire.
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
       const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (!file) continue;
-          e.preventDefault();
-          trackEvent('image_paste_started', {});
-          setImportInitialFile(file);
-          setShowImportDialog(true);
-          return;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            e.preventDefault();
+            trackEvent('image_paste_started', {});
+            setImportInitialFile(file);
+            setShowImportDialog(true);
+            return;
+          }
         }
+      }
+      // No image on the clipboard — fall back to the in-app stitch
+      // clipboard, same as the old Ctrl+V shortcut, but only outside text
+      // fields (native text paste there is untouched).
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (clipboard && clipboard.length) {
+        e.preventDefault();
+        handlePaste();
       }
     }
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-  }, []);
+  }, [clipboard, selection]);
 
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
