@@ -7,6 +7,7 @@ import PaginationControl from './PaginationControl';
 import styles from './DesignList.module.css';
 import type { Design } from '@/app/types/design';
 import DownloadPdfLink from './DownloadPdfLink';
+import EditorCTAButton from './EditorCTAButton';
 import { CreateDesignUrl } from '@/lib/url-helper';
 import { devLog } from '@/lib/devLog';
 
@@ -179,6 +180,17 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
           isMissing={isMissing ?? undefined}
         />
       </div>
+      {design.EditorPatternKey && (
+        <div className="w-full mt-1 text-center">
+          <EditorCTAButton
+            href={`/photo-to-cross-stitch?source=design_list_catalog&catalogPatternId=${design.DesignID}`}
+            label="Open in editor"
+            eventName="design_editor_cta_clicked"
+            eventParams={{ designId: design.DesignID, source: 'design_list_catalog' }}
+            className={styles.editorLink}
+          />
+        </div>
+      )}
     </div>
   );
 }

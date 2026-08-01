@@ -81,6 +81,20 @@
   text-decoration-thickness: 1px;
 }
 
+.editorLink {
+  color: #e11d48;
+  font-weight: 500;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.editorLink:hover {
+  color: #be123c;
+  text-decoration-thickness: 1px;
+}
+
 .pagination {
   margin: 1.5rem 0;
 }
