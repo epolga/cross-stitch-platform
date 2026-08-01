@@ -46,6 +46,22 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
+0. **Verify password-reset works end-to-end.** 2026-07-28 found and fixed a
+   real IAM bug: the EC2 role's inline policy (`CrossStitchDynamoDBAccessPolicy`)
+   never included the `PasswordResetTokens` table, so `createPasswordResetToken`'s
+   `PutItem` silently threw `AccessDeniedException` on every single
+   password-reset request, ever — the route's catch-all always returned
+   `ok:true` regardless, so neither users nor Olga ever saw an error. This
+   affected 100% of reset attempts, not just one user. Fixed by adding
+   `PasswordResetTokens` (+ index) to the policy's resource list (confirmed
+   via `iam simulate-principal-policy`, not by triggering a real send). Not
+   yet confirmed with a real end-to-end reset by an actual user — check
+   next session, or ask a real user to try "forgot password" and confirm
+   the email arrives. Also worth checking: is this IAM policy tracked
+   anywhere in source control (`.ebextensions`/IaC)? Search came up empty
+   this session — if it's genuinely only a hand-maintained AWS resource,
+   the next new DDB table added to the app risks the exact same silent
+   failure mode.
 1. **Ann persona — introduce Nitka next.** Per `web/plan/ann_story_timeline.md`'s
    "Suggested next-mention order": naming the cat as a character is the
    lowest-friction next piece (already visually established via the
