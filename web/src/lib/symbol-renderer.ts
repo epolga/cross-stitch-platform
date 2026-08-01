@@ -86,16 +86,6 @@ function rightHalf(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: num
   ctx.beginPath(); ctx.arc(ri(cx), ri(cy), r, -Math.PI / 2, Math.PI / 2, false); ctx.closePath(); ctx.fill();
 }
 
-function concentricSquares(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  ctx.lineWidth = 1;
-  const outer = ri(s * 0.70);
-  const oh = ri(outer / 2);
-  ctx.strokeRect(rs(ri(cx) - oh), rs(ri(cy) - oh), outer - 1, outer - 1);
-  const inner = ri(s * 0.36);
-  const ih = ri(inner / 2);
-  ctx.strokeRect(rs(ri(cx) - ih), rs(ri(cy) - ih), inner - 1, inner - 1);
-}
-
 function topRightTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
   const h = ri(s * 0.70);
   const x0 = ri(cx) - ri(h / 2), y0 = ri(cy) - ri(h / 2);
@@ -189,20 +179,6 @@ function fourDots(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: numb
   }
 }
 
-function snowflake(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  const r = ri(s * 0.36);
-  const icx = ri(cx), icy = ri(cy);
-  ctx.lineWidth = Math.max(1, ri(s * 0.11));
-  ctx.lineCap = 'round';
-  for (let i = 0; i < 6; i++) {
-    const a = (i * Math.PI) / 3;
-    ctx.beginPath();
-    ctx.moveTo(icx, icy);
-    ctx.lineTo(icx + ri(Math.cos(a) * r), icy + ri(Math.sin(a) * r));
-    ctx.stroke();
-  }
-}
-
 function hourglass(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
   const hw = ri(s * 0.32), hh = ri(s * 0.34);
   const icx = ri(cx), icy = ri(cy);
@@ -227,13 +203,79 @@ function diamondRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: n
   ctx.fill('evenodd');
 }
 
-function filledPlus(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  const arm = ri(s * 0.34), thick = ri(s * 0.16);
-  const icx = ri(cx), icy = ri(cy);
-  ctx.beginPath();
-  ctx.rect(icx - arm,   icy - thick, arm * 2,   thick * 2);
-  ctx.rect(icx - thick, icy - arm,   thick * 2, arm * 2);
-  ctx.fill();
+// ── StitchCraft library symbols (Olga's picks from sc_sym.dll) ────────────────
+//
+// Each entry is a 16-row list of horizontal "ink" runs ([startCol, len] pairs)
+// reproducing the source 16x16 monochrome bitmap exactly — one fillRect per
+// run (not per pixel) keeps draw calls low (4-34 per symbol here, comparable
+// to the hand-authored shapes above). Generated once from the real bitmaps
+// extracted out of sc_sym.dll; not meant to be hand-edited.
+const STITCHCRAFT_BITMAPS: [number, number][][][] = [
+  [[],[],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[],[]], // #1 filled square
+  [[],[],[[2,2],[12,2]],[[2,3],[11,3]],[[3,3],[10,3]],[[4,3],[9,3]],[[5,6]],[[6,4]],[[6,4]],[[5,6]],[[4,3],[9,3]],[[3,3],[10,3]],[[2,3],[11,3]],[[2,2],[12,2]],[],[]], // #2 X
+  [[],[],[],[],[],[],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[],[],[],[],[],[]], // #3 dash
+  [[],[],[[6,4]],[[4,3],[9,3]],[[3,2],[11,2]],[[3,1],[12,1]],[[2,2],[12,2]],[[2,1],[13,1]],[[2,1],[13,1]],[[2,2],[12,2]],[[3,1],[12,1]],[[3,2],[11,2]],[[4,3],[9,3]],[[6,4]],[],[]], // #4 circle outline
+  [[],[],[[7,2]],[[7,2]],[[6,4]],[[6,4]],[[5,6]],[[5,6]],[[4,8]],[[4,8]],[[3,10]],[[3,10]],[[2,12]],[[2,12]],[],[]], // #5 filled triangle
+  [[],[],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[2,12]],[[2,12]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[],[]], // #6 plus
+  [[],[],[[5,6]],[[5,6]],[[5,2],[9,2]],[[2,5],[9,5]],[[2,12]],[[2,2],[6,4],[12,2]],[[2,2],[6,4],[12,2]],[[2,12]],[[2,5],[9,5]],[[5,2],[9,2]],[[5,6]],[[5,6]],[],[]], // #143 flower cross
+  [[],[],[],[],[],[[2,12]],[[2,12]],[],[],[[2,12]],[[2,12]],[],[],[],[],[]], // #8 equals
+  [[],[],[[2,12]],[[2,12]],[[2,2],[7,2],[12,2]],[[2,2],[7,2],[12,2]],[[2,2],[7,2],[12,2]],[[2,12]],[[2,12]],[[2,2],[7,2],[12,2]],[[2,2],[7,2],[12,2]],[[2,2],[7,2],[12,2]],[[2,12]],[[2,12]],[],[]], // #102 window grid
+  [[],[],[[2,12]],[[2,12]],[[2,2],[6,4],[12,2]],[[2,2],[7,2],[12,2]],[[2,3],[11,3]],[[2,4],[10,4]],[[2,4],[10,4]],[[2,3],[11,3]],[[2,2],[7,2],[12,2]],[[2,2],[6,4],[12,2]],[[2,12]],[[2,12]],[],[]], // #182 boxed X
+  [[],[],[[2,4],[10,4]],[[2,1],[5,2],[9,2],[13,1]],[[2,1],[6,4],[13,1]],[[2,2],[7,2],[12,2]],[[3,2],[6,4],[11,2]],[[4,3],[9,3]],[[4,3],[9,3]],[[3,2],[6,4],[11,2]],[[2,2],[7,2],[12,2]],[[2,1],[6,4],[13,1]],[[2,1],[5,2],[9,2],[13,1]],[[2,4],[10,4]],[],[]], // #183 diamond cross
+  [[],[],[[4,2],[10,2]],[[3,3],[10,3]],[[2,5],[9,5]],[[2,5],[9,5]],[[4,8]],[[6,4]],[[6,4]],[[4,8]],[[2,5],[9,5]],[[2,5],[9,5]],[[3,3],[10,3]],[[4,2],[10,2]],[],[]], // #257 clover X
+  [[],[],[[7,2]],[[3,2],[7,2],[11,2]],[[3,3],[7,2],[10,3]],[[4,8]],[[5,6]],[[2,12]],[[2,12]],[[5,6]],[[4,8]],[[3,3],[7,2],[10,3]],[[3,2],[7,2],[11,2]],[[7,2]],[],[]], // #13 asterisk
+  [[],[],[[7,2]],[[7,2]],[[6,4]],[[6,4]],[[2,12]],[[3,10]],[[4,8]],[[4,8]],[[4,8]],[[3,4],[9,4]],[[3,3],[10,3]],[[3,2],[11,2]],[],[]], // #87 star
+  [[],[],[[6,4]],[[4,8]],[[3,2],[7,2],[11,2]],[[3,1],[7,2],[12,1]],[[2,2],[7,2],[12,2]],[[2,12]],[[2,12]],[[2,2],[7,2],[12,2]],[[3,1],[7,2],[12,1]],[[3,2],[7,2],[11,2]],[[4,8]],[[6,4]],[],[]], // #101 circled cross
+  [[],[],[[7,2]],[[6,4]],[[5,6]],[[4,2],[7,2],[10,2]],[[3,2],[7,2],[11,2]],[[2,12]],[[2,12]],[[3,2],[7,2],[11,2]],[[4,2],[7,2],[10,2]],[[5,6]],[[6,4]],[[7,2]],[],[]], // #118 diamond plus
+  [[],[],[[2,12]],[[2,12]],[[2,2],[12,2]],[[2,2],[5,2],[9,2],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[5,2],[9,2],[12,2]],[[2,2],[12,2]],[[2,12]],[[2,12]],[],[]], // #291 bold boxed X
+  [[],[],[[3,4],[9,4]],[[2,2],[6,4],[12,2]],[[2,1],[7,2],[13,1]],[[2,1],[7,2],[13,1]],[[2,1],[7,2],[13,1]],[[2,1],[13,1]],[[2,2],[12,2]],[[3,2],[11,2]],[[4,2],[10,2]],[[5,2],[9,2]],[[6,4]],[[7,2]],[],[]], // #343 heart
+  [[],[],[[2,12]],[[2,12]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[7,2]],[[2,12]],[[2,12]],[],[]], // #19 I-beam
+  [[],[],[[3,4],[9,4]],[[2,2],[6,4],[12,2]],[[2,1],[7,2],[13,1]],[[2,1],[7,2],[13,1]],[[2,2],[12,2]],[[3,3],[10,3]],[[3,3],[10,3]],[[2,2],[12,2]],[[2,1],[7,2],[13,1]],[[2,1],[7,2],[13,1]],[[2,2],[6,4],[12,2]],[[3,4],[9,4]],[],[]], // #344 four-leaf clover
+  [[],[],[[7,2]],[[7,2]],[[6,4]],[[6,1],[9,1]],[[4,3],[9,3]],[[2,3],[11,3]],[[2,3],[11,3]],[[4,3],[9,3]],[[6,1],[9,1]],[[6,4]],[[7,2]],[[7,2]],[],[]], // #345 sparkle
+  [[],[],[[7,2]],[[7,2]],[[3,10]],[[3,2],[6,1],[9,1],[11,2]],[[4,3],[9,3]],[[5,1],[10,1]],[[4,2],[10,2]],[[4,3],[9,3]],[[3,2],[6,1],[9,1],[11,2]],[[3,10]],[[7,2]],[[7,2]],[],[]], // #348 star hexagram
+  [[],[],[[2,12]],[[2,12]],[[2,2],[6,1],[9,1],[12,2]],[[2,2],[6,1],[9,1],[12,2]],[[2,12]],[[2,2],[6,1],[9,1],[12,2]],[[2,2],[6,1],[9,1],[12,2]],[[2,12]],[[2,2],[6,1],[9,1],[12,2]],[[2,2],[6,1],[9,1],[12,2]],[[2,12]],[[2,12]],[],[]], // #490 fine grid
+  [[],[],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[],[]], // #24 double bar
+  [[],[],[[2,12]],[[2,12]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,12]],[[2,12]],[],[]], // #25 square outline
+  [[],[],[[2,12]],[[2,12]],[[2,2],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[5,2],[9,2],[12,2]],[[2,2],[5,2],[9,2],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[5,6],[12,2]],[[2,2],[12,2]],[[2,12]],[[2,12]],[],[]], // #177 nested square
+  [[],[],[[6,4]],[[4,8]],[[3,10]],[[3,10]],[[2,12]],[[2,12]],[[2,12]],[[2,12]],[[3,10]],[[3,10]],[[4,8]],[[6,4]],[],[]], // #27 filled circle
+  [[],[],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[[6,4]],[],[]], // #28 vertical bar
+  [[],[],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[[2,12]],[[2,12]],[[5,2],[9,2]],[[5,2],[9,2]],[[2,12]],[[2,12]],[[5,2],[9,2]],[[5,2],[9,2]],[[5,2],[9,2]],[],[]], // #491 hash
+  [[],[],[[7,2]],[[6,4]],[[5,6]],[[4,8]],[[3,10]],[[2,12]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,10]],[],[]], // #407 house outline
+  [[],[],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,12]],[[2,12]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[[2,2],[12,2]],[],[]], // #21 H shape
+  [[],[],[],[[12,2]],[[11,3]],[[10,3]],[[9,3]],[[8,3]],[[2,2],[7,3]],[[2,3],[6,3]],[[3,5]],[[4,3]],[[5,1]],[],[],[]], // #70 checkmark
+  [[],[],[[5,6]],[[4,8]],[[3,3],[10,3]],[[2,5],[9,5]],[[2,2],[5,6],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[5,6],[12,2]],[[2,5],[9,5]],[[3,3],[10,3]],[[4,8]],[[5,6]],[],[]], // #83 circled X
+  [[],[],[[6,4]],[[5,2],[9,2]],[[5,1],[10,1]],[[5,1],[10,1]],[[5,2],[9,2]],[[6,4]],[[3,10]],[[2,2],[6,4],[12,2]],[[2,1],[7,2],[13,1]],[[2,1],[7,2],[13,1]],[[2,2],[6,4],[12,2]],[[3,4],[9,4]],[],[]], // #349 triple clover
+  [[],[],[[2,12]],[[2,12]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[3,2],[7,2],[11,2]],[[2,12]],[[2,12]],[],[]], // #380 roman III
+  [[],[],[],[],[],[[7,2]],[[6,4]],[[5,6]],[[5,6]],[[6,4]],[[7,2]],[],[],[],[],[]], // #43 dot
+  [[],[],[[5,6]],[[4,8]],[[3,3],[10,3]],[[2,3],[11,3]],[[2,2],[7,2],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[7,2],[12,2]],[[2,3],[11,3]],[[3,3],[10,3]],[[4,8]],[[5,6]],[],[]], // #56 circled dot
+  [[],[],[[6,4]],[[4,8]],[[3,2],[7,2],[11,2]],[[3,1],[7,2],[12,1]],[[2,2],[7,2],[12,2]],[[2,1],[6,4],[13,1]],[[2,1],[5,6],[13,1]],[[2,5],[9,5]],[[3,3],[10,3]],[[3,2],[11,2]],[[4,3],[9,3]],[[6,4]],[],[]], // #364 circular swirl
+  [[],[],[[7,2]],[[6,4]],[[5,2],[9,2]],[[4,2],[10,2]],[[3,2],[11,2]],[[2,12]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,1],[12,1]],[[3,10]],[],[]], // #405 house
+  [[],[],[[2,12]],[[2,12]],[[2,4],[10,4]],[[2,5],[9,5]],[[2,2],[5,6],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[6,4],[12,2]],[[2,2],[5,6],[12,2]],[[2,5],[9,5]],[[2,4],[10,4]],[[2,12]],[[2,12]],[],[]], // #82 cornered X box
+];
+
+const STITCHCRAFT_NAMES = [
+  'Filled square', 'X', 'Dash', 'Circle outline', 'Filled triangle', 'Plus',
+  'Flower cross', 'Equals', 'Window grid', 'Boxed X', 'Diamond cross', 'Clover X',
+  'Asterisk', 'Star', 'Circled cross', 'Diamond plus', 'Bold boxed X', 'Heart',
+  'I-beam', 'Four-leaf clover', 'Sparkle', 'Star hexagram', 'Fine grid', 'Double bar',
+  'Square outline', 'Nested square', 'Filled circle', 'Vertical bar', 'Hash', 'House outline',
+  'H shape', 'Checkmark', 'Circled X', 'Triple clover', 'Roman III', 'Dot',
+  'Circled dot', 'Circular swirl', 'House', 'Cornered X box',
+];
+
+function drawStitchCraftSymbol(index: number): SymbolDrawFn {
+  return (ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) => {
+    const unit = s / 16;
+    const x0 = ri(cx) - s / 2, y0 = ri(cy) - s / 2;
+    const rows = STITCHCRAFT_BITMAPS[index];
+    for (let row = 0; row < rows.length; row++) {
+      for (const [start, len] of rows[row]) {
+        // +0.75 keeps adjacent same-color runs from leaving a hairline seam
+        // at fractional cell sizes — these are always fills, never strokes.
+        ctx.fillRect(x0 + start * unit, y0 + row * unit, len * unit + 0.75, unit + 0.75);
+      }
+    }
+  };
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────────
@@ -248,7 +290,6 @@ export const CUSTOM_SYMBOL_REGISTRY = new Map<string, SymbolDrawFn>([
   [E(5),  bottomHalf],
   [E(6),  leftHalf],
   [E(7),  rightHalf],
-  [E(8),  concentricSquares],
   [E(9),  topRightTriangle],
   [E(10), bottomLeftTriangle],
   [E(11), topLeftTriangle],
@@ -257,11 +298,15 @@ export const CUSTOM_SYMBOL_REGISTRY = new Map<string, SymbolDrawFn>([
   [E(14), horizontalLines],
   [E(15), wave],
   [E(16), fourDots],
-  [E(17), snowflake],
   [E(18), hourglass],
   [E(19), diamondRing],
-  [E(20), filledPlus],
 ]);
+
+// StitchCraft library symbols (E21-E60) — registered in bulk since each is the
+// same generic bitmap-run renderer, just indexed differently.
+for (let i = 0; i < STITCHCRAFT_BITMAPS.length; i++) {
+  CUSTOM_SYMBOL_REGISTRY.set(E(21 + i), drawStitchCraftSymbol(i));
+}
 
 export function isPUA(sym: string): boolean {
   const cp = sym.codePointAt(0) ?? 0;
@@ -276,7 +321,6 @@ export const CUSTOM_SYMBOL_NAMES = new Map<string, string>([
   [E(5),  'Bottom semicircle'],
   [E(6),  'Left semicircle'],
   [E(7),  'Right semicircle'],
-  [E(8),  'Concentric squares'],
   [E(9),  'Top-right triangle'],
   [E(10), 'Bottom-left triangle'],
   [E(11), 'Top-left triangle'],
@@ -285,11 +329,13 @@ export const CUSTOM_SYMBOL_NAMES = new Map<string, string>([
   [E(14), 'Horizontal lines'],
   [E(15), 'Wave'],
   [E(16), 'Four dots'],
-  [E(17), 'Snowflake'],
   [E(18), 'Hourglass'],
   [E(19), 'Diamond ring'],
-  [E(20), 'Filled plus'],
 ]);
+
+for (let i = 0; i < STITCHCRAFT_NAMES.length; i++) {
+  CUSTOM_SYMBOL_NAMES.set(E(21 + i), STITCHCRAFT_NAMES[i]);
+}
 
 // Draws a PUA custom symbol or a Unicode text character.
 // Caller must pre-set ctx.font/textAlign/textBaseline for the Unicode path.
