@@ -7,6 +7,8 @@ export interface BlogPost {
   keywords?: string[];
   ctaHref?: string;
   ctaLabel?: string;
+  imageUrl?: string;
+  imageAlt?: string;
 }
 
 export const blogPosts: BlogPost[] = [
@@ -23,6 +25,8 @@ export const blogPosts: BlogPost[] = [
       'cross stitch pattern with a story',
       'cottage garden cross stitch pattern',
     ],
+    imageUrl: 'https://d2o1uvvg91z7o4.cloudfront.net/photos/15/5460/4.jpg',
+    imageAlt: 'Black Cat cross-stitch pattern — a black cat with golden eyes in a cottage garden',
     body: [
       "A few winters ago I found a kitten under the hedge outside my building — soaked through, and thin enough that I could count her ribs through her fur. She didn't run when I reached for her, which is how I knew it was bad. Healthy strays run.",
       "The next few weeks were not a sure thing. A vet, a heating pad, feedings every few hours, and a lot of sitting very still so she'd learn that a hand reaching toward her wasn't something to fear. I won't pretend I knew it would work out. I just kept showing up, the way you do.",

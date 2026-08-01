@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { buildCanonicalUrl } from '@/lib/url-helper';
@@ -42,6 +43,18 @@ export default async function ShortStoryPost({ params }: Props) {
           {new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
         <h1 className="text-3xl font-bold text-gray-800 mt-2">{post.title}</h1>
+
+        {post.imageUrl && (
+          <div className="relative w-full max-w-sm mx-auto mt-6 aspect-square not-prose">
+            <Image
+              src={post.imageUrl}
+              alt={post.imageAlt ?? post.title}
+              fill
+              className="object-contain rounded-lg"
+              sizes="(max-width: 640px) 100vw, 384px"
+            />
+          </div>
+        )}
 
         {post.body.map((paragraph, i) => (
           <p key={i} className="mt-4 leading-relaxed">{paragraph}</p>
