@@ -265,6 +265,35 @@ export default function ConvertPage() {
     return () => document.removeEventListener('keydown', onKey, { capture: true });
   }, [undoStack, redoStack, selection, clipboard]);
 
+  // Paste an image from the OS clipboard (screenshot, copied photo, etc.)
+  // straight into the import dialog — same entry point as drag-and-drop and
+  // Upload Your Photo. Listening to the native 'paste' event rather than a
+  // Ctrl/Cmd+V keydown check makes this work the same on Windows/Linux
+  // (Ctrl+V) and macOS (Cmd+V): the browser normalizes both into the same
+  // ClipboardEvent regardless of platform. Only acts when the clipboard
+  // actually contains image data, so pasting text (e.g. into the pattern
+  // name field) is completely unaffected — no INPUT/TEXTAREA guard needed.
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          e.preventDefault();
+          trackEvent('image_paste_started', {});
+          setImportInitialFile(file);
+          setShowImportDialog(true);
+          return;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
   const [helpTab, setHelpTab] = useState<HelpTab | null>(null);
