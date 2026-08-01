@@ -18,17 +18,44 @@ const FEATURE_REQUESTS_TABLE = process.env.DDB_FEATURE_REQUESTS_TABLE || "Featur
 
 const ddb = new DynamoDBClient({ region: REGION });
 
+// Every `source` value any "Open in editor" / "Turn your own photo" CTA
+// across the site passes through `?source=` — see ConvertClient.tsx's
+// `editor_opened` tracking (source falls back to "referrer"/"direct" when
+// the link carries no ?source= at all). Kept here so the report can label
+// a source even if its count is 0 today.
+const SOURCE_LABELS: Record<string, string> = {
+  design_page_catalog: 'design page — "Open this pattern in the editor"',
+  design_list_catalog: 'catalog list card — "Open in editor"',
+  design_page: 'design page — "Turn your own photo into a pattern"',
+  album_page: 'album page — "Turn your own photo into a pattern"',
+  beginner_patterns_page: '"Easy patterns for beginners" page CTA',
+  small_patterns_page: '"Small patterns" page CTA',
+  referrer: 'external referrer (no ?source= on the link)',
+  direct: 'direct / no referrer',
+};
+
+const CATALOG_SOURCES = new Set(['design_page_catalog', 'design_list_catalog']);
+
+const KNOWN_EVENT_TYPES = [
+  'editor_opened',
+  'pattern_generated',
+  'pdf_exported',
+  'feedback_submitted',
+  'editor_error',
+] as const;
+type KnownEventType = typeof KNOWN_EVENT_TYPES[number];
+
 interface EventCounts {
   editor_opened: number;
   pattern_generated: number;
   pdf_exported: number;
   feedback_submitted: number;
   editor_error: number;
-  // Not a distinct eventType in DDB — a sub-count of editor_opened events
-  // whose source is "design_page_catalog" (the "Open this pattern in the
-  // editor" button on a catalog design page, added 2026-07-27's Step 2).
+  // Sum of catalog_pattern_opens across both catalog entry points (design
+  // page + list card) — kept as a single total for the top-line funnel.
   catalog_pattern_opens: number;
-  [key: string]: number;
+  // Raw per-source counts of editor_opened, for the detailed breakdown.
+  bySource: Record<string, number>;
 }
 
 interface FeedbackRow {
@@ -45,7 +72,9 @@ async function getEventCounts(date: string): Promise<EventCounts> {
     feedback_submitted: 0,
     editor_error: 0,
     catalog_pattern_opens: 0,
+    bySource: {},
   };
+  const knownEventTypes: readonly string[] = KNOWN_EVENT_TYPES;
   let lastKey: Record<string, AttributeValue> | undefined;
   do {
     const { Items = [], LastEvaluatedKey } = await ddb.send(new QueryCommand({
@@ -58,14 +87,27 @@ async function getEventCounts(date: string): Promise<EventCounts> {
     }));
     for (const item of Items) {
       const et = item.eventType?.S;
-      if (et && et in counts) counts[et]++;
-      if (et === "editor_opened" && item.source?.S === "design_page_catalog") {
-        counts.catalog_pattern_opens++;
+      if (et && knownEventTypes.includes(et)) counts[et as KnownEventType]++;
+      if (et === "editor_opened") {
+        const src = item.source?.S || "unknown";
+        counts.bySource[src] = (counts.bySource[src] || 0) + 1;
+        if (CATALOG_SOURCES.has(src)) counts.catalog_pattern_opens++;
       }
     }
     lastKey = LastEvaluatedKey as Record<string, AttributeValue> | undefined;
   } while (lastKey);
   return counts;
+}
+
+function sourceLabel(src: string): string {
+  return SOURCE_LABELS[src] ?? src;
+}
+
+// Sources with a nonzero count today, sorted highest-first.
+function topSources(counts: EventCounts): Array<[string, number]> {
+  return Object.entries(counts.bySource)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
 }
 
 const BASELINE_DAYS = 7;
@@ -164,6 +206,13 @@ function buildTextBody(date: string, counts: EventCounts, feedback: FeedbackRow[
   lines.push(`  PDF export: ${counts.pdf_exported}  (${pct(counts.pdf_exported, counts.pattern_generated)} of generated)`);
   lines.push(`  Feedback:   ${counts.feedback_submitted}`);
   if (counts.editor_error > 0) lines.push(`  Errors:     ${counts.editor_error}`);
+  const sources = topSources(counts);
+  if (sources.length > 0) {
+    lines.push("", "Sessions by source");
+    for (const [src, n] of sources) {
+      lines.push(`  ${n} (${pct(n, counts.editor_opened)})  ${sourceLabel(src)}`);
+    }
+  }
   if (feedback.length > 0) {
     lines.push("", "Feedback received");
     for (const f of feedback) {
@@ -190,6 +239,17 @@ function buildHtmlBody(date: string, counts: EventCounts, feedback: FeedbackRow[
     ...(counts.editor_error > 0 ? [row("Errors", `<span style="color:#c33">${counts.editor_error}</span>`)] : []),
   ].join("\n");
 
+  const sourceRows = topSources(counts)
+    .map(([src, n]) => row(sourceLabel(src), `${n} <span style="color:#888">(${pct(n, counts.editor_opened)})</span>`))
+    .join("\n");
+
+  const sourceBlock = sourceRows
+    ? `<h3 style="margin:24px 0 8px;font-size:15px">Sessions by source</h3>
+<table style="border-collapse:collapse">
+${sourceRows}
+</table>`
+    : "";
+
   const feedbackBlock = feedback.length > 0
     ? `<h3 style="margin:24px 0 8px;font-size:15px">Feedback received</h3>
 <ul style="margin:0;padding-left:20px;line-height:1.7">
@@ -211,6 +271,7 @@ ${feedback.map(f => `<li><span style="color:#888;font-size:12px">[${f.importance
 ${funnelRows}
 </table>
 
+${sourceBlock}
 ${feedbackBlock}
 ${observationBlock}
 </body></html>`;
@@ -226,6 +287,13 @@ function buildTelegramText(date: string, counts: EventCounts, observation: strin
     `Feedback: ${counts.feedback_submitted}`,
   ];
   if (counts.editor_error > 0) lines.push(`Errors: ${counts.editor_error}`);
+  const sources = topSources(counts);
+  if (sources.length > 0) {
+    lines.push("", "By source:");
+    for (const [src, n] of sources) {
+      lines.push(`  ${n} (${pct(n, counts.editor_opened)}) — ${sourceLabel(src)}`);
+    }
+  }
   if (observation) lines.push("", observation);
   return lines.join("\n");
 }
