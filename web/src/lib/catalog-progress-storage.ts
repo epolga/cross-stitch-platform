@@ -1,10 +1,9 @@
 import {
   DynamoDBClient,
   GetItemCommand,
-  PutItemCommand,
+  UpdateItemCommand,
   CreateTableCommand,
   DescribeTableCommand,
-  type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
 
 // Stitch-progress marks for a catalog design the user hasn't (or hasn't yet)
@@ -59,6 +58,7 @@ function ensureTable(): Promise<void> {
 
 export interface CatalogProgress {
   progress: string;
+  cellSize?: number;
   updatedAt: string;
 }
 
@@ -71,6 +71,7 @@ export async function getCatalogProgress(userId: string, designId: number): Prom
   if (!Item) return null;
   return {
     progress: Item.progress?.S ?? '',
+    cellSize: Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
     updatedAt: Item.updatedAt?.S ?? '',
   };
 }
@@ -80,11 +81,30 @@ export async function saveCatalogProgress(userId: string, designId: number, prog
   if (progressRle.length > 350_000)
     throw new Error('Progress too large to save (exceeds 350 KB compressed)');
 
-  const item: Record<string, AttributeValue> = {
-    userId:    { S: userId },
-    designId:  { N: String(designId) },
-    progress:  { S: progressRle },
-    updatedAt: { S: new Date().toISOString() },
-  };
-  await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
+  // Partial update — leaves a previously-saved cellSize (if any) untouched.
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { userId: { S: userId }, designId: { N: String(designId) } },
+    UpdateExpression: 'SET progress = :p, updatedAt = :t',
+    ExpressionAttributeValues: {
+      ':p': { S: progressRle },
+      ':t': { S: new Date().toISOString() },
+    },
+  }));
+}
+
+// Lightweight partial update for the user's own zoom preference on this
+// catalog design — kept separate from saveCatalogProgress (called far more
+// often, on every stitch mark) so a zoom change never touches progress data.
+export async function saveCatalogCellSize(userId: string, designId: number, cellSize: number): Promise<void> {
+  await ensureTable();
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { userId: { S: userId }, designId: { N: String(designId) } },
+    UpdateExpression: 'SET cellSize = :c, updatedAt = :t',
+    ExpressionAttributeValues: {
+      ':c': { N: String(cellSize) },
+      ':t': { S: new Date().toISOString() },
+    },
+  }));
 }

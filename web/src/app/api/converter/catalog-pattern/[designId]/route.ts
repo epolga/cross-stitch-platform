@@ -45,6 +45,7 @@ export async function GET(
       try {
         const prog = await getCatalogProgress(session.userId, designId);
         if (prog && prog.progress) data.progress = prog.progress;
+        if (prog?.cellSize) data.cellSize = prog.cellSize;
       } catch (e) {
         console.error('[converter/catalog-pattern] progress lookup failed:', e);
       }

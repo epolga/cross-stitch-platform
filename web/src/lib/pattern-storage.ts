@@ -80,6 +80,7 @@ export interface SavedPattern {
   modifiedAt: string;
   ownerID?: string;
   progress?: string;
+  cellSize?: number;
 }
 
 export async function savePattern(
@@ -185,6 +186,20 @@ export async function saveProgress(id: string, progressRle: string): Promise<voi
   }));
 }
 
+// Lightweight partial update for the owner's zoom preference on this
+// pattern — same rationale as saveProgress, kept out of updatePattern.
+export async function saveCellSize(id: string, cellSize: number): Promise<void> {
+  await ensureTable();
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { patternId: { S: id } },
+    UpdateExpression: 'SET cellSize = :c',
+    ExpressionAttributeValues: {
+      ':c': { N: String(cellSize) },
+    },
+  }));
+}
+
 export interface PatternSummary {
   id: string;
   name: string;
@@ -245,5 +260,6 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     modifiedAt:   Item.modifiedAt?.S ?? createdAt,
     ownerID:      Item.ownerID?.S,
     progress:     Item.progress?.S,
+    cellSize:     Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
   };
 }

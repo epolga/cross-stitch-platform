@@ -188,7 +188,7 @@ export default function ConvertPage() {
     function onWheel(e: WheelEvent) {
       if (!e.ctrlKey) return;
       e.preventDefault();
-      setCellSize(s => Math.max(4, Math.min(40, s + (e.deltaY < 0 ? 1 : -1))));
+      changeZoom(s => Math.max(4, Math.min(40, s + (e.deltaY < 0 ? 1 : -1))));
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -254,8 +254,8 @@ export default function ConvertPage() {
           setSelection({ r0: 0, c0: 0, r1: g.length - 1, c1: g[0].length - 1 });
         }
       }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setCellSize(s => Math.min(40, s + 2)); }
-      if (e.key === 'ArrowDown') { e.preventDefault(); setCellSize(s => Math.max(4,  s - 2)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); changeZoom(s => Math.min(40, s + 2)); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); changeZoom(s => Math.max(4,  s - 2)); }
     }
     document.addEventListener('keydown', onKey, { capture: true });
     return () => document.removeEventListener('keydown', onKey, { capture: true });
@@ -334,13 +334,14 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     updatePalette(data.palette);
-    updateGrid(removeConfetti(paddedGrid).grid);
+    const finalGrid = removeConfetti(paddedGrid).grid;
+    updateGrid(finalGrid);
     setUndoStack([]);
     setRedoStack([]);
     setSelectedColor(0);
     setSelection(null);
     setHiddenColors(new Set());
-    setCellSize(12);
+    setCellSize(computeInitialCellSize(finalGrid[0]?.length ?? 0));
     setShowImportDialog(false);
     hasTrackedEditingStartRef.current = false;
     trackEvent('image_uploaded', {});
@@ -561,7 +562,7 @@ export default function ConvertPage() {
           : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
-        setCellSize(12);
+        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : computeInitialCellSize(data.width));
         if (typeof data.progress === 'string' && data.progress.length > 0) {
           const boolGrid = rleDecode(data.progress, data.width, data.height);
           const next = new Set<string>();
@@ -650,7 +651,7 @@ export default function ConvertPage() {
         updatePalette(data.palette);
         setHiddenColors(new Set<number>());
         setPatternName(data.title ?? '');
-        setCellSize(12);
+        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : computeInitialCellSize(data.width ?? data.grid[0]?.length ?? 0));
         setCatalogDesignId(parseInt(designId, 10));
         catalogOriginalRef.current = { grid: data.grid, palette: data.palette };
         if (typeof data.progress === 'string' && data.progress.length > 0) {
@@ -724,7 +725,7 @@ export default function ConvertPage() {
     updatePalette(resumeDraft.palette);
     setPatternName(resumeDraft.name ?? '');
     setHiddenColors(new Set(resumeDraft.hiddenColors ?? []));
-    setCellSize(12);
+    setCellSize(computeInitialCellSize(resumeDraft.grid[0]?.length ?? 0));
     setResumeDraft(null);
   }
 
@@ -926,6 +927,54 @@ export default function ConvertPage() {
     } catch {
       postEditorEvent('editor_error', { errorCode: 'progress_save_failed', step: 'stitch_progress' });
     }
+  }
+
+  // Zoom is a per-user, per-design preference, saved alongside stitch
+  // progress (same catalog-progress row / pattern row, a separate lightweight
+  // field so a zoom change never re-serializes progress or vice versa).
+  // Auto-computed resets (new photo, resumed draft, initial load with no
+  // saved value yet) call setCellSize directly and skip this entirely —
+  // only an actual user-driven zoom change (slider, hotkeys, Ctrl+scroll)
+  // goes through changeZoom and gets persisted.
+  const cellSizeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function flushCellSizeSave(size: number) {
+    const id = savedPatternIdRef.current;
+    const catalogId = catalogDesignIdRef.current;
+    if (!id && !catalogId) return;
+    const url = id
+      ? `/api/converter/patterns/${id}/cell-size`
+      : `/api/converter/catalog-pattern/${catalogId}/cell-size`;
+    try {
+      await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cellSize: size }),
+      });
+    } catch {
+      // best-effort — a failed save just means next visit recomputes fit-to-width
+    }
+  }
+
+  function changeZoom(updater: number | ((s: number) => number)) {
+    setCellSize(prev => {
+      const next = typeof updater === 'function' ? (updater as (s: number) => number)(prev) : updater;
+      if (cellSizeSaveTimer.current) clearTimeout(cellSizeSaveTimer.current);
+      cellSizeSaveTimer.current = setTimeout(() => flushCellSizeSave(next), 800);
+      return next;
+    });
+  }
+
+  // Only shrinks below the normal 12px/cell default when the design is
+  // wider than the visible canvas area; never enlarges a design that
+  // already fits.
+  function computeInitialCellSize(gridWidth: number): number {
+    const DEFAULT_CELL_SIZE = 12;
+    const wrapperWidth = canvasWrapperRef.current?.clientWidth ?? 0;
+    if (wrapperWidth <= 0 || gridWidth <= 0 || gridWidth * DEFAULT_CELL_SIZE <= wrapperWidth) {
+      return DEFAULT_CELL_SIZE;
+    }
+    return Math.max(4, Math.floor(wrapperWidth / gridWidth));
   }
 
   // Silent — used both by the explicit "Clear progress" button and internally
@@ -1777,8 +1826,8 @@ export default function ConvertPage() {
                   { type: 'item', label: 'Both', checked: viewMode === 'both', onClick: () => setViewMode('both') },
                   { type: 'item', label: 'Simulation', checked: viewMode === 'simulation', onClick: () => setViewMode('simulation') },
                   { type: 'separator' },
-                  { type: 'item', label: 'Zoom In',  shortcut: 'Ctrl+↑', onClick: () => setCellSize(s => Math.min(40, s + 2)) },
-                  { type: 'item', label: 'Zoom Out', shortcut: 'Ctrl+↓', onClick: () => setCellSize(s => Math.max(4, s - 2)) },
+                  { type: 'item', label: 'Zoom In',  shortcut: 'Ctrl+↑', onClick: () => changeZoom(s => Math.min(40, s + 2)) },
+                  { type: 'item', label: 'Zoom Out', shortcut: 'Ctrl+↓', onClick: () => changeZoom(s => Math.max(4, s - 2)) },
                 ],
               },
               {
@@ -2118,7 +2167,7 @@ export default function ConvertPage() {
                 <span className="text-xs text-gray-500 flex-none">Zoom</span>
                 <input
                   type="range" min={4} max={40} value={cellSize}
-                  onChange={e => setCellSize(parseInt(e.target.value))}
+                  onChange={e => changeZoom(parseInt(e.target.value))}
                   className="flex-1 accent-rose-500"
                   title="Drag to zoom in or out — or hold Ctrl and scroll on the canvas"
                 />
