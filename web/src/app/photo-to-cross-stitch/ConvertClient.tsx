@@ -239,14 +239,18 @@ export default function ConvertPage() {
       if (!mod) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      const key = e.key.toLowerCase();
-      if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-      if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
-      if (key === 'c') { e.preventDefault(); handleCopy(); }
-      if (key === 'x') { e.preventDefault(); handleCut(); }
-      if (key === 'v') { e.preventDefault(); handlePaste(); }
-      if (key === 's') { e.preventDefault(); handleSaveRef.current(); }
-      if (key === 'a') {
+      // e.key reflects the active keyboard layout (e.g. a Cyrillic letter
+      // instead of 'c'/'v'/... when typing in Russian), so it stops matching
+      // these comparisons entirely on a non-English layout. e.code reports
+      // the physical key position and is layout-independent.
+      const code = e.code;
+      if (code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (code === 'KeyY' || (code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); redo(); }
+      if (code === 'KeyC') { e.preventDefault(); handleCopy(); }
+      if (code === 'KeyX') { e.preventDefault(); handleCut(); }
+      if (code === 'KeyV') { e.preventDefault(); handlePaste(); }
+      if (code === 'KeyS') { e.preventDefault(); handleSaveRef.current(); }
+      if (code === 'KeyA') {
         e.preventDefault();
         const g = gridRef.current;
         if (g.length && g[0].length) {
