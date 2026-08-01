@@ -4,6 +4,28 @@ import { sendEmailToAdmin } from '@/lib/email-service';
 import { getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
 import { createSessionToken, setSessionCookie } from '@/lib/session';
 
+// Human-readable labels for the RegistrationSource values dispatched to
+// openRegisterModal across the site (DownloadPdfLink, AuthControl,
+// ConvertClient, RegisterNewsletterLink, etc.) — see `npm run reg-source`
+// in automation/pinterest-agent for the aggregate report these same values
+// feed.
+const SOURCE_LABELS: Record<string, string> = {
+  'auth-control': 'Navbar (Sign In / Register)',
+  'design-download': 'Downloading a pattern PDF',
+  'design-download-fallback': 'Downloading a pattern PDF',
+  'converter-download': 'Downloading a PDF from the editor',
+  'converter-save': 'Saving a pattern in the editor',
+  'converter-stitch-mode': 'Turning on Stitch Mode in the editor',
+  'converter-open': 'Opening a saved pattern in the editor',
+  'newsletter-cta': 'Newsletter link',
+  'download-access-page': 'Download-access page',
+};
+
+function describeSource(source?: string): string {
+  if (!source) return 'Unknown (before source tracking, or untracked path)';
+  return SOURCE_LABELS[source] ?? source;
+}
+
 function resolveBaseUrl(req: Request): string {
   const host = req.headers.get('host');
   if (host) {
@@ -44,6 +66,7 @@ export async function GET(req: Request): Promise<Response> {
          <ul>
            <li><strong>Email:</strong> ${result.email ?? 'unknown'}</li>
            <li><strong>Name:</strong> ${result.firstName ?? 'unknown'}</li>
+           <li><strong>Registered from:</strong> ${describeSource(result.registrationSource)}</li>
          </ul>`,
       );
     } catch (notifyError) {

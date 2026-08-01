@@ -534,7 +534,7 @@ export async function getVerifiedUserByCid(
  */
 export async function verifyUserByToken(
   token: string,
-): Promise<{ email?: string; firstName?: string; cid?: string } | null> {
+): Promise<{ email?: string; firstName?: string; cid?: string; registrationSource?: string } | null> {
   const tableName = process.env.DDB_USERS_TABLE;
   if (!tableName) {
     console.warn('DDB_USERS_TABLE not set; cannot verify user');
@@ -552,7 +552,7 @@ export async function verifyUserByToken(
     ExpressionAttributeNames: { '#token': 'VerificationToken' },
     ExpressionAttributeValues: { ':token': { S: trimmedToken } },
     ProjectionExpression:
-      'ID, Email, FirstName, VerificationTokenExpiresAt, Verified, cid',
+      'ID, Email, FirstName, VerificationTokenExpiresAt, Verified, cid, RegistrationSource',
   };
 
   let lastEvaluatedKey: Record<string, AttributeValue> | undefined;
@@ -564,6 +564,7 @@ export async function verifyUserByToken(
         expiresAt?: string;
         verified?: boolean;
         cid?: string;
+        registrationSource?: string;
       }
     | undefined;
 
@@ -580,6 +581,7 @@ export async function verifyUserByToken(
         expiresAt: found.VerificationTokenExpiresAt?.S,
         verified: found.Verified?.BOOL,
         cid: found.cid?.S,
+        registrationSource: found.RegistrationSource?.S,
       };
       break;
     }
@@ -589,7 +591,12 @@ export async function verifyUserByToken(
   if (!match) return null;
 
   if (match.verified) {
-    return { email: match.email, firstName: match.firstName, cid: match.cid };
+    return {
+      email: match.email,
+      firstName: match.firstName,
+      cid: match.cid,
+      registrationSource: match.registrationSource,
+    };
   }
 
   if (match.expiresAt && new Date(match.expiresAt).getTime() < Date.now()) {
@@ -618,7 +625,12 @@ export async function verifyUserByToken(
     }),
   );
 
-  return { email: match.email, firstName: match.firstName, cid: match.cid };
+  return {
+    email: match.email,
+    firstName: match.firstName,
+    cid: match.cid,
+    registrationSource: match.registrationSource,
+  };
 }
 
 /**
