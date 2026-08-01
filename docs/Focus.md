@@ -378,6 +378,36 @@ Full background/algorithm:
     `/XStitch-Charts.aspx` and `catalog_pattern_opens` in the daily editor
     summary for a post-send bump; SES complaint/bounce rate for this batch
     specifically (only the one pre-existing suppression seen so far).
+14. **Design-vote "Previous vote: none" mystery — check for recurrence.**
+    Olga forwarded 3 separate real "New design vote" admin-email incidents
+    (designs 5460/4987/3592, different users/IPs/dates) all showing the
+    identical signature: a user's rapid up/down/up toggle (0.8-3.3s apart)
+    where every single request reports `Previous vote: none`, even though
+    the prior request in the same burst had just written a real vote.
+    Confirmed NOT explained by: multiple EB instances (this environment
+    runs exactly one EC2 instance), an app-level cache (none exists on this
+    path), or a duplicate/mismatched DynamoDB key (only one item exists per
+    voter+design, with the correct final value). Also confirmed the
+    `setDesignVote` "switch" branch (`design-likes.ts`) never actually fires
+    in these incidents — every request takes the "no prior vote" branch,
+    meaning `getUserDesignVote`'s read is what's failing to see a write from
+    1-3+ seconds earlier, longer than normal DynamoDB eventual-consistency
+    lag. **Fix applied 2026-08-01** (not yet confirmed effective): added
+    `ConsistentRead: true` to the vote read in `getUserDesignVote`, plus
+    temporary diagnostic `console.log`s in `getUserDesignVote`/
+    `putDesignVote` (raw DynamoDB response, exact timestamp) so a
+    recurrence can be traced via `eb logs` instead of guessed at. **Next
+    session: check whether the "Previous vote: none" pattern has recurred**
+    (search Gmail for "New design vote" / "Design vote cleared") — if it
+    has, pull `eb logs` around that timestamp and look for the
+    `[design-likes]` diagnostic lines. If it hasn't recurred after a
+    reasonable window, remove the temporary logging.
+    Separately (not a bug, a product question for Olga): `DesignLikeButton.tsx`
+    and the backend both currently treat clicking the *opposite* arrow while
+    already voted as "clear my vote," not "switch my vote" — this is
+    internally consistent between client and server, so left as-is pending
+    an explicit decision on whether the wanted behavior is a direct switch
+    instead.
 
 ## Done when
 
@@ -394,3 +424,4 @@ Full background/algorithm:
 - [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
+- [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14); temp diagnostic logging removed once resolved

@@ -124,16 +124,39 @@ export async function getDesignLikeCount(designId: number): Promise<number> {
 
 export async function getUserDesignVote(designId: number, email: string): Promise<StoredVote> {
   const normalizedEmail = ensureValidLikeEmail(email);
+  const pk = designPk(designId);
+  const sk = userSk(normalizedEmail);
   const response = await client.send(
     new GetItemCommand({
       TableName: LIKES_TABLE_NAME,
       Key: {
-        PK: { S: designPk(designId) },
-        SK: { S: userSk(normalizedEmail) },
+        PK: { S: pk },
+        SK: { S: sk },
       },
       ProjectionExpression: 'VoteDirection, VoteValue, EntityType',
+      // Repeated "Previous vote: none" notifications for the same voter
+      // within seconds of their own prior vote (seen across several
+      // real incidents, e.g. designs 4987/3592/5460) suggested a
+      // just-written vote wasn't visible to the very next read. Default
+      // GetItem reads are eventually consistent; force strong consistency
+      // here since this read directly gates whether a vote is treated as
+      // fresh vs. a repeat/switch.
+      ConsistentRead: true,
+      ReturnConsumedCapacity: 'TOTAL',
     }),
   );
+
+  // TEMP DIAGNOSTIC (2026-08-01): logs every vote read while investigating
+  // the above — remove once a recurrence has been confirmed fixed or the
+  // root cause is found some other way.
+  console.log('[design-likes] getUserDesignVote', {
+    at: new Date().toISOString(),
+    pk,
+    sk,
+    found: !!response.Item,
+    item: response.Item,
+    consumedCapacity: response.ConsumedCapacity,
+  });
 
   return parseStoredVote(response.Item);
 }
@@ -222,6 +245,15 @@ async function putDesignVote(designId: number, email: string, vote: Exclude<Stor
       },
     }),
   );
+
+  // TEMP DIAGNOSTIC (2026-08-01): see getUserDesignVote — pairs with that
+  // log to correlate write time vs. the next read's "found" result.
+  console.log('[design-likes] putDesignVote', {
+    at: now,
+    pk: designPk(designId),
+    sk: userSk(normalizedEmail),
+    vote,
+  });
 }
 
 export async function removeDesignLike(designId: number, email: string): Promise<void> {
