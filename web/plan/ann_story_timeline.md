@@ -34,8 +34,9 @@ Update this file every time a new piece of Ann content ships.
     spelled out as prose/story content).
   - Site bio line: "Built by a cross-stitch designer who has spent more hours
     than she'd like to admit counting stitches from a paper chart."
-  - Favicon/avatar: black circle with "N" — canonically the cat **Nitka**,
-    but never named or characterized in actual text content, only as an icon.
+  - Favicon: flowers, not cat-themed. (Corrected 2026-08-01 — earlier
+    versions of this file wrongly called it "a black circle with N,
+    canonically Nitka." No plan to change it to match the Nitka storyline.)
 
 ## Not yet mentioned anywhere
 
@@ -60,9 +61,13 @@ Update this file every time a new piece of Ann content ships.
 
 ## Suggested next-mention order
 
-Introducing **Nitka as a character** is the lowest-friction next step — she's
-already visually established via the favicon, so naming her in text is a
-callback, not a cold introduction. **Age** and **Tomáš/Klára** are bigger
-reveals; per the persona doc's usage note, the first use of each should read
-as a natural first mention, not be undercut by having already leaked
-somewhere else first — cross-check this file before every new Ann piece.
+Introducing **Nitka as a character** is the lowest-friction next step.
+**2026-08-01 update: the actual planned vehicle is the "Black Cat" design
+(Design 5460)** — Ann designed it in Nitka's honor (found as a stray kitten,
+nursed back to health), so a design-spotlight email + a fuller blog post
+built around that design is the real first introduction, not a generic
+favicon callback (see corrected favicon note above — it's flowers, no cat
+tie-in exists there). **Age** and **Tomáš/Klára** are bigger reveals; per the
+persona doc's usage note, the first use of each should read as a natural
+first mention, not be undercut by having already leaked somewhere else first
+— cross-check this file before every new Ann piece.

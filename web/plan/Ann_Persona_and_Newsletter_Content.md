@@ -11,7 +11,21 @@ continuity document so future emails don't contradict each other.
 - Contact: ann@cross-stitch.com
 - Site bio line (public): "Built by a cross-stitch designer who has spent more hours than
   she'd like to admit counting stitches from a paper chart."
-- Site favicon/avatar: a black circle with "N" — canonically Ann's cat, **Nitka**.
+- Site favicon: flowers — **not** cat-themed. (Corrected 2026-08-01: earlier
+  versions of this doc wrongly described it as "a black circle with N,
+  canonically Nitka." Olga has no plan to change the favicon to match the
+  Nitka storyline — the persona works through text, not iconography.)
+
+## New facts (2026-08-01, confirmed by Olga — not yet public, no prior contradicting mentions)
+
+- **Nitka's origin story:** Ann found her as a stray kitten and nursed her
+  back to health. The catalog design **"Black Cat" (Design 5460, `Black-Cat-
+  15-210-Free-Design.aspx`, 174×218 stitches, 29 colors, "Cats" album — a
+  black cat with golden eyes amid a cottage garden of poppies, lavender,
+  daisies, roses, with a blue bird and cottage backdrop)** was designed by
+  Ann specifically **in Nitka's honor** — not a design that merely "reminded
+  her" of the cat. This is the intended first-mention vehicle for Nitka as a
+  named character (see `ann_story_timeline.md`).
 
 ## New facts (2026-07-08, confirmed by Olga — not yet public, no prior contradicting mentions)
 

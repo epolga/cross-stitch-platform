@@ -11,6 +11,30 @@ export interface BlogPost {
 
 export const blogPosts: BlogPost[] = [
   {
+    slug: 'the-story-behind-black-cat',
+    title: 'The story behind Black Cat',
+    date: '2026-08-01',
+    excerpt:
+      "I found her outside, half-frozen, thin enough to count her ribs. She wasn't supposed to make it. This pattern is what I made instead of forgetting that.",
+    keywords: [
+      'cross stitch cat pattern',
+      'black cat cross stitch pattern free',
+      'cat rescue story',
+      'cross stitch pattern with a story',
+      'cottage garden cross stitch pattern',
+    ],
+    body: [
+      "A few winters ago I found a kitten under the hedge outside my building — soaked through, and thin enough that I could count her ribs through her fur. She didn't run when I reached for her, which is how I knew it was bad. Healthy strays run.",
+      "The next few weeks were not a sure thing. A vet, a heating pad, feedings every few hours, and a lot of sitting very still so she'd learn that a hand reaching toward her wasn't something to fear. I won't pretend I knew it would work out. I just kept showing up, the way you do.",
+      "She's the reason I named her Nitka — \"little thread\" in Czech — the day she was finally strong enough to climb into my workbasket and calmly unravel half a spool of DMC while I pretended to be annoyed about it.",
+      "\"Black Cat\" is my thank-you to her, stitched instead of spoken: a black cat with golden eyes, settled into a cottage garden of poppies, lavender, daisies, and roses, with a blue bird keeping her company. I wanted her to have a garden and someone watching over her, since for a while nobody was watching over her at all.",
+      "These days Nitka is unbothered by almost everything, and has an uncanny talent for lying down on exactly the section of fabric I need next. She has no idea any of this is about her, which is probably for the best.",
+      "If you've got a rescue of your own — cat, dog, or something stranger — I'd love to hear the story. Leave a reaction below, or just reply if this reached you by email.",
+    ],
+    ctaHref: '/Black-Cat-15-210-Free-Design.aspx',
+    ctaLabel: 'Download the free Black Cat pattern →',
+  },
+  {
     slug: 'how-to-turn-a-photo-into-a-cross-stitch-pattern',
     title: 'How to turn a photo into a cross-stitch pattern',
     date: '2026-07-28',
