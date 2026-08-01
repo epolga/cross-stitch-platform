@@ -73,6 +73,7 @@ const structuredData = {
     'Hide individual colors to stitch one thread at a time',
     'Use the chart on laptop, tablet, or phone — no printing required',
     'Stitch Mode: mark cells as stitched and pick up exactly where you left off, synced across devices',
+    'Automatically adjusts for the type of image you upload — photos, drawings, and logos all convert cleanly, no settings to figure out',
   ],
 };
 
@@ -131,6 +132,11 @@ const FAQ = [
     id: 'faq-share',
     q: 'Can I share my pattern with someone else?',
     a: 'Yes. Once you’ve saved a pattern, click "Copy link" to get a shareable URL — send it to anyone, no account needed on their end, great for showing a gift design before you stitch it.',
+  },
+  {
+    id: 'faq-image-type',
+    q: 'Does this work with drawings or logos too, not just photos?',
+    a: 'Yes — there\'s nothing to configure. The converter looks at your image and automatically adjusts itself, whether it\'s a photo, a simple drawing, or a logo, so colors and edges come out clean either way.',
   },
 ];
 
@@ -255,6 +261,7 @@ export default function PhotoToCrossStitchPage() {
                 <li><span className="font-medium text-gray-800">Confetti gets cleaned up automatically.</span> Stray, isolated single stitches are folded into the surrounding color as soon as your pattern is generated — no extra click needed. Chart → Remove Confetti re-runs the same cleanup later if editing brings any back.</li>
                 <li><span className="font-medium text-gray-800">Start with fewer colors.</span> 10–15 thread colors is a lovely, manageable project. Add more if you want a portrait with fine detail.</li>
                 <li><span className="font-medium text-gray-800">Try different sizes.</span> 50×50 stitches on 14-count Aida makes a 9×9 cm piece — a great quick project. 80×80 gives a 14×14 cm result with more detail.</li>
+                <li><span className="font-medium text-gray-800">Works for more than photos.</span> Drawings and logos convert cleanly too — the settings adjust automatically.</li>
               </ul>
             </div>
 
