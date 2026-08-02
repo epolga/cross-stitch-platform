@@ -14,32 +14,38 @@ const client = new DynamoDBClient({ region: REGION });
 let tableReady: Promise<void> | null = null;
 
 function ensureTable(): Promise<void> {
-  return (tableReady ??= (async () => {
-    try {
-      await client.send(new DescribeTableCommand({ TableName: TABLE }));
-    } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'ResourceNotFoundException') throw e;
-      await client.send(
-        new CreateTableCommand({
-          TableName: TABLE,
-          KeySchema: [
-            { AttributeName: 'eid', KeyType: 'HASH' },
-            { AttributeName: 'cid', KeyType: 'RANGE' },
-          ],
-          AttributeDefinitions: [
-            { AttributeName: 'eid', AttributeType: 'S' },
-            { AttributeName: 'cid', AttributeType: 'S' },
-          ],
-          BillingMode: 'PAY_PER_REQUEST',
-        }),
-      );
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
-        if (Table?.TableStatus === 'ACTIVE') break;
+  if (!tableReady) {
+    tableReady = (async () => {
+      try {
+        await client.send(new DescribeTableCommand({ TableName: TABLE }));
+      } catch (e: unknown) {
+        if ((e as { name?: string })?.name !== 'ResourceNotFoundException') throw e;
+        await client.send(
+          new CreateTableCommand({
+            TableName: TABLE,
+            KeySchema: [
+              { AttributeName: 'eid', KeyType: 'HASH' },
+              { AttributeName: 'cid', KeyType: 'RANGE' },
+            ],
+            AttributeDefinitions: [
+              { AttributeName: 'eid', AttributeType: 'S' },
+              { AttributeName: 'cid', AttributeType: 'S' },
+            ],
+            BillingMode: 'PAY_PER_REQUEST',
+          }),
+        );
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
+          if (Table?.TableStatus === 'ACTIVE') break;
+        }
       }
-    }
-  })());
+    })().catch((e) => {
+      tableReady = null;
+      throw e;
+    });
+  }
+  return tableReady;
 }
 
 export interface EmailEntryRecord {

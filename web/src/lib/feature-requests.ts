@@ -18,31 +18,37 @@ const client = new DynamoDBClient({ region: REGION });
 let _tableReady: Promise<void> | null = null;
 
 function ensureTable(): Promise<void> {
-  return (_tableReady ??= (async () => {
-    try {
-      const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
-      if (Table?.TableStatus !== 'ACTIVE') {
+  if (!_tableReady) {
+    _tableReady = (async () => {
+      try {
+        const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
+        if (Table?.TableStatus !== 'ACTIVE') {
+          for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const { Table: t } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
+            if (t?.TableStatus === 'ACTIVE') break;
+          }
+        }
+      } catch (e: unknown) {
+        if ((e as { name?: string })?.name !== 'ResourceNotFoundException') throw e;
+        await client.send(new CreateTableCommand({
+          TableName: TABLE,
+          KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
+          AttributeDefinitions: [{ AttributeName: 'id', AttributeType: 'S' }],
+          BillingMode: 'PAY_PER_REQUEST',
+        }));
         for (let i = 0; i < 30; i++) {
           await new Promise(r => setTimeout(r, 2000));
-          const { Table: t } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
-          if (t?.TableStatus === 'ACTIVE') break;
+          const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
+          if (Table?.TableStatus === 'ACTIVE') break;
         }
       }
-    } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'ResourceNotFoundException') throw e;
-      await client.send(new CreateTableCommand({
-        TableName: TABLE,
-        KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
-        AttributeDefinitions: [{ AttributeName: 'id', AttributeType: 'S' }],
-        BillingMode: 'PAY_PER_REQUEST',
-      }));
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 2000));
-        const { Table } = await client.send(new DescribeTableCommand({ TableName: TABLE }));
-        if (Table?.TableStatus === 'ACTIVE') break;
-      }
-    }
-  })());
+    })().catch((e) => {
+      _tableReady = null;
+      throw e;
+    });
+  }
+  return _tableReady;
 }
 
 export type Importance = 'nice-to-have' | 'important' | 'need-this';
