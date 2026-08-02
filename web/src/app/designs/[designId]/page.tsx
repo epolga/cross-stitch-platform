@@ -221,21 +221,49 @@ export default async function DesignPage({ params }: Props) {
   const pinterestTrackingMode = pinterestPinUrl ? 'existing_pin' : 'create_pin';
 
   const jsonLdDescription = design.SeoDescription || design.Description || `Free cross-stitch pattern: ${design.Caption}`;
+  const jsonLdImageUrl = toAbsoluteUrl(design.ImageUrl) || DEFAULT_OG_IMAGE;
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CreativeWork",
     "name": design.SeoTitle ? `${design.SeoTitle} - Free Cross-Stitch Pattern` : `${design.Caption} - Free Cross-Stitch Pattern`,
     "description": jsonLdDescription,
-    "image": toAbsoluteUrl(design.ImageUrl) || DEFAULT_OG_IMAGE,
+    "image": {
+      "@type": "ImageObject",
+      "contentUrl": jsonLdImageUrl,
+      "creator": { "@type": "Person", "name": "Ann" },
+      "copyrightNotice": "© Cross-Stitch.com",
+      "creditText": "Cross-Stitch.com",
+      "license": buildCanonicalUrl('/terms#image-license'),
+      "acquireLicensePage": buildCanonicalUrl('/terms#image-license'),
+    },
     "url": buildCanonicalUrl(CreateDesignUrl(design)),
     "isAccessibleForFree": true,
     "inLanguage": "en",
     "creator": { "@type": "Person", "name": "Ann" },
   };
 
+  const albumBreadcrumbName = nav?.albumCaption || (nav ? `Album ${nav.albumId}` : null);
+  const breadcrumbStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: buildCanonicalUrl('/') },
+      ...(albumBreadcrumbName && albumUrl
+        ? [{ '@type': 'ListItem', position: 2, name: albumBreadcrumbName, item: buildCanonicalUrl(albumUrl) }]
+        : []),
+      {
+        '@type': 'ListItem',
+        position: albumBreadcrumbName && albumUrl ? 3 : 2,
+        name: design.SeoTitle || design.Caption,
+        item: canonicalUrl,
+      },
+    ],
+  };
+
   return (
     <div className="container mx-auto p-4">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }} />
       <h1 className="text-center text-3xl font-bold mb-6">{design.SeoTitle || design.Caption}</h1>
       <div className="max-w-3xl mx-auto md:max-w-none">
         <div className="border border-gray-500 rounded-lg shadow hover:shadow-lg p-5 text-center

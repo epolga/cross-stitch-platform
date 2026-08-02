@@ -123,8 +123,25 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
   const baseUrl = albumCaption ? await CreateAlbumUrl(albumCaption) : `/albums/${albumId}`;
   const isBookmarksAlbum = (albumCaption || '').toLowerCase() === 'bookmarks';
   const nav = await getAdjacentAlbums(parseInt(albumId));
+
+  const breadcrumbStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: buildCanonicalUrl('/') },
+      { '@type': 'ListItem', position: 2, name: 'All Albums', item: buildCanonicalUrl('/XStitch-Charts.aspx') },
+      {
+        '@type': 'ListItem',
+        position: 3,
+        name: albumCaption || `Album ${albumId}`,
+        item: buildCanonicalUrl(baseUrl),
+      },
+    ],
+  };
+
   return (
     <div className="container mx-auto p-4">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }} />
       <h1 className="text-3xl font-bold mb-6">Designs in {albumCaption || `Album ${albumId}`} ({entryCount} designs)</h1>
       {albumSeoDescription ? (
         <div className="text-gray-600 text-sm mb-4">

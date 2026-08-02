@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import type { PatternPalette } from '@/lib/pattern-converter';
 import { drawSymbol } from '@/lib/symbol-renderer';
 
@@ -230,45 +230,71 @@ function shapeCells(
   return [[r1, c1]]; // point
 }
 
-// ── Cross stitch mask — generated at exact cell size so lines hit the corner holes precisely ──
-function buildCrossMask(ecs: number): HTMLCanvasElement {
+// ── Simple single-line cross, but tapered — thin at the corner holes, full
+// width at the middle (same sine taper as the multi-strand simulation's
+// individual strands, just one straight, un-bowed line per diagonal instead
+// of 4 random ones). This is the current default cross rendering.
+function buildTaperedSimpleCrossMask(ecs: number): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = ecs; c.height = ecs;
   const ctx = c.getContext('2d')!;
-  const lw = Math.max(2.5, ecs * 0.32);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = lw;
-  ctx.lineCap = 'round';
-  // Bottom stitch first (/ diagonal), top stitch on top (\ diagonal)
-  ctx.beginPath(); ctx.moveTo(0, ecs); ctx.lineTo(ecs, 0); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, 0);   ctx.lineTo(ecs, ecs); ctx.stroke();
+  ctx.fillStyle = '#fff';
+  const maxLw = Math.max(2, ecs * 0.3);
+
+  function drawTaperedDiagonal(x0: number, y0: number, x1: number, y1: number) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len; // unit vector perpendicular to the diagonal
+    const N = 16;
+    const left: [number, number][] = [];
+    const right: [number, number][] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const bx = x0 + dx * t, by = y0 + dy * t;
+      const w = (maxLw / 2) * Math.sin(Math.PI * t);
+      left.push([bx + nx * w, by + ny * w]);
+      right.push([bx - nx * w, by - ny * w]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(left[0][0], left[0][1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(left[i][0], left[i][1]);
+    for (let i = N; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawTaperedDiagonal(0, ecs, ecs, 0);
+  drawTaperedDiagonal(0, 0, ecs, ecs);
   return c;
 }
 
-// ── Programmatic Aida cell texture ───────────────────────────────
-function buildAidaCell(cs: number): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  c.width = cs; c.height = cs;
-  const ctx = c.getContext('2d')!;
+function stampSimpleCross(
+  ecs: number,
+  col: { r: number; g: number; b: number },
+  mask: HTMLCanvasElement,
+  shadowBlur: number,
+  shadowOff: number,
+): HTMLCanvasElement {
+  const tmp = document.createElement('canvas');
+  tmp.width = ecs; tmp.height = ecs;
+  const tc = tmp.getContext('2d')!;
+  tc.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
+  tc.fillRect(0, 0, ecs, ecs);
+  tc.globalCompositeOperation = 'destination-in';
+  tc.drawImage(mask, 0, 0);
 
-  // Base linen/cream color
-  ctx.fillStyle = '#EDE0C4';
-  ctx.fillRect(0, 0, cs, cs);
-
-  // Subtle 2×2 thread-bundle shading (Aida weave)
-  const half = cs / 2;
-  ctx.fillStyle = 'rgba(0,0,0,0.05)';
-  ctx.fillRect(0, 0, half, half);
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  ctx.fillRect(half, half, half, half);
-
-  // Fine thread separator lines
-  ctx.strokeStyle = 'rgba(100,75,40,0.14)';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath(); ctx.moveTo(half, 0); ctx.lineTo(half, cs); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(0, half); ctx.lineTo(cs, half); ctx.stroke();
-
-  return c;
+  const out = document.createElement('canvas');
+  out.width = ecs; out.height = ecs;
+  const oc = out.getContext('2d')!;
+  oc.save();
+  oc.beginPath(); oc.rect(0, 0, ecs, ecs); oc.clip();
+  oc.shadowColor = 'rgba(0,0,0,0.3)';
+  oc.shadowBlur = shadowBlur * 1.3;
+  oc.shadowOffsetX = shadowOff * 0.6;
+  oc.shadowOffsetY = shadowOff * 0.6;
+  oc.drawImage(tmp, 0, 0);
+  oc.restore();
+  return out;
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -293,7 +319,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const lastPxRef   = useRef<[number, number] | null>(null); // last raw (unconstrained) cursor px during shape drag
 
   // Simulation mode assets
-  const aidaCellCache   = useRef<{ cs: number; dpr: number; canvas: HTMLCanvasElement } | null>(null);
+  const aidaImgRef      = useRef<HTMLImageElement | null>(null); // loaded /simulation/Canvas.png
+  const [aidaImgVersion, setAidaImgVersion] = useState(0); // bumped once the image loads, to trigger a redraw
   const aidaLayerRef    = useRef<HTMLCanvasElement | null>(null); // persistent Aida background
   const crossLayerRef   = useRef<HTMLCanvasElement | null>(null); // persistent cross layer (incremental)
   const prevGridRef     = useRef<number[][] | null>(null);        // last rendered grid for diff
@@ -303,7 +330,7 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const strokeCellsRef   = useRef<Set<string>>(new Set()); // accumulated cells (sim stroke)
   const lastStrokePosRef = useRef<[number, number] | null>(null);
   // Per-color pre-rendered cross canvases (shadow baked in) — rebuilt when palette or cs changes
-  const colorCellCacheRef = useRef<HTMLCanvasElement[]>([]);
+  const colorCellCacheRef = useRef<HTMLCanvasElement[]>([]); // [colorIndex]
   const colorCacheKeyRef  = useRef<string>('');
 
   // Keep latest props in refs so draw() can always read current values
@@ -370,14 +397,23 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         const w = cols * cs, h = rows * cs;
 
         // ── Aida layer: rebuild only when dimensions or cs change ──
-        if (!aidaLayerRef.current || aidaLayerRef.current.width !== w * dpr || aidaLayerRef.current.height !== h * dpr) {
-          if (!aidaCellCache.current || aidaCellCache.current.cs !== cs || aidaCellCache.current.dpr !== dpr)
-            aidaCellCache.current = { cs, dpr, canvas: buildAidaCell(cs * dpr) };
+        // (skipped until Canvas.png loads — draw() re-runs once it does, via aidaImgVersion)
+        // Drawn cell-by-cell straight from the source image (not via a
+        // separate rounded tile canvas + createPattern) — tiling through an
+        // intermediate tile whose size must round to a whole pixel count
+        // drifts out of sync with the per-cell grid over many repeats,
+        // showing up as blocky misaligned squares at some zoom levels.
+        if (aidaImgRef.current && (!aidaLayerRef.current || aidaLayerRef.current.width !== w * dpr || aidaLayerRef.current.height !== h * dpr)) {
           const al = document.createElement('canvas');
           al.width = w * dpr; al.height = h * dpr;
           const alCtx = al.getContext('2d')!;
-          const pat = alCtx.createPattern(aidaCellCache.current.canvas, 'repeat');
-          if (pat) { alCtx.fillStyle = pat; alCtx.fillRect(0, 0, w * dpr, h * dpr); }
+          const ecs = cs * dpr;
+          const img = aidaImgRef.current;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              alCtx.drawImage(img, 0, 0, 16, 16, c * ecs, r * ecs, ecs, ecs);
+            }
+          }
           aidaLayerRef.current = al;
           prevGridRef.current = null; // force full cross-layer rebuild
         }
@@ -402,35 +438,12 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         const shadowBlur = Math.max(1, ecs * 0.15);
         const shadowOff  = Math.max(0.5, ecs * 0.08);
 
-        // Per-color cache: pre-render each color's cross with shadow baked in once.
-        // Hot loop then becomes a simple drawImage blit — no clip/shadow per cell.
+        // Per-color cache: pre-render each color's cross with shadow baked in
+        // once. Hot loop then becomes a simple drawImage blit — no clip/shadow per cell.
         const cacheKey = `${ecs}|${pal.map(p => `${p.r},${p.g},${p.b}`).join('|')}`;
         if (colorCacheKeyRef.current !== cacheKey) {
-          // Build cross mask at this exact cell size — corner-to-corner so it aligns with Aida holes
-          const crossMask = buildCrossMask(ecs);
-          colorCellCacheRef.current = pal.map(col => {
-            // colored cross masked to cross shape
-            const tmp = document.createElement('canvas');
-            tmp.width = ecs; tmp.height = ecs;
-            const tc = tmp.getContext('2d')!;
-            tc.fillStyle = `rgb(${col.r},${col.g},${col.b})`;
-            tc.fillRect(0, 0, ecs, ecs);
-            tc.globalCompositeOperation = 'destination-in';
-            tc.drawImage(crossMask, 0, 0); // 1:1 — already ecs×ecs, no scaling
-            // shadow baked and clipped to cell bounds
-            const out = document.createElement('canvas');
-            out.width = ecs; out.height = ecs;
-            const oc = out.getContext('2d')!;
-            oc.save();
-            oc.beginPath(); oc.rect(0, 0, ecs, ecs); oc.clip();
-            oc.shadowColor = 'rgba(0,0,0,0.45)';
-            oc.shadowBlur = shadowBlur;
-            oc.shadowOffsetX = shadowOff;
-            oc.shadowOffsetY = shadowOff;
-            oc.drawImage(tmp, 0, 0);
-            oc.restore();
-            return out;
-          });
+          const simpleMask = buildTaperedSimpleCrossMask(ecs);
+          colorCellCacheRef.current = pal.map(col => stampSimpleCross(ecs, col, simpleMask, shadowBlur, shadowOff));
           colorCacheKeyRef.current = cacheKey;
           prevGridRef.current = null; // force full repaint after cache rebuild
         }
@@ -446,16 +459,18 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
             if (!paletteChanged && !hiddenChanged && prevEffective === effectiveCi) continue;
 
             clCtx.clearRect(c * ecs, r * ecs, ecs, ecs);
-            if (effectiveCi >= 0 && colorCellCacheRef.current[effectiveCi]) {
-              clCtx.drawImage(colorCellCacheRef.current[effectiveCi], c * ecs, r * ecs);
+            const stamp = effectiveCi >= 0 ? colorCellCacheRef.current[effectiveCi] : undefined;
+            if (stamp) {
+              clCtx.drawImage(stamp, c * ecs, r * ecs);
             }
           }
         }
 
         prevGridRef.current = g;
 
-        // Composite Aida + crosses onto main canvas
-        ctx.drawImage(aidaLayerRef.current!, ML, MT, w, h);
+        // Composite Aida + crosses onto main canvas (Aida layer is null for one
+        // frame if Canvas.png hasn't finished loading yet — draw() re-runs once it has)
+        if (aidaLayerRef.current) ctx.drawImage(aidaLayerRef.current, ML, MT, w, h);
         ctx.drawImage(crossLayerRef.current!, ML, MT, w, h);
 
         // Holes overlay — always on top of stitches so thread ends visibly enter the cloth
@@ -671,7 +686,13 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
     }
   }
 
-  useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors, stitchedCells, focusColorIndex]);
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => { aidaImgRef.current = img; setAidaImgVersion(v => v + 1); };
+    img.src = '/simulation/Canvas.png';
+  }, []);
+
+  useEffect(() => { draw(); }, [grid, palette, mode, cellSize, hiddenColors, stitchedCells, focusColorIndex, aidaImgVersion]);
 
   useEffect(() => {
     if (!selection) { marchingAntsRef.current = 0; return; }
@@ -1005,36 +1026,27 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       const ctx = offscreen.getContext('2d');
       if (!ctx) return null;
 
-      // Aida background
-      const aidaCell = buildAidaCell(cs);
-      const pat = ctx.createPattern(aidaCell, 'repeat');
-      if (pat) { ctx.fillStyle = pat; ctx.fillRect(0, 0, w, h); }
+      // Aida background — falls back to a plain linen fill on the rare chance
+      // Canvas.png hasn't finished loading yet when a capture is requested.
+      // Drawn cell-by-cell straight from the source image, same as the live
+      // canvas — see the comment on the live "Aida layer" build for why.
+      if (aidaImgRef.current) {
+        const img = aidaImgRef.current;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            ctx.drawImage(img, 0, 0, 16, 16, c * cs, r * cs, cs, cs);
+          }
+        }
+      } else {
+        ctx.fillStyle = '#EDE0C4';
+        ctx.fillRect(0, 0, w, h);
+      }
 
-      // Per-color cross cache with shadow baked in
+      // Per-color cross cache, same as the live canvas
       const shadowBlur = Math.max(1, cs * 0.15);
       const shadowOff  = Math.max(0.5, cs * 0.08);
-      const crossMask  = buildCrossMask(cs);
-      const colorCache = pal.map(c => {
-        const tmp = document.createElement('canvas');
-        tmp.width = cs; tmp.height = cs;
-        const tc = tmp.getContext('2d')!;
-        tc.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
-        tc.fillRect(0, 0, cs, cs);
-        tc.globalCompositeOperation = 'destination-in';
-        tc.drawImage(crossMask, 0, 0);
-        const out = document.createElement('canvas');
-        out.width = cs; out.height = cs;
-        const oc = out.getContext('2d')!;
-        oc.save();
-        oc.beginPath(); oc.rect(0, 0, cs, cs); oc.clip();
-        oc.shadowColor = 'rgba(0,0,0,0.45)';
-        oc.shadowBlur = shadowBlur;
-        oc.shadowOffsetX = shadowOff;
-        oc.shadowOffsetY = shadowOff;
-        oc.drawImage(tmp, 0, 0);
-        oc.restore();
-        return out;
-      });
+      const simpleMask = buildTaperedSimpleCrossMask(cs);
+      const colorCache = pal.map(col => stampSimpleCross(cs, col, simpleMask, shadowBlur, shadowOff));
 
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {

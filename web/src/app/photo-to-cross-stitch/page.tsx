@@ -150,6 +150,15 @@ const faqStructuredData = {
   })),
 };
 
+const breadcrumbStructuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: buildCanonicalUrl('/') },
+    { '@type': 'ListItem', position: 2, name: 'Pattern Maker', item: buildCanonicalUrl('/photo-to-cross-stitch') },
+  ],
+};
+
 export default function PhotoToCrossStitchPage() {
   return (
     <>
@@ -160,6 +169,10 @@ export default function PhotoToCrossStitchPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqStructuredData) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
       />
       <div className="min-h-screen bg-gray-50">
         <div className="w-full px-6 py-8">

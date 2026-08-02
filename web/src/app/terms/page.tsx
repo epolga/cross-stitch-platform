@@ -89,8 +89,18 @@ export default function TermsPage() {
         </p>
       </section>
 
+      <section id="image-license" className="space-y-3 scroll-mt-6">
+        <h2 className="text-2xl font-semibold">8. Pattern and Image License</h2>
+        <p>
+          Design images and PDF charts on this site are provided for personal,
+          non-commercial use (stitching). Reselling, redistributing, or
+          otherwise using the images or PDFs commercially without permission
+          is not allowed.
+        </p>
+      </section>
+
       <section className="space-y-3">
-        <h2 className="text-2xl font-semibold">8. Related Policies</h2>
+        <h2 className="text-2xl font-semibold">9. Related Policies</h2>
         <p>
           Please review our{' '}
           <Link href="/privacy-policy" className="text-blue-600 hover:underline">
@@ -101,7 +111,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-2xl font-semibold">9. Contact</h2>
+        <h2 className="text-2xl font-semibold">10. Contact</h2>
         <p>
           Questions about these terms can be sent to{' '}
           <a

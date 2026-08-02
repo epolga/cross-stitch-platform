@@ -1034,6 +1034,33 @@ export default function ConvertPage() {
     return Math.max(4, Math.floor(wrapperWidth / gridWidth));
   }
 
+  // Fixed zoom presets for the View menu, alongside the free-form slider/hotkeys.
+  const LARGE_EDIT_CELL_SIZE = 24;
+  const SMALL_EDIT_CELL_SIZE = 10;
+  // 96 CSS px/inch is the browser's standard reference pixel density; on
+  // 14-count Aida there are 14 stitches per inch, so this is the closest a
+  // screen can approximate "life-size" — actual on-screen size still varies
+  // with each monitor's real pixel density.
+  const AIDA14_TRUE_SIZE_CELL_SIZE = Math.round(96 / 14); // 7
+
+  function fitCellSizeToWidth(): number {
+    const gridWidth = gridRef.current[0]?.length ?? 0;
+    const wrapperWidth = canvasWrapperRef.current?.clientWidth ?? 0;
+    if (gridWidth <= 0 || wrapperWidth <= 0) return cellSize;
+    return Math.max(4, Math.min(40, Math.floor(wrapperWidth / gridWidth)));
+  }
+
+  function fitCellSizeToWholeChart(): number {
+    const g = gridRef.current;
+    const gridWidth = g[0]?.length ?? 0;
+    const gridHeight = g.length;
+    const wrapper = canvasWrapperRef.current;
+    const wrapperWidth = wrapper?.clientWidth ?? 0;
+    const wrapperHeight = wrapper?.clientHeight ?? 0;
+    if (gridWidth <= 0 || gridHeight <= 0 || wrapperWidth <= 0 || wrapperHeight <= 0) return cellSize;
+    return Math.max(4, Math.min(40, Math.floor(Math.min(wrapperWidth / gridWidth, wrapperHeight / gridHeight))));
+  }
+
   // Silent — used both by the explicit "Clear progress" button and internally
   // whenever the grid's dimensions/content shift (resize/mirror/size-to-design),
   // since old marks would no longer line up with the right cells.
@@ -1885,6 +1912,12 @@ export default function ConvertPage() {
                   { type: 'separator' },
                   { type: 'item', label: 'Zoom In',  shortcut: 'Ctrl+↑', onClick: () => changeZoom(s => Math.min(40, s + 2)) },
                   { type: 'item', label: 'Zoom Out', shortcut: 'Ctrl+↓', onClick: () => changeZoom(s => Math.max(4, s - 2)) },
+                  { type: 'separator' },
+                  { type: 'item', label: 'Large Edit', onClick: () => changeZoom(LARGE_EDIT_CELL_SIZE) },
+                  { type: 'item', label: 'Small Edit', onClick: () => changeZoom(SMALL_EDIT_CELL_SIZE) },
+                  { type: 'item', label: 'True Size', onClick: () => changeZoom(AIDA14_TRUE_SIZE_CELL_SIZE) },
+                  { type: 'item', label: 'Chart Width', onClick: () => changeZoom(fitCellSizeToWidth()) },
+                  { type: 'item', label: 'Whole Chart', onClick: () => changeZoom(fitCellSizeToWholeChart()) },
                 ],
               },
               {

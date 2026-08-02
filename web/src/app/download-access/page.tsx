@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { buildCanonicalUrl } from '@/lib/url-helper';
 import DownloadAccessPageClient from './DownloadAccessPageClient';
 
 type Props = {
@@ -22,10 +23,22 @@ function normalizeInternalPath(value: string | undefined): string {
   return trimmed;
 }
 
-export const metadata: Metadata = {
-  title: 'Choose a Download Plan | Cross Stitch Designs',
-  description: 'Review the monthly and yearly download plans before continuing to registration.',
-};
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const params = await searchParams;
+  // designId/caption/image are referrer-tracking params (which design sent the
+  // visitor here) — real, valuable data kept in the URL/analytics, but they
+  // turn this one page into a near-duplicate crawlable URL per design, same
+  // issue already fixed on /photo-to-cross-stitch. noindex on the
+  // design-tagged variants is the fix; the bare URL stays indexable.
+  const hasReferrerId = Boolean(params?.designId || params?.caption || params?.image);
+
+  return {
+    title: 'Choose a Download Plan | Cross Stitch Designs',
+    description: 'Review the monthly and yearly download plans before continuing to registration.',
+    alternates: { canonical: buildCanonicalUrl('/download-access') },
+    robots: hasReferrerId ? 'noindex, follow' : 'index, follow',
+  };
+}
 
 export default async function DownloadAccessPage({ searchParams }: Props) {
   const resolvedSearchParams = await searchParams;

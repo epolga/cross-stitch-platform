@@ -48,7 +48,7 @@ const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/': '2026-07-30', // src/app/page.tsx
   '/XStitch-Charts.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
-  '/photo-to-cross-stitch': '2026-07-30', // src/app/photo-to-cross-stitch/page.tsx
+  '/photo-to-cross-stitch': '2026-08-02', // src/app/photo-to-cross-stitch/page.tsx
   '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/WhyCrossStitch': '2026-06-01', // src/app/WhyCrossStitch/page.tsx
   '/Article070409.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
@@ -62,6 +62,8 @@ const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/tutorial': '2026-07-30', // src/app/tutorial/page.tsx
   '/easy-cross-stitch-patterns-for-beginners': '2026-07-30', // src/app/easy-cross-stitch-patterns-for-beginners/page.tsx
   '/small-cross-stitch-patterns': '2026-07-30', // src/app/small-cross-stitch-patterns/page.tsx
+  '/terms': '2026-08-02', // src/app/terms/page.tsx
+  '/CrossStitchTips.aspx': '2026-06-01', // src/app/CrossStitchTips.aspx/page.tsx
 };
 
 // Function to generate the sitemap XML
@@ -84,6 +86,8 @@ async function generateAndUploadSitemap(baseUrl: string) {
     { url: '/exercises', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/exercises'] },
     { url: '/short-stories', changefreq: 'monthly', priority: 0.4, lastmod: STATIC_PAGE_LASTMOD['/short-stories'] },
     { url: '/privacy-policy', changefreq: 'yearly', priority: 0.3, lastmod: STATIC_PAGE_LASTMOD['/privacy-policy'] },
+    { url: '/terms', changefreq: 'yearly', priority: 0.3, lastmod: STATIC_PAGE_LASTMOD['/terms'] },
+    { url: '/CrossStitchTips.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/CrossStitchTips.aspx'] },
   ];
 
   // Fetch album URLs
