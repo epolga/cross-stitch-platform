@@ -443,7 +443,7 @@ export default function ConvertPage() {
     setSelectedColor(0);
     setSelection(null);
     setHiddenColors(new Set());
-    setCellSize(computeInitialCellSize(finalGrid[0]?.length ?? 0));
+    setCellSize(fitCellSizeToWholeChart());
     setShowImportDialog(false);
     hasTrackedEditingStartRef.current = false;
     trackEvent('image_uploaded', {});
@@ -664,7 +664,7 @@ export default function ConvertPage() {
           : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
-        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : computeInitialCellSize(data.width));
+        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : fitCellSizeToWholeChart());
         if (typeof data.progress === 'string' && data.progress.length > 0) {
           const boolGrid = rleDecode(data.progress, data.width, data.height);
           const next = new Set<string>();
@@ -753,7 +753,7 @@ export default function ConvertPage() {
         updatePalette(data.palette);
         setHiddenColors(new Set<number>());
         setPatternName(data.title ?? '');
-        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : computeInitialCellSize(data.width ?? data.grid[0]?.length ?? 0));
+        setCellSize(typeof data.cellSize === 'number' ? data.cellSize : fitCellSizeToWholeChart());
         setCatalogDesignId(parseInt(designId, 10));
         catalogOriginalRef.current = { grid: data.grid, palette: data.palette };
         if (typeof data.progress === 'string' && data.progress.length > 0) {
@@ -827,7 +827,7 @@ export default function ConvertPage() {
     updatePalette(resumeDraft.palette);
     setPatternName(resumeDraft.name ?? '');
     setHiddenColors(new Set(resumeDraft.hiddenColors ?? []));
-    setCellSize(computeInitialCellSize(resumeDraft.grid[0]?.length ?? 0));
+    setCellSize(fitCellSizeToWholeChart());
     setResumeDraft(null);
   }
 
@@ -1065,18 +1065,6 @@ export default function ConvertPage() {
       cellSizeSaveTimer.current = setTimeout(() => flushCellSizeSave(next), 800);
       return next;
     });
-  }
-
-  // Only shrinks below the normal 12px/cell default when the design is
-  // wider than the visible canvas area; never enlarges a design that
-  // already fits.
-  function computeInitialCellSize(gridWidth: number): number {
-    const DEFAULT_CELL_SIZE = 12;
-    const wrapperWidth = canvasWrapperRef.current?.clientWidth ?? 0;
-    if (wrapperWidth <= 0 || gridWidth <= 0 || gridWidth * DEFAULT_CELL_SIZE <= wrapperWidth) {
-      return DEFAULT_CELL_SIZE;
-    }
-    return Math.max(4, Math.floor(wrapperWidth / gridWidth));
   }
 
   // Fixed zoom presets for the View menu, alongside the free-form slider/hotkeys.
