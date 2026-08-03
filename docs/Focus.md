@@ -52,6 +52,30 @@ work itself (`web/plan/Cross-Stitch.com — Site Technology Milestones.md`),
 not yet started. Otherwise pull from Open items below.
 
 **Shipped 2026-08-03:**
+- [x] **Editor: defaults to "Whole Chart" zoom on every load path** (new
+  conversion, saved pattern with no stored `cellSize`, catalog design,
+  resumed draft) instead of the old width-only `computeInitialCellSize`
+  (which never zoomed in on small designs and ignored height). Reuses the
+  same math as the existing "Whole Chart" View-menu preset
+  (`fitCellSizeToWholeChart()`); the old function is deleted, now unused.
+  Verified on both a large design (Black Cat, zooms out to fit) and a
+  small one (Horseshoe, zooms in to fill the screen — this is the actual
+  behavior change from before). Commit `3fdf9e6`, deployed, Health: Green.
+- [x] **Open item #11 (CIE76 → CIEDE2000) — admin-only experiment shipped,
+  not a default-behavior change.** Regular users unaffected (still CIE76).
+  Implemented CIEDE2000 in `pattern-converter.ts` alongside CIE76;
+  `convertImage()` takes a new `colorDistanceMode` param (`'cie76'` |
+  `'final-only'` | `'everywhere'`), enforced server-side in
+  `/api/convert/route.ts` via session + `ADMIN_EMAILS` (not just hidden
+  client-side) — Olga wants to try it herself over time before deciding
+  which to keep. Import-from-Photo dialog shows a picker only when
+  `/api/admin/me` confirms admin. Comparison script
+  `web/scripts/compare-ciede2000.ts` measured on a real sample photo:
+  `everywhere` is ~7-25x slower than `cie76` (k-means clustering calls
+  CIEDE2000 millions of times per conversion) and both CIEDE2000 modes
+  reassign ~26-29% of cells to a different (usually adjacent-tone) DMC
+  color vs. the `cie76` baseline — visually a subtle warm/cool shift, not
+  dramatic. Commit `a93f1b5`, deployed, Health: Green.
 - [x] **Editor: mobile scroll affordances for canvas + palette panel, found
   via a live report from Olga** ("на телефоне не вижу скрола" testing the
   Black Cat design in the photo-to-cross-stitch editor). Root cause:
@@ -383,17 +407,22 @@ Full background/algorithm:
     to the daily Lambda pipeline, gated on day-of-month === 26. Verified
     via manual local test runs only so far; first real scheduled trigger is
     **2026-08-26**.
-11. **Switch photo converter's DMC matching from CIE76 to CIEDE2000**
-    (`web/src/lib/pattern-converter.ts:32-61` — `rgbToLab`/`labDist2`/
-    `nearestDmcLab` currently do plain Euclidean distance in Lab space,
-    i.e. CIE76) — CIEDE2000 is a more perceptually accurate color-distance
-    formula (weights hue/chroma/lightness differences unevenly, unlike the
-    naive CIE76 Euclidean version). Prompted by the 2026-07-26 AI-tools-scan
-    flagging competitor Xstitchify's "Delta-E/CIELAB matching" as a
-    differentiator — we already do the Lab-space part, this closes the gap
-    on formula accuracy. Affects both `convertImage`'s clustering
-    (`labDist2` is also used for k-means++ init/assignment, not just final
-    DMC snapping) and `nearestDmcLab`'s final snap step.
+11. **Switch photo converter's DMC matching from CIE76 to CIEDE2000 — admin
+    experiment shipped 2026-08-03, decision pending.** CIEDE2000 now exists
+    in `pattern-converter.ts` alongside CIE76, selectable via
+    `convertImage()`'s `colorDistanceMode` param, but only a verified admin
+    account can actually invoke a non-default mode (`/api/convert/route.ts`
+    checks session + `ADMIN_EMAILS` server-side) — regular users still
+    always get CIE76, unchanged. Olga is trying it herself over time via a
+    picker in the Import-from-Photo dialog (visible to admins only) before
+    deciding whether to make one the new default. Comparison numbers
+    (`web/scripts/compare-ciede2000.ts` against a real sample photo):
+    `everywhere` mode is ~7-25x slower than `cie76` (CIEDE2000 called
+    millions of times inside k-means clustering) with both CIEDE2000 modes
+    reassigning ~26-29% of cells to a different (usually adjacent-tone) DMC
+    color — a real but subtle shift, not dramatic, in the rendered preview.
+    Next step: no code work — just Olga using the admin picker for a while,
+    then telling us which mode (if any) to make the new default.
 12. **Adopt DINOHash for near-duplicate catalog image detection** — found
     via the 2026-07-26 AI-tools-scan. Current pipeline
     (`automation/pinterest-agent/scripts/find-duplicate-designs.ts` +
@@ -478,7 +507,7 @@ Full background/algorithm:
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
-- [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
+- [ ] Photo converter's DMC color matching: admin-only picker shipped 08-03, Olga to test and pick a default
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
