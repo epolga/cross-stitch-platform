@@ -5,11 +5,23 @@ import type { ConvertedPattern } from '@/lib/pattern-converter';
 import type { ImageAnalysis } from '@/lib/image-analysis';
 
 import { trackEvent } from '@/lib/track-event';
+import { isUserLoggedIn } from '@/app/components/AuthControl';
+import type { ColorDistanceMode } from '@/lib/pattern-converter';
 
 const COLOR_OPTIONS_PHOTO = [5, 10, 20, 30, 40, 50, 100] as const;
 const COLOR_OPTIONS_LINEART = [2, 3, 4, 5, 10, 20] as const;
 
 type UserMode = 'auto' | 'photo' | 'illustration' | 'line-art';
+
+// Admin-only experiment (Focus.md Open item #11) — regular users always get
+// 'cie76' (current/unchanged behavior); the server only honors a different
+// value for verified admins (see /api/convert route.ts), so this control
+// being visible is not itself a security boundary, just a UI convenience.
+const DISTANCE_MODE_LABELS: Record<ColorDistanceMode, string> = {
+  cie76: 'CIE76 (current)',
+  'final-only': 'CIEDE2000 — final DMC snap only',
+  everywhere: 'CIEDE2000 — everywhere (slow)',
+};
 
 const TYPE_LABELS: Record<string, { icon: string; label: string }> = {
   photo:        { icon: '📷', label: 'Photo' },
@@ -38,6 +50,8 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
   const [analysis, setAnalysis] = useState<ImageAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [userMode, setUserMode] = useState<UserMode>('auto');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [colorDistanceMode, setColorDistanceMode] = useState<ColorDistanceMode>('cie76');
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
 
@@ -45,6 +59,14 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
     if (open && initialFile) handleFile(initialFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialFile]);
+
+  useEffect(() => {
+    if (!isUserLoggedIn()) return;
+    fetch('/api/admin/me', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((d: { isAdmin?: boolean }) => setIsAdmin(!!d.isAdmin))
+      .catch(() => {});
+  }, []);
 
   // When analysis arrives with a suggested minimum width, auto-update the inputs.
   useEffect(() => {
@@ -158,6 +180,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       form.append('height', String(innerH));
       form.append('colors', String(numColors));
       form.append('mode', mode);
+      if (isAdmin) form.append('colorDistanceMode', colorDistanceMode);
       trackEvent('pattern_generation_started', {
         width: innerW,
         height: innerH,
@@ -367,6 +390,26 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               : 'Best for drawings, sketches, quotes, and images with sharp outlines.'}
           </p>
         </div>
+
+        {isAdmin && (
+          <div className="mb-4 rounded border border-dashed border-gray-300 p-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Admin: DMC color-matching algorithm
+            </label>
+            <select
+              value={colorDistanceMode}
+              onChange={e => setColorDistanceMode(e.target.value as ColorDistanceMode)}
+              className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+            >
+              {(Object.keys(DISTANCE_MODE_LABELS) as ColorDistanceMode[]).map(m => (
+                <option key={m} value={m}>{DISTANCE_MODE_LABELS[m]}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-400 mt-1">
+              Not shown to regular users — server only honors this for admin accounts.
+            </p>
+          </div>
+        )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 

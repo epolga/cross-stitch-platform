@@ -48,13 +48,100 @@ function labDist2(a: Lab, b: Lab): number {
   return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 }
 
+// CIEDE2000 (Sharma, Wu & Dalal 2005 reference formula) — a perceptually
+// weighted color-distance metric, unlike CIE76's naive Euclidean distance
+// in LAB space. Substantially more expensive (several sqrt/atan2/sin/cos
+// per call) — see DistanceMode below for where each metric is actually used.
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+
+function ciede2000(labA: Lab, labB: Lab): number {
+  const [L1, a1, b1] = labA;
+  const [L2, a2, b2] = labB;
+
+  const C1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const C2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const Cbar = (C1 + C2) / 2;
+  const Cbar7 = Cbar ** 7;
+  const G = 0.5 * (1 - Math.sqrt(Cbar7 / (Cbar7 + 25 ** 7)));
+
+  const a1p = a1 * (1 + G);
+  const a2p = a2 * (1 + G);
+  const C1p = Math.sqrt(a1p * a1p + b1 * b1);
+  const C2p = Math.sqrt(a2p * a2p + b2 * b2);
+
+  const hp = (a: number, b: number) => {
+    if (a === 0 && b === 0) return 0;
+    const h = Math.atan2(b, a) * RAD2DEG;
+    return h < 0 ? h + 360 : h;
+  };
+  const h1p = hp(a1p, b1);
+  const h2p = hp(a2p, b2);
+
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+
+  let dhp: number;
+  if (C1p * C2p === 0) dhp = 0;
+  else if (Math.abs(h2p - h1p) <= 180) dhp = h2p - h1p;
+  else if (h2p - h1p > 180) dhp = h2p - h1p - 360;
+  else dhp = h2p - h1p + 360;
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin((dhp / 2) * DEG2RAD);
+
+  const Lbarp = (L1 + L2) / 2;
+  const Cbarp = (C1p + C2p) / 2;
+
+  let hbarp: number;
+  if (C1p * C2p === 0) hbarp = h1p + h2p;
+  else if (Math.abs(h1p - h2p) <= 180) hbarp = (h1p + h2p) / 2;
+  else if (h1p + h2p < 360) hbarp = (h1p + h2p + 360) / 2;
+  else hbarp = (h1p + h2p - 360) / 2;
+
+  const T = 1
+    - 0.17 * Math.cos((hbarp - 30) * DEG2RAD)
+    + 0.24 * Math.cos((2 * hbarp) * DEG2RAD)
+    + 0.32 * Math.cos((3 * hbarp + 6) * DEG2RAD)
+    - 0.20 * Math.cos((4 * hbarp - 63) * DEG2RAD);
+
+  const dTheta = 30 * Math.exp(-(((hbarp - 275) / 25) ** 2));
+  const Cbarp7 = Cbarp ** 7;
+  const Rc = 2 * Math.sqrt(Cbarp7 / (Cbarp7 + 25 ** 7));
+  const Sl = 1 + (0.015 * (Lbarp - 50) ** 2) / Math.sqrt(20 + (Lbarp - 50) ** 2);
+  const Sc = 1 + 0.045 * Cbarp;
+  const Sh = 1 + 0.015 * Cbarp * T;
+  const Rt = -Math.sin(2 * dTheta * DEG2RAD) * Rc;
+
+  const lTerm = dLp / Sl;
+  const cTerm = dCp / Sc;
+  const hTerm = dHp / Sh;
+  return Math.sqrt(lTerm * lTerm + cTerm * cTerm + hTerm * hTerm + Rt * cTerm * hTerm);
+}
+
+// Where CIEDE2000 gets used, given it's ~10-20x more expensive than CIE76:
+// - 'cie76': current/baseline behavior everywhere (fast).
+// - 'final-only': CIE76 for k-means clustering internals (invisible to the
+//   user, just an implementation detail for grouping similar pixels), but
+//   CIEDE2000 for the actual DMC-thread color match — the step a user can
+//   perceive ("does this suggested color look like my photo").
+// - 'everywhere': CIEDE2000 for clustering too — theoretically more
+//   perceptually-even color grouping, but k-means's centroid-averaging step
+//   still assumes a roughly-Euclidean space, so this is a heuristic
+//   deviation from classic Lloyd's-algorithm guarantees, not a pure win.
+export type ColorDistanceMode = 'cie76' | 'final-only' | 'everywhere';
+
+function makeDistanceFns(mode: ColorDistanceMode) {
+  const clusterDist = mode === 'everywhere' ? ciede2000 : labDist2;
+  const finalDist = mode === 'cie76' ? labDist2 : ciede2000;
+  return { clusterDist, finalDist };
+}
+
 // Pre-compute all DMC colors in LAB space once at module load
 const DMC_LAB: Lab[] = DMC.map(c => rgbToLab(c.r, c.g, c.b));
 
-function nearestDmcLab(lab: Lab): number {
+function nearestDmcLab(lab: Lab, dist: (a: Lab, b: Lab) => number): number {
   let best = 0, bestDist = Infinity;
   for (let i = 0; i < DMC_LAB.length; i++) {
-    const d = labDist2(lab, DMC_LAB[i]);
+    const d = dist(lab, DMC_LAB[i]);
     if (d < bestDist) { bestDist = d; best = i; }
   }
   return best;
@@ -123,7 +210,7 @@ interface KMeansResult {
   inertia: number;
 }
 
-function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => number): KMeansResult {
+function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): KMeansResult {
   const n = allPixels.length;
   const ns = sample.length;
   k = Math.min(k, ns);
@@ -133,7 +220,7 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
   for (let ci = 1; ci < k; ci++) {
     const dists = sample.map(p => {
       let minD = Infinity;
-      for (const c of centroids) { const d = labDist2(p, c); if (d < minD) minD = d; }
+      for (const c of centroids) { const d = dist(p, c); if (d < minD) minD = d; }
       return minD;
     });
     const total = dists.reduce((s, d) => s + d, 0);
@@ -150,7 +237,7 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
     for (let i = 0; i < ns; i++) {
       let best = 0, bestD = Infinity;
       for (let j = 0; j < k; j++) {
-        const d = labDist2(sample[i], centroids[j]);
+        const d = dist(sample[i], centroids[j]);
         if (d < bestD) { bestD = d; best = j; }
       }
       if (sAssign[i] !== best) { sAssign[i] = best; changed = true; }
@@ -176,7 +263,7 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
   for (let i = 0; i < n; i++) {
     let best = 0, bestD = Infinity;
     for (let j = 0; j < k; j++) {
-      const d = labDist2(allPixels[i], centroids[j]);
+      const d = dist(allPixels[i], centroids[j]);
       if (d < bestD) { bestD = d; best = j; }
     }
     assignments[i] = best;
@@ -186,10 +273,10 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
   return { centroids, assignments, inertia };
 }
 
-function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => number): KMeansResult {
+function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): KMeansResult {
   let best: KMeansResult | null = null;
   for (let run = 0; run < KMEANS_RUNS; run++) {
-    const result = kmeansOnce(allPixels, sample, k, rand);
+    const result = kmeansOnce(allPixels, sample, k, rand, dist);
     if (!best || result.inertia < best.inertia) best = result;
   }
   return best!;
@@ -203,7 +290,9 @@ export async function convertImage(
   targetHeight: number,
   maxColors: number,
   mode: ConversionMode = 'photo',
+  colorDistanceMode: ColorDistanceMode = 'cie76',
 ): Promise<ConvertedPattern> {
+  const { clusterDist, finalDist } = makeDistanceFns(colorDistanceMode);
   const { data, info } = await (
     mode === 'line-art' || mode === 'illustration'
       ? sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill', kernel: 'nearest' }).removeAlpha()
@@ -229,10 +318,10 @@ export async function convertImage(
   const kOver = (mode === 'line-art' || mode === 'illustration')
     ? Math.min(maxColors, sample.length)
     : Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
-  const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver, rand);
+  const { centroids, assignments } = kmeansLab(pixelsLab, sample, kOver, rand, clusterDist);
 
   // Snap each centroid to nearest DMC color
-  const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c));
+  const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c, finalDist));
 
   // Tally pixel count per centroid, then per DMC color
   const centroidPx = new Int32Array(centroids.length);
@@ -247,14 +336,17 @@ export async function convertImage(
     [...dmcPx.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxColors).map(([d]) => d)
   );
 
-  // Remap dropped centroids to nearest kept centroid (in LAB space)
+  // Remap dropped centroids to nearest kept centroid (in LAB space) — this
+  // decides which surviving DMC color absorbs an under-represented cluster,
+  // so it's a "final" user-visible color decision, not an internal
+  // clustering detail.
   const centroidFinal = centroidDmc.map((d, ci) => {
     if (keepDmc.has(d)) return d;
     let best = d, bestDist = Infinity;
     for (let cj = 0; cj < centroids.length; cj++) {
       if (!keepDmc.has(centroidDmc[cj])) continue;
-      const dist = labDist2(centroids[ci], centroids[cj]);
-      if (dist < bestDist) { bestDist = dist; best = centroidDmc[cj]; }
+      const dd = finalDist(centroids[ci], centroids[cj]);
+      if (dd < bestDist) { bestDist = dd; best = centroidDmc[cj]; }
     }
     return best;
   });
