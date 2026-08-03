@@ -69,6 +69,22 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
   }
   const colorDiversity = colorBuckets.size; // 1–64
 
+  // Flatness: fraction of adjacent-pixel pairs (horizontal + vertical) whose
+  // luminance differs by less than a small noise floor. Flat illustrations
+  // are built from large contiguous same-color regions, so most neighboring
+  // pixels are near-identical; real photos have continuous tonal variation
+  // (sensor noise, lighting gradients, skin/hair/fabric detail) almost
+  // everywhere, so very few neighbor pairs are ever truly flat.
+  let flatPairs = 0, totalPairs = 0;
+  const FLAT_EPS = 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x < w - 1) { totalPairs++; if (Math.abs(lum[y * w + x] - lum[y * w + x + 1]) < FLAT_EPS) flatPairs++; }
+      if (y < h - 1) { totalPairs++; if (Math.abs(lum[y * w + x] - lum[(y + 1) * w + x]) < FLAT_EPS) flatPairs++; }
+    }
+  }
+  const flatFraction = flatPairs / totalPairs;
+
   // ── Classify ────────────────────────────────────────────────────────────────
   let type: ImageType;
   let confidence: 'high' | 'medium' | 'low';
@@ -78,8 +94,26 @@ export async function analyzeImage(buffer: Buffer): Promise<ImageAnalysis> {
     // Widened brackets (dark<64, light>192) catch light-gray backgrounds and dark-gray outlines.
     type = edgeDensity > 0.25 ? 'typography' : 'line-art';
     confidence = bimodalFraction > 0.75 ? 'high' : 'medium';
-  } else if (colorDiversity <= 12 && meanSaturation > 20) {
-    // Few distinct colours, some saturation → flat illustration / logo
+  } else if ((colorDiversity <= 16 || flatFraction > 0.45) && meanSaturation > 20) {
+    // Flat illustration / logo: either few distinct colours, or mostly
+    // uniform-color neighboring pixels (or both).
+    //
+    // Rebuilt 2026-08-03 after two rounds of miscalibration against real
+    // examples Olga provided. colorDiversity alone isn't reliable: a real
+    // photo can land as low as 21 (a TV-interview screenshot with a plain
+    // dark background and a narrow warm palette), overlapping a flat
+    // illustration's range (13-19), so no single colorDiversity threshold
+    // separates all known cases. flatFraction (added this round) resolves
+    // the case colorDiversity can't: a genuinely flat vector illustration
+    // (this site's own "Try a Sample Image" puppy) measured 0.61 — nearly
+    // double both real photos' ~0.34-0.35 — while a rendered cross-stitch
+    // pattern preview (fabric-weave texture + stitch anti-aliasing over an
+    // otherwise flat ~8-10-color illustration) measured only 0.30, low
+    // enough to need colorDiversity (13) to catch it instead. Neither
+    // signal alone covers every case; OR-ing them does, against the 4 real
+    // examples on file (2 illustration, 2 photo — see
+    // docs/session-log/2026-08.md for the full numbers). Revisit with more
+    // samples if either direction misfires again.
     type = 'illustration';
     confidence = 'medium';
   } else {
