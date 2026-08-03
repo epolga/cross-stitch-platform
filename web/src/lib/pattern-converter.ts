@@ -282,6 +282,97 @@ function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => numbe
   return best!;
 }
 
+// ── Outline preservation (illustration/line-art mode) ───────────────────────
+//
+// Flat illustrations typically separate color regions with a thin white
+// (or near-white) outline stroke, and reuse the same stroke for small
+// details like an eye's specular highlight. Downsampling straight to
+// stitch-grid resolution routinely loses these: a 1-2px stroke rarely lands
+// on a nearest-neighbor sample point, and even where it survives, it's such
+// a small minority of total pixels that the color-reduction step's
+// "keep top N colors by pixel count" trims it away, blending it into
+// whatever region it bordered. Detecting these strokes on the FULL-resolution
+// source (before any downsampling blurs them) and force-writing a protected
+// outline color onto the final grid — after normal clustering, bypassing the
+// pixel-count trim entirely — fixes this regardless of maxColors.
+//
+// Sobel gradient magnitude + a brightness floor, not a generic bidirectional
+// edge detector: calibrated against real examples that specifically use a
+// white/near-white stroke (the common flat-illustration convention), not an
+// arbitrary-color outline.
+const OUTLINE_LUM_THRESHOLD = 200;
+const OUTLINE_GRADIENT_THRESHOLD = 40;
+
+function detectOutlineMask(data: Buffer, w: number, h: number): Uint8Array {
+  const n = w * h;
+  const lum = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    lum[i] = 0.299 * data[i * 3] + 0.587 * data[i * 3 + 1] + 0.114 * data[i * 3 + 2];
+  }
+  const mask = new Uint8Array(n);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (lum[i] <= OUTLINE_LUM_THRESHOLD) continue;
+      const gx = -lum[i-w-1] + lum[i-w+1] - 2*lum[i-1] + 2*lum[i+1] - lum[i+w-1] + lum[i+w+1];
+      const gy = -lum[i-w-1] - 2*lum[i-w] - lum[i-w+1] + lum[i+w-1] + 2*lum[i+w] + lum[i+w+1];
+      if (Math.sqrt(gx * gx + gy * gy) / 8 > OUTLINE_GRADIENT_THRESHOLD) mask[i] = 1;
+    }
+  }
+  return mask;
+}
+
+// Maps the full-resolution outline mask down to the target stitch grid: a
+// target cell is flagged if any source pixel in its corresponding block was
+// flagged. Same nearest-block mapping the target resolution otherwise samples.
+function downsampleOutlineMask(mask: Uint8Array, srcW: number, srcH: number, dstW: number, dstH: number): Uint8Array {
+  const out = new Uint8Array(dstW * dstH);
+  for (let ty = 0; ty < dstH; ty++) {
+    const y0 = Math.floor((ty / dstH) * srcH);
+    const y1 = Math.max(y0 + 1, Math.floor(((ty + 1) / dstH) * srcH));
+    for (let tx = 0; tx < dstW; tx++) {
+      const x0 = Math.floor((tx / dstW) * srcW);
+      const x1 = Math.max(x0 + 1, Math.floor(((tx + 1) / dstW) * srcW));
+      let found = false;
+      for (let sy = y0; sy < y1 && !found; sy++) {
+        for (let sx = x0; sx < x1; sx++) {
+          if (mask[sy * srcW + sx]) { found = true; break; }
+        }
+      }
+      if (found) out[ty * dstW + tx] = 1;
+    }
+  }
+  return out;
+}
+
+// A thin stroke on the full-resolution source can land on non-adjacent
+// target cells once downsampled to a coarse stitch grid, breaking it into
+// scattered single-cell dots instead of a continuous line. This app never
+// allows isolated single-stitch "confetti" (see removeConfetti on the
+// client, same 8-neighbor rule) — a lone forced-white dot with no outline
+// neighbor is exactly that, so it's dropped here and left to whatever the
+// normal color clustering would have assigned that cell instead, rather
+// than forcing a stray pixel onto the final grid.
+function removeIsolatedOutlineCells(mask: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(mask);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!out[i]) continue;
+      let hasNeighbor = false;
+      for (let dy = -1; dy <= 1 && !hasNeighbor; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const ny = y + dy, nx = x + dx;
+          if (ny >= 0 && ny < h && nx >= 0 && nx < w && mask[ny * w + nx]) { hasNeighbor = true; break; }
+        }
+      }
+      if (!hasNeighbor) out[i] = 0;
+    }
+  }
+  return out;
+}
+
 // ── Main converter ───────────────────────────────────────────────────────────
 
 export async function convertImage(
@@ -293,8 +384,9 @@ export async function convertImage(
   colorDistanceMode: ColorDistanceMode = 'cie76',
 ): Promise<ConvertedPattern> {
   const { clusterDist, finalDist } = makeDistanceFns(colorDistanceMode);
+  const isFlatArtMode = mode === 'line-art' || mode === 'illustration';
   const { data, info } = await (
-    mode === 'line-art' || mode === 'illustration'
+    isFlatArtMode
       ? sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill', kernel: 'nearest' }).removeAlpha()
       : sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill' }).removeAlpha()
   ).raw().toBuffer({ resolveWithObject: true });
@@ -302,6 +394,16 @@ export async function convertImage(
   const w = info.width;
   const h = info.height;
   const n = w * h;
+
+  // Outline strokes need to be found before any resizing blurs/skips them —
+  // decode the source at its own native resolution separately for this.
+  let outlineGrid: Uint8Array | null = null;
+  if (isFlatArtMode) {
+    const full = await sharp(imageBuffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const fullMask = detectOutlineMask(full.data, full.info.width, full.info.height);
+    const downsampled = downsampleOutlineMask(fullMask, full.info.width, full.info.height, w, h);
+    outlineGrid = removeIsolatedOutlineCells(downsampled, w, h);
+  }
 
   // Convert all pixels to LAB
   const pixelsLab: Lab[] = new Array(n);
@@ -353,6 +455,17 @@ export async function convertImage(
 
   // Map each pixel to its final DMC color (guaranteed ≤ maxColors distinct values)
   const pixelDmc: number[] = Array.from(assignments, j => centroidFinal[j]);
+
+  // Force outline-stroke pixels onto a protected near-white DMC color,
+  // bypassing the pixel-count trim above entirely — this can push the final
+  // palette one color past maxColors, a deliberate, minor exception to keep
+  // the illustration's separating strokes and highlight dots intact.
+  if (outlineGrid) {
+    const outlineDmc = nearestDmcLab(rgbToLab(255, 255, 255), finalDist);
+    for (let i = 0; i < n; i++) {
+      if (outlineGrid[i]) pixelDmc[i] = outlineDmc;
+    }
+  }
 
   // Build compact palette
   const uniqueDmc = Array.from(new Set(pixelDmc));
