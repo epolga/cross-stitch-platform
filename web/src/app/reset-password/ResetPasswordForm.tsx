@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Props = {
   token: string;
 };
 
+const SUCCESS_REDIRECT_DELAY_MS = 2000;
+
 export default function ResetPasswordForm({ token }: Props) {
+  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -40,6 +44,7 @@ export default function ResetPasswordForm({ token }: Props) {
 
       setStatus('success');
       setMessage(data.message || 'Password has been updated.');
+      setTimeout(() => router.push('/'), SUCCESS_REDIRECT_DELAY_MS);
     } catch (err) {
       console.error(err);
       setStatus('error');
