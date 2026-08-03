@@ -47,10 +47,88 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-Nothing queued yet. S5 is done; S6's baseline is measured (see Shipped
-below) — the next S6 step would be the actual prefetch/`content-visibility`
-work itself (`web/plan/Cross-Stitch.com — Site Technology Milestones.md`),
-not yet started. Otherwise pull from Open items below.
+Pull from Open item #16 (outline-preservation posterization idea) first if
+picking up where 2026-08-03/04 left off, otherwise S6's next step
+(prefetch/`content-visibility` work, `web/plan/Cross-Stitch.com — Site
+Technology Milestones.md`) or Open items below.
+
+**Shipped 2026-08-04** (commits `38e1cea`, `c7a73fb`, deployed & health-checked Green):
+
+Reworked outline/stroke preservation (illustration/line-art mode,
+`web/src/lib/pattern-converter.ts`) after Olga flagged two real bugs in the
+2026-08-03 version: it assumed every outline was white and force-wrote pure
+white onto anything it flagged, and it treated any sharp edge — including
+ordinary boundaries between two flat color regions — as an "outline."
+- **Detection**: replaced the brightness-gated Sobel edge detector with a
+  brightness-agnostic morphological top-hat (white top-hat + black top-hat,
+  structuring-element radius 2px, `OUTLINE_STROKE_RADIUS`). This finds any
+  feature narrower than the structuring element regardless of whether it's
+  lighter or darker than its surroundings — a black ink line and a white
+  keyline are found the same way. Top-hat threshold `OUTLINE_TOPHAT_THRESHOLD`
+  ended at **50** (luminance units) after tuning: 25 caught genuine strokes
+  but also caught soft internal shading as false positives (see below); 50
+  is the current best trade-off.
+- **Color**: instead of always forcing detected strokes to white, each
+  stroke is now force-written to the DMC nearest its own averaged sampled
+  color from the source (`resolveOutlineComponents`).
+- **Grouping bug found and fixed**: connected candidate cells are grouped
+  into components (flood fill) BEFORE the distinctness check and DMC snap,
+  not judged pixel-by-pixel. Pixel-by-pixel judging had a real bug: two
+  adjacent dark candidate cells (e.g. both part of the baby's eye outline in
+  the "Lady of Perpetual Love" design) would suppress each other as "not
+  distinct" since each read as close to its neighbor — backwards, since
+  mutual agreement between candidates is evidence FOR a stroke. Grouping
+  first, then comparing the group's average color against its true
+  (non-candidate) bordering neighbors, fixed this — confirmed via direct
+  pipeline tracing (`resolveOutlineComponents`'s component/border logic).
+  This also incidentally fixed a bull test-image regression (34 colors →
+  20-21) caused by an earlier, wrong attempt at this same fix (excluding
+  candidate neighbors from comparison entirely, which weakened the filter
+  exactly where dense noise needed it strongest).
+- **Verified against 3 real illustrations**: puppy (white keyline strokes +
+  white eye-highlight dots), a stitched-bull test asset (wavy white
+  keylines, deliberately textured), and "Lady of Perpetual Love" (white
+  keylines + a dark hairline + a small gold star + the baby's face). At
+  target width 100 stitches, the baby's eyebrow/eye were initially invisible
+  (too small/low-contrast to survive); raising the top-hat threshold to 50
+  fixed this AND shrank an over-thick eyebrow blob down to ~2 stitches each
+  for eyebrow and eye, which Olga confirmed as sufficient. Confirmed via
+  both the standalone converter (with `removeConfetti` replicated in the
+  test script, matching the client's automatic post-conversion cleanup) and
+  the real `/photo-to-cross-stitch` browser flow end-to-end.
+- **Known remaining minor issue, not fixed, not blocking**: Olga noticed a
+  handful of small (1-4 stitch) stray-color patches inside otherwise
+  visually-flat regions on the puppy (the orange ear, a paw) — e.g. DMC 3776
+  "Light Mahogany" (198,113,54) scattered inside a field of DMC 922 "Light
+  Copper" (221,117,63). Investigated in depth: the source PNG looks
+  perfectly flat there to the eye, but direct pixel sampling shows real
+  (if subtle) local variation. **Median-filter denoising was tried and
+  rejected**: tested radius 3, 5, and 7 (`sharp().median(n)`) applied only to
+  the outline-detection input (not the color-clustering input, so a
+  preserved stroke's color stays true to source) — none of the three
+  changed the ear/paw speckle pattern AT ALL (pixel-identical output),
+  while radius 7 was already destructive enough to erase the Lady's
+  eyebrow entirely. Since even a 15×15 median window didn't touch it, this
+  is probably NOT simple per-pixel noise/dithering — more likely a
+  compression-artifact-like pattern (e.g. JPEG blockiness baked into the
+  PNG at export) that's structured rather than random, which a median
+  filter doesn't reliably remove.
+  - **Proposed next step (not implemented)**: instead of denoising, run a
+    coarse k-means color quantization (~16-20 colors — much finer than the
+    final stitch grid, but coarse enough to collapse compression noise into
+    its nearest real color) on the FULL-resolution image, and run
+    `detectOutlineMask` on that quantized copy instead of the raw source.
+    Genuine strokes would survive as their own cluster; sub-visible
+    compression noise should disappear since it'd almost always cluster
+    into its dominant surrounding color. More expensive (an extra full-res
+    k-means pass) — not started, needs Olga's go-ahead given the cost/risk,
+    and should be verified against all 3 test images again before shipping.
+  - Test images used throughout, if picking this back up: puppy —
+    `D:\Stitch Craft\Charts\ReadyCharts\2026_07_04\Puppy.png`; Lady of
+    Perpetual Love — `D:\Stitch Craft\Charts\ReadyCharts\2026_06_26\Lady of
+    Perpetual Love.png`; bull/Style3 — synthetic test asset, regenerate via
+    the session's earlier steps if the scratchpad copy is gone (session
+    temp dirs are not persistent).
 
 **Shipped 2026-08-03** (full detail: `docs/session-log/2026-08.md`):
 - [x] Editor defaults to "Whole Chart" zoom on every load path (commit `3fdf9e6`).
@@ -214,6 +292,18 @@ didn't log the user in).
     signal. Not yet investigated: whether the CloudWatch agent
     (`amazon-cloudwatch-agent.service`, seen in `eb-engine.log`) is actually
     running on the current instance, or needs a restart/reconfig.
+16. **Outline-preservation: stray small-patch noise in visually-flat
+    regions.** See the 2026-08-04 Shipped entry above for full detail.
+    Median-filter denoising (radii 3/5/7) tried and rejected — didn't touch
+    the noise at all, and radius 7 erased a real thin detail (the Lady's
+    eyebrow). Proposed next step: quantize the full-resolution source to a
+    coarse (~16-20 color) palette via k-means before running outline
+    detection on it, instead of denoising. Not started — needs a go-ahead
+    (adds a full-res k-means pass) and re-verification against all 3 test
+    images (puppy, bull, Lady of Perpetual Love) before shipping. Low
+    priority — cosmetic, not blocking, doesn't affect the deployed fix's
+    correctness on any of the reported real bugs (white-forcing, brow/eye
+    visibility, star, keylines).
 
 ## Done when
 
