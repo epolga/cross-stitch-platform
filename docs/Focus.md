@@ -46,40 +46,36 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-0. **Verify password-reset works end-to-end.** 2026-07-28 found and fixed a
-   real IAM bug: the EC2 role's inline policy (`CrossStitchDynamoDBAccessPolicy`)
-   never included the `PasswordResetTokens` table, so `createPasswordResetToken`'s
-   `PutItem` silently threw `AccessDeniedException` on every single
-   password-reset request, ever — the route's catch-all always returned
-   `ok:true` regardless, so neither users nor Olga ever saw an error. This
-   affected 100% of reset attempts, not just one user. Fixed by adding
-   `PasswordResetTokens` (+ index) to the policy's resource list (confirmed
-   via `iam simulate-principal-policy`, not by triggering a real send). Not
-   yet confirmed with a real end-to-end reset by an actual user — check
-   next session, or ask a real user to try "forgot password" and confirm
-   the email arrives. Also worth checking: is this IAM policy tracked
-   anywhere in source control (`.ebextensions`/IaC)? Search came up empty
-   this session — if it's genuinely only a hand-maintained AWS resource,
-   the next new DDB table added to the app risks the exact same silent
-   failure mode.
-1. **Ann persona — introduce Nitka next.** Per `web/plan/ann_story_timeline.md`'s
-   "Suggested next-mention order": naming the cat as a character is the
-   lowest-friction next piece (already visually established via the
-   favicon, so it's a callback, not a cold introduction). Check that file
-   before writing anything, so age/Tomáš/Klára don't leak before their own
-   intended first mention. 2026-07-28 only shipped one practical/SEO post
-   (`how-to-turn-a-photo-into-a-cross-stitch-pattern`) — the personal/
-   recurring persona side of the Current goal above is still untouched.
-2. **Milestone S5** — differentiate the homepage "Based on your browsing"
+0. **Milestone S5** — differentiate the homepage "Based on your browsing"
    personalization (`PersonalizedSection.tsx` / `/api/personalized`) beyond
    generic embedding-similarity (currently one undifferentiated pool of up
    to 12 nearest neighbors). Planned categories, not yet built: simpler
    alternatives, comparable color-palette matches, larger/smaller versions
    of the same subject. Medium priority, doesn't block anything.
-3. **Milestone S6 first step** — before any prefetch/`content-visibility`
+1. **Milestone S6 first step** — before any prefetch/`content-visibility`
    work, measure current real navigation performance (PageSpeed, Core Web
    Vitals) on homepage/design page/albums, so later changes have a real
    baseline, per the doc's own caution.
+
+**Shipped 2026-08-03:**
+- [x] **Password-reset end-to-end — confirmed working, one follow-on bug found
+  and fixed.** Verified the 2026-07-28 IAM fix holds: a direct DynamoDB
+  write→immediate-consume round-trip through the real `/api/auth/reset-password`
+  endpoint succeeded cleanly. Olga's own first real attempt hit "The reset
+  link is invalid or has expired" — root cause not conclusively pinned down
+  (table was already empty by the time it was investigated; CloudWatch log
+  streaming for this environment was found to be stalled, ~80+ min behind
+  real traffic, a separate infra issue not yet followed up on), most likely
+  a stale/pre-fix link. A second real attempt through the actual site UI
+  succeeded. While testing, found and fixed a real UX bug: `ResetPasswordForm.tsx`
+  showed a static "Password has been updated" message with no next step —
+  now redirects to `/` two seconds after success. Commit `93855f3`, deployed
+  same day, `eb status` Health: Green post-deploy.
+- [x] **Ann persona — Nitka already introduced, no new work needed.** Item 1
+  below (carried from 2026-07-28) was stale: `blog-posts.ts`'s
+  `the-story-behind-black-cat` post (dated 2026-08-01) already names and
+  introduces Nitka in-depth (origin story, name meaning, present-day
+  behavior). Confirmed via grep, not re-written.
 
 **Shipped 2026-07-28** (all 6 quick-wins from the 2026-07-27 ChatGPT-doc
 mining, plus same-day follow-ups — full detail in git log / commit messages,
@@ -392,22 +388,38 @@ Full background/algorithm:
     in these incidents — every request takes the "no prior vote" branch,
     meaning `getUserDesignVote`'s read is what's failing to see a write from
     1-3+ seconds earlier, longer than normal DynamoDB eventual-consistency
-    lag. **Fix applied 2026-08-01** (not yet confirmed effective): added
-    `ConsistentRead: true` to the vote read in `getUserDesignVote`, plus
-    temporary diagnostic `console.log`s in `getUserDesignVote`/
-    `putDesignVote` (raw DynamoDB response, exact timestamp) so a
-    recurrence can be traced via `eb logs` instead of guessed at. **Next
-    session: check whether the "Previous vote: none" pattern has recurred**
-    (search Gmail for "New design vote" / "Design vote cleared") — if it
-    has, pull `eb logs` around that timestamp and look for the
-    `[design-likes]` diagnostic lines. If it hasn't recurred after a
-    reasonable window, remove the temporary logging.
+    lag. **Fix applied 2026-08-01**, checked 2026-08-03 (via Olga's own
+    Gmail — CloudWatch couldn't be used, see infra item below): "New design
+    vote" emails since 08-01 look normal, no "Previous vote: none" seen in a
+    suspicious rapid-toggle context. **No recurrence in the ~2 days since
+    the fix** — promising, but that's a short window against 3 prior
+    incidents spread out over longer, so keep the temporary diagnostic
+    `console.log`s in `getUserDesignVote`/`putDesignVote` in place for now
+    rather than removing them yet. Re-check again in another week or two of
+    silence before calling this resolved and pulling the logging.
     Separately (not a bug, a product question for Olga): `DesignLikeButton.tsx`
     and the backend both currently treat clicking the *opposite* arrow while
     already voted as "clear my vote," not "switch my vote" — this is
     internally consistent between client and server, so left as-is pending
     an explicit decision on whether the wanted behavior is a direct switch
     instead.
+15. **CloudWatch log streaming for `cross-stitch-com-env-clone` appears
+    stalled.** Found 2026-08-03 while investigating the password-reset and
+    design-vote items above: the environment's live EC2 instance
+    (`i-0ba24e0fa016ebe9f`, running since 2026-08-01) has a
+    `/aws/elasticbeanstalk/.../var/log/web.stdout.log` log stream whose
+    *last* event is ~7.5 hours stale despite substantial real traffic since
+    (manual test requests, a real user's password-reset attempts, a full
+    `eb deploy`). An even older, already-terminated instance
+    (`i-03f413f56baca37c2`) has a separate stream that's similarly stuck
+    (~2+ hours stale at time of check). Effectively no one can currently use
+    `eb logs`/CloudWatch to debug anything happening on this environment in
+    close to real time — this blocked confirming the password-reset root
+    cause today and blocks tracing any future `[design-likes]` recurrence
+    (Open item #14) via logs, leaving Gmail-forwarding as the only working
+    signal. Not yet investigated: whether the CloudWatch agent
+    (`amazon-cloudwatch-agent.service`, seen in `eb-engine.log`) is actually
+    running on the current instance, or needs a restart/reconfig.
 
 ## Done when
 
@@ -424,4 +436,5 @@ Full background/algorithm:
 - [ ] Photo converter's DMC color matching switched from CIE76 to CIEDE2000
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
-- [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14); temp diagnostic logging removed once resolved
+- [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
+- [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
