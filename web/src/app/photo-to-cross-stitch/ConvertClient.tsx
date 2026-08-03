@@ -252,11 +252,15 @@ export default function ConvertPage() {
       // internally-scrolling area instead (see the scroll-hint indicators
       // in PaletteBar.tsx).
       const isStacked = window.innerWidth < 768;
-      setPaletteMaxHeight(
-        isStacked
-          ? Math.round(window.innerHeight * 0.45)
-          : Math.max(400, window.innerHeight - 150)
-      );
+      const raw = isStacked
+        ? Math.round(window.innerHeight * 0.45)
+        : Math.max(400, window.innerHeight - 150);
+      // The 400px desktop floor assumes a viewport tall enough to spare it
+      // (true for virtually any desktop window) — a phone in landscape can
+      // have less than 400px of height to begin with, so the floor alone
+      // could make the panel taller than the screen itself. Never claim
+      // more than the viewport actually has.
+      setPaletteMaxHeight(Math.min(raw, window.innerHeight - 40));
     };
     applyPaletteHeight();
     window.addEventListener('resize', applyPaletteHeight);
