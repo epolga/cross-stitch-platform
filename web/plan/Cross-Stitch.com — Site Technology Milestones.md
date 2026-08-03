@@ -247,7 +247,44 @@ None currently planned.
 
 ## Status
 
-Future — Phase 3.
+Future — Phase 3. **Baseline measured 2026-08-03** (first step, per this
+milestone's own caution to measure before changing anything) — see below.
+No prefetch/`content-visibility` work started yet.
+
+## Baseline (2026-08-03)
+
+Measured live on `cross-stitch.com` via a real Chromium tab (Playwright),
+reading `largest-contentful-paint`/`layout-shift`/navigation-timing entries
+directly off the Performance API — **not** PageSpeed Insights/Lighthouse
+(Google's anonymous PSI API quota was exhausted for the day) or CrUX field
+data. Single unthrottled desktop run per page, not a median of several or a
+simulated slow-mobile/3G profile — a real but limited baseline; redo with
+Lighthouse (mobile, throttled) or CrUX once available for a more standard
+comparison point.
+
+| Page | TTFB | FCP | LCP | LCP element | CLS | Load event | Transfer size | Resources |
+|---|---|---|---|---|---|---|---|---|
+| `/` (homepage) | 200ms | 832ms | 832ms | `<p>` (text block) | 0 | 963ms | 34.6 KB | 95 |
+| `/Horseshoe-16-53-Free-Design.aspx` (design page) | 212ms | 296ms | 896ms | `<img>` design photo (CloudFront) | 0.001 | 2258ms | 25.2 KB | 70 |
+| `/albums` | 186ms | 276ms | 276ms | `<p>` (text block) | 0 | 375ms | 17.2 KB | 181 |
+
+Observations:
+* All three LCP values are well under the "good" 2.5s threshold and CLS is
+  effectively zero everywhere — no urgent problem visible in this baseline.
+* Homepage and `/albums` LCP element is a text paragraph, not an image —
+  `content-visibility` work should keep this in mind (the caution below
+  about not touching "the main image" doesn't fully cover these two pages;
+  double-check what text block is actually the LCP candidate before hiding
+  anything above it).
+* Design page's `loadEvent` (2258ms) is much higher than its LCP (896ms)
+  and than the other two pages' load events — worth a closer look before
+  assuming prefetch/`content-visibility` is the highest-value next step
+  there specifically.
+* Noticed in passing, not investigated: browser console showed 33 errors
+  on the design page and 18 on `/albums` during this session (vs. 0-10 on
+  the homepage across two loads) — unclear if consistent/meaningful or
+  session noise (ad/tracker-related is plausible), flagging for awareness
+  only, out of scope for this baseline pass.
 
 ## Planned work
 

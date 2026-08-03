@@ -46,18 +46,28 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-0. **Milestone S5** — differentiate the homepage "Based on your browsing"
-   personalization (`PersonalizedSection.tsx` / `/api/personalized`) beyond
-   generic embedding-similarity (currently one undifferentiated pool of up
-   to 12 nearest neighbors). Planned categories, not yet built: simpler
-   alternatives, comparable color-palette matches, larger/smaller versions
-   of the same subject. Medium priority, doesn't block anything.
-1. **Milestone S6 first step** — before any prefetch/`content-visibility`
-   work, measure current real navigation performance (PageSpeed, Core Web
-   Vitals) on homepage/design page/albums, so later changes have a real
-   baseline, per the doc's own caution.
+Nothing queued yet. S5 is done; S6's baseline is measured (see Shipped
+below) — the next S6 step would be the actual prefetch/`content-visibility`
+work itself (`web/plan/Cross-Stitch.com — Site Technology Milestones.md`),
+not yet started. Otherwise pull from Open items below.
 
 **Shipped 2026-08-03:**
+- [x] **Milestone S5 — differentiated personalization shipped.**
+  `/api/personalized` now tags each recommendation `simpler` / `larger` /
+  `smaller` / `similar-palette` relative to the viewed design, reusing
+  existing `colorBucket`/`sizeCategory`/`subject` facets (no new
+  computation). `PersonalizedSection.tsx` shows the tag as a label on the
+  thumbnail. Verified against real data (DesignID 4217). Commit `f47ede8`,
+  deployed, Health: Green.
+- [x] **Milestone S6 first step — real navigation-performance baseline
+  measured**, via a live Chromium tab (Playwright) reading Performance-API
+  entries directly on `cross-stitch.com` (PageSpeed Insights' anonymous
+  quota was exhausted for the day). Homepage LCP 832ms, design page LCP
+  896ms, `/albums` LCP 276ms; CLS ~0 everywhere — no urgent problem in this
+  baseline. Single unthrottled desktop run per page, not Lighthouse/CrUX —
+  full numbers and caveats in the milestone doc's new "Baseline" section.
+  Noted in passing, not investigated: 33 console errors on the design page
+  and 18 on `/albums` during the run (vs. 0-10 on homepage).
 - [x] **Password-reset end-to-end — confirmed working, one follow-on bug found
   and fixed.** Verified the 2026-07-28 IAM fix holds: a direct DynamoDB
   write→immediate-consume round-trip through the real `/api/auth/reset-password`
