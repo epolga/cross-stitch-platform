@@ -52,6 +52,41 @@ work itself (`web/plan/Cross-Stitch.com — Site Technology Milestones.md`),
 not yet started. Otherwise pull from Open items below.
 
 **Shipped 2026-08-03:**
+- [x] **Editor: mobile scroll affordances for canvas + palette panel, found
+  via a live report from Olga** ("на телефоне не вижу скрола" testing the
+  Black Cat design in the photo-to-cross-stitch editor). Root cause:
+  mobile browsers hide native scrollbars until actively scrolling, so an
+  oversized pattern canvas gave no hint it could be scrolled at all.
+  Iterated through a few approaches with Olga before landing on the final
+  one: a background-color fade wasn't visible over dark/matching-color
+  pattern content, so replaced with an opaque rose-colored chevron pill
+  (with a white ring so it stays legible even against a same-hue or
+  near-black patch) plus a soft shadow as secondary polish — shown/hidden
+  per actual `scrollLeft`/`scrollWidth`/`clientWidth`, all 4 edges
+  (`ConvertClient.tsx`). Verified interactively via an Artifact demo
+  (canvas colored to test both a dark patch and an accent-matching patch
+  directly under the indicator) before touching the real code.
+  Separately found while investigating (same session): the palette color
+  list (`PaletteBar.tsx`) reused the desktop side-by-side height formula
+  (`window.innerHeight - 150`) even when stacked below the canvas on
+  mobile, making the combined page ~2x viewport height. Fixed: mobile gets
+  its own ~45%-of-viewport cap with the same scroll-indicator technique
+  applied to its internal list (required switching the list from `h-full`
+  to `absolute inset-0` — a classic nested-flex height-percentage bug) and
+  clamping the previously-unconditional `minHeight` formula so it can't
+  re-exceed the new smaller `maxHeight`. A follow-up question ("what
+  happens on phone rotation?") surfaced one more real edge case: at ≥768px
+  width the layout switches to the desktop side-by-side branch, whose
+  400px floor can exceed a landscape phone's actual viewport height (e.g.
+  844×390 measured a real 400px panel against a 390px-tall screen) — fixed
+  by clamping the final value to `innerHeight - 40` regardless of branch.
+  All three fixes verified directly on production (not just locally) via
+  a live Chromium session at correct device dimensions — worth noting for
+  future sessions: this environment's real Chrome runs under 133% Windows
+  display scaling, so `browser_resize(W, H)` must be called with
+  `W*0.75, H*0.75` to land on the intended CSS-pixel viewport, discovered
+  after several confusing mismatched-viewport readings this session.
+  Commits `b6fa808`, `79d9cd1`; deployed twice, Health: Green both times.
 - [x] **Milestone S5 — differentiated personalization shipped.**
   `/api/personalized` now tags each recommendation `simpler` / `larger` /
   `smaller` / `similar-palette` relative to the viewed design, reusing
