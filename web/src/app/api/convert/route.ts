@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { convertImage, type ColorDistanceMode } from '@/lib/pattern-converter';
 import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-analysis';
-import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,18 +12,10 @@ const MIN_DIM = 10;
 const MAX_DIM = 500;
 const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
 
-// Focus.md Open item #11 — regular users always get 'cie76' (unchanged
-// behavior); a non-default value is only honored for verified admin
-// accounts, regardless of what the client sends (the dialog only shows the
-// control to admins, but this is the actual enforcement point).
-async function resolveColorDistanceMode(request: NextRequest, requested: string): Promise<ColorDistanceMode> {
-  if (!VALID_DISTANCE_MODES.has(requested) || requested === 'cie76') return 'cie76';
-  const session = await getSession(request);
-  if (!session) return 'cie76';
-  const adminEmails = (process.env.ADMIN_EMAILS || '')
-    .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-  if (!adminEmails.includes(session.email.toLowerCase())) return 'cie76';
-  return requested as ColorDistanceMode;
+// Focus.md Open item #11 — offered to every visitor (Import from Photo
+// dialog, "Thread color accuracy"), not admin-gated.
+function resolveColorDistanceMode(requested: string): ColorDistanceMode {
+  return VALID_DISTANCE_MODES.has(requested) ? (requested as ColorDistanceMode) : 'cie76';
 }
 
 export async function POST(request: NextRequest) {
@@ -62,7 +53,7 @@ export async function POST(request: NextRequest) {
       resolvedMode = modeParam as ConversionMode;
     }
 
-    const colorDistanceMode = await resolveColorDistanceMode(request, distanceModeParam);
+    const colorDistanceMode = resolveColorDistanceMode(distanceModeParam);
     const pattern = await convertImage(buffer, width, height, colors, resolvedMode, colorDistanceMode);
 
     return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode });

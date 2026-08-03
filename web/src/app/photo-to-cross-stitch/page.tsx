@@ -64,7 +64,7 @@ const structuredData = {
     'Convert any JPEG, PNG or WebP photo to a cross-stitch pattern',
     'Start from a blank canvas and design a pattern by hand, no photo required',
     'Choose stitch width and height independently',
-    'Automatic DMC thread color matching from 454 colors',
+    'Automatic DMC thread color matching from 454 colors, with a choice of quick Standard matching or closer-to-photo Better/Best Color Match accuracy modes',
     'Automatic confetti cleanup — removes stray single-color stitches after conversion, plus a manual Remove Confetti tool for later touch-ups',
     'Reduce palette to 10, 15, 20 or 25 colors',
     'Color preview and symbol grid views',
@@ -107,6 +107,11 @@ const FAQ = [
     id: 'faq-confetti',
     q: 'Does the converter clean up stray "confetti" stitches automatically?',
     a: 'Yes. Photo conversion can scatter stray, isolated single stitches ("confetti") across a pattern — a lone odd-colored cell surrounded by a different color, annoying to stitch on its own. Every pattern generated here runs an automatic confetti cleanup pass before you see the result, folding any isolated stitch into the most common color around it — no extra click needed. If manual editing reintroduces any, Chart → Remove Confetti runs the same cleanup again on demand.',
+  },
+  {
+    id: 'faq-color-accuracy',
+    q: 'Can I control how closely the thread colors match my photo?',
+    a: 'Yes. Before converting, pick a "Thread color accuracy" setting: Standard is the quick default; Better Color Match picks slightly truer-to-photo DMC shades at the same speed; Best Color Match uses the most accurate color-matching available, for photos where getting the exact shade right matters most — it just takes a bit longer to generate.',
   },
   {
     id: 'faq-pdf',
@@ -221,6 +226,13 @@ export default function PhotoToCrossStitchPage() {
               <div>
                 <p className="font-semibold text-gray-900 text-xs">Your chart on any device</p>
                 <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Keep the chart open on a tablet or phone propped beside your hoop. No printing, no paper to lose.</p>
+              </div>
+            </a>
+            <a href="#faq-color-accuracy" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
+              <span className="text-lg flex-none leading-none mt-0.5">🎯</span>
+              <div>
+                <p className="font-semibold text-gray-900 text-xs">Choose your color accuracy</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Standard is quick; Better and Best Color Match pick DMC threads even closer to your photo&apos;s real shades.</p>
               </div>
             </a>
             <a href="#faq-account" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
