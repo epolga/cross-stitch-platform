@@ -8,6 +8,8 @@ Build the Next.js app, deploy to Elastic Beanstalk, then check environment statu
 
 2. **Clean** — delete the `web/.next/` directory to avoid stale or mixed artifacts from any running dev server.
 
+2a. **Remove stray/throwaway files before building.** `eb deploy` zips and uploads the entire local working directory as-is — not just git-committed state — so any untracked scratch file left on disk (e.g. a one-off diagnostic script in `web/scripts/`) gets deployed too, and if it has a type error or other build-breaking issue, the server-side build fails, `next start` finds no valid `.next` output, and the whole app 502s (this has happened for real — see `docs/session-log/2026-08.md`, 2026-08-03 incident). Run `git status --short` in `web/`; for any untracked file that was a temporary/diagnostic script (not a real deliverable), delete it now, before building. When in doubt about whether an untracked file is meant to stay, ask rather than deploy it or delete it silently.
+
 2b. **Check static-page lastmod** — `web/src/app/sitemap.xml/route.ts` has a hand-maintained `STATIC_PAGE_LASTMOD` map (one date per static route with no DB row behind it, e.g. `/`, `/WhyCrossStitch`, `/exercises`). Check `git status`/`git diff` for changes to any of those routes' source files; if one changed, bump its date in `STATIC_PAGE_LASTMOD` to **today (this deploy's date)** before building — not the date the file was committed, since a commit can sit undeployed for a while and the deploy date is what actually matches when a crawler would see the new content. Otherwise the sitemap's `<lastmod>` for that page silently goes stale or wrong.
 
 3. **Build** — run `npm run build` from the `web/` directory. Wait for it to complete. If the build fails, stop and report the error.
@@ -20,4 +22,6 @@ Build the Next.js app, deploy to Elastic Beanstalk, then check environment statu
 
 5. **Deploy** — run `eb deploy cross-stitch-com-env-clone` from the `web/` directory. Wait for it to complete. If it fails, stop and report the error.
 
-6. **Check status** — run `eb status cross-stitch-com-env-clone` from the `web/` directory and report the Health field. If Health is not Green, fetch `eb logs cross-stitch-com-env-clone`, show the cause, and suggest next steps.
+6. **Check status** — run `eb status cross-stitch-com-env-clone` from the `web/` directory and report the Health field.
+
+7. **If Health is not Green (or the site itself returns 5xx): roll back first, investigate second.** Before this deploy, note the currently-deployed version label from `eb status` (`Deployed Version:`) so it's available to roll back to. If the new deploy leaves the environment unhealthy or the live site down, immediately redeploy that prior version — `eb deploy cross-stitch-com-env-clone --version <prior-version-label>` — and confirm the site responds again (curl the homepage) before doing anything else. Only once service is restored should the actual cause be investigated (build logs, `eb logs`, CloudWatch) — don't leave production down while debugging. This is a hard rule, not just a suggestion: a live outage always gets rolled back before it gets diagnosed.
