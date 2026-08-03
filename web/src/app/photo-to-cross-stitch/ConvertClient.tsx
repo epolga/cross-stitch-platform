@@ -182,6 +182,34 @@ export default function ConvertPage() {
   const [selection, setSelection] = useState<SelectionRect | null>(null);
   const [clipboard, setClipboard] = useState<number[][] | null>(null);
 
+  // Native scrollbars are invisible-until-scrolling on mobile (iOS/Android
+  // both do this by design), so a canvas wider/taller than the screen gives
+  // no visual hint it's scrollable at all. These edge fades are our own
+  // always-checkable affordance, independent of OS scrollbar behavior.
+  const [scrollHint, setScrollHint] = useState({ left: false, right: false, top: false, bottom: false });
+
+  useEffect(() => {
+    const el = canvasWrapperRef.current;
+    if (!el) return;
+    function updateScrollHint() {
+      if (!el) return;
+      setScrollHint({
+        left: el.scrollLeft > 1,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+        top: el.scrollTop > 1,
+        bottom: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+      });
+    }
+    updateScrollHint();
+    el.addEventListener('scroll', updateScrollHint, { passive: true });
+    const ro = new ResizeObserver(updateScrollHint);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', updateScrollHint);
+      ro.disconnect();
+    };
+  }, [grid, cellSize]);
+
   useEffect(() => {
     const el = canvasWrapperRef.current;
     if (!el) return;
@@ -215,7 +243,20 @@ export default function ConvertPage() {
 
   useEffect(() => {
     const applyPaletteHeight = () => {
-      setPaletteMaxHeight(Math.max(400, window.innerHeight - 150));
+      // Below md (768px, matches the `md:flex-row` breakpoint below) the
+      // canvas and palette stack vertically instead of sitting side by
+      // side, so the palette shouldn't claim close to the full viewport
+      // height the way it does on desktop — that made a large palette push
+      // total page height to roughly 2x the viewport (canvas + palette,
+      // both sized off innerHeight). It gets a smaller, capped,
+      // internally-scrolling area instead (see the scroll-hint indicators
+      // in PaletteBar.tsx).
+      const isStacked = window.innerWidth < 768;
+      setPaletteMaxHeight(
+        isStacked
+          ? Math.round(window.innerHeight * 0.45)
+          : Math.max(400, window.innerHeight - 150)
+      );
     };
     applyPaletteHeight();
     window.addEventListener('resize', applyPaletteHeight);
@@ -2272,9 +2313,10 @@ export default function ConvertPage() {
             )}
 
             {/* Canvas */}
+            <div className="relative flex-1 min-w-0 flex">
             <div
               ref={canvasWrapperRef}
-              className={`flex-1 overflow-auto border rounded-lg bg-gray-50 min-w-0 relative transition-colors max-h-[calc(100vh-150px)] ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
+              className={`flex-1 min-w-0 overflow-auto border rounded-lg bg-gray-50 relative transition-colors max-h-[calc(100vh-150px)] ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
               onDragOver={e => {
                 e.preventDefault();
                 if (!hasDesign && !dragOverCanvas) trackEvent('image_drop_started', {});
@@ -2363,7 +2405,42 @@ export default function ConvertPage() {
                 onMarkCell={handleMarkCell}
                 onMarkStrokeEnd={handleMarkStrokeEnd}
               />
-            </div>
+            </div>{/* end canvasWrapperRef (scrollable) */}
+            {/*
+              A translucent scrim alone isn't reliable here: the canvas
+              underneath can be any color, including near-black (e.g. the
+              Black Cat design's fur right at the edge) — a dark gradient
+              disappears against dark content exactly like a light one
+              disappears against light content. So the actual affordance is
+              an opaque rose chevron pill (fixed color, always contrasts
+              regardless of what's behind it); the gradient stays only as
+              a soft, secondary polish for the common light-background case.
+            */}
+            {scrollHint.left && (
+              <>
+                <div className="pointer-events-none absolute inset-y-0 left-0 w-8 z-20 rounded-l-lg bg-gradient-to-r from-black/25 to-transparent" />
+                <div className="pointer-events-none absolute top-1/2 left-1.5 z-20 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-rose-500 text-white text-xs shadow-md ring-2 ring-white/80">‹</div>
+              </>
+            )}
+            {scrollHint.right && (
+              <>
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-8 z-20 rounded-r-lg bg-gradient-to-l from-black/25 to-transparent" />
+                <div className="pointer-events-none absolute top-1/2 right-1.5 z-20 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-rose-500 text-white text-xs shadow-md ring-2 ring-white/80">›</div>
+              </>
+            )}
+            {scrollHint.top && (
+              <>
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-8 z-20 rounded-t-lg bg-gradient-to-b from-black/25 to-transparent" />
+                <div className="pointer-events-none absolute left-1/2 top-1.5 z-20 -translate-x-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-rose-500 text-white text-xs shadow-md ring-2 ring-white/80">︿</div>
+              </>
+            )}
+            {scrollHint.bottom && (
+              <>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 z-20 rounded-b-lg bg-gradient-to-t from-black/25 to-transparent" />
+                <div className="pointer-events-none absolute left-1/2 bottom-1.5 z-20 -translate-x-1/2 flex items-center justify-center w-6 h-6 rounded-full bg-rose-500 text-white text-xs shadow-md ring-2 ring-white/80">﹀</div>
+              </>
+            )}
+            </div>{/* end relative flex wrapper */}
             </div>{/* end canvas column */}
 
             {/* Palette column — right of canvas */}

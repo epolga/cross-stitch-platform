@@ -38,11 +38,37 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   const [editMenu, setEditMenu] = useState<EditMenu | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollHint, setScrollHint] = useState({ top: false, bottom: false });
   useImperativeHandle(ref, () => ({
     scrollTo(index: number) {
       rowRefs.current[index]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
   }));
+
+  // Same edge-hint pattern as the pattern canvas (ConvertClient.tsx): a
+  // capped-height, internally-scrolling list gives no native cue on mobile
+  // that there's more to scroll to, since the OS hides scrollbars until
+  // actively scrolling.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    function updateScrollHint() {
+      if (!el) return;
+      setScrollHint({
+        top: el.scrollTop > 1,
+        bottom: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+      });
+    }
+    updateScrollHint();
+    el.addEventListener('scroll', updateScrollHint, { passive: true });
+    const ro = new ResizeObserver(updateScrollHint);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', updateScrollHint);
+      ro.disconnect();
+    };
+  }, [palette.length, maxHeight]);
 
   useEffect(() => {
     if (blinkIndex == null) { setBlinkOn(true); return; }
@@ -60,6 +86,14 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
 
   const allVisible = hiddenColors.size === 0;
 
+  // Clamped to maxHeight when one's given, so the two never conflict — an
+  // unclamped minHeight can otherwise win over a smaller maxHeight (per the
+  // CSS spec, min-height overrides max-height), which would silently
+  // defeat the mobile-stacked-layout cap in ConvertClient.tsx for any
+  // palette with 16+ colors.
+  const naturalMinHeight = Math.min(palette.length, 16) * 22 + 180;
+  const resolvedMinHeight = maxHeight ? Math.min(naturalMinHeight, maxHeight) : naturalMinHeight;
+
   const squareBase: React.CSSProperties = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     width: 18, height: 18, flexShrink: 0,
@@ -68,7 +102,7 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch overflow-hidden" style={{ minWidth: 118, minHeight: Math.min(palette.length, 16) * 22 + 180, ...(maxHeight ? { maxHeight } : {}) }}>
+    <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch overflow-hidden" style={{ minWidth: 118, minHeight: resolvedMinHeight, ...(maxHeight ? { maxHeight } : {}) }}>
 
       {/* Active color preview */}
       <div className="flex flex-col items-center gap-1 flex-none">
@@ -123,7 +157,8 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
       )}
 
       {/* Swatches */}
-      <div className="flex flex-col gap-1 overflow-y-auto flex-1">
+      <div className="relative flex-1 min-h-0 w-full">
+      <div ref={listRef} className="absolute inset-0 flex flex-col gap-1 overflow-y-auto">
         {palette.map((c, i) => {
           const isSelected = i === selectedIndex;
           const isBlink   = i === blinkIndex && !blinkOn;
@@ -238,7 +273,20 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
             </div>
           );
         })}
-      </div>
+      </div>{/* end scrollable list */}
+      {scrollHint.top && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-6 z-20 bg-gradient-to-b from-black/20 to-transparent" />
+          <div className="pointer-events-none absolute left-1/2 top-1 z-20 -translate-x-1/2 flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] shadow-md ring-2 ring-white/80">︿</div>
+        </>
+      )}
+      {scrollHint.bottom && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 z-20 bg-gradient-to-t from-black/20 to-transparent" />
+          <div className="pointer-events-none absolute left-1/2 bottom-1 z-20 -translate-x-1/2 flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] shadow-md ring-2 ring-white/80">﹀</div>
+        </>
+      )}
+      </div>{/* end relative wrapper */}
 
       {/* Tips */}
       {palette.length > 0 && (
