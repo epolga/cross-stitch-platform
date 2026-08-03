@@ -5,11 +5,21 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { Design } from '@/app/types/design';
 import { CreateDesignUrl } from '@/lib/url-helper';
+import type { MatchReason } from '@/app/api/personalized/route';
 
 const STORAGE_KEY = 'viewed_designs';
 
+type PersonalizedDesign = Design & { matchReason?: MatchReason };
+
+const MATCH_LABELS: Record<MatchReason, string> = {
+  simpler: 'Simpler',
+  larger: 'Larger version',
+  smaller: 'Smaller version',
+  'similar-palette': 'Similar color count',
+};
+
 export default function PersonalizedSection() {
-  const [designs, setDesigns] = useState<Design[]>([]);
+  const [designs, setDesigns] = useState<PersonalizedDesign[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +34,7 @@ export default function PersonalizedSection() {
         body: JSON.stringify({ viewedIds }),
       })
         .then(r => r.ok ? r.json() : null)
-        .then((data: { designs: Design[] } | null) => {
+        .then((data: { designs: PersonalizedDesign[] } | null) => {
           if (!cancelled && data?.designs?.length) setDesigns(data.designs);
         })
         .catch(() => {});
@@ -57,6 +67,11 @@ export default function PersonalizedSection() {
                 />
               ) : (
                 <div className="w-full h-full bg-gray-100" />
+              )}
+              {design.matchReason && (
+                <span className="absolute bottom-1 left-1 right-1 truncate rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-white">
+                  {MATCH_LABELS[design.matchReason]}
+                </span>
               )}
             </div>
             <p className="mt-1 text-xs text-gray-600 leading-tight line-clamp-2 group-hover:text-rose-600 transition-colors">

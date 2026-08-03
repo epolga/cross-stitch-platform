@@ -196,15 +196,24 @@ Allow natural-language queries: "simple colorful cat", "small Christmas pattern 
 
 ## Status
 
-**Built and live — was marked "Future" here, which was stale (found and
-fixed 2026-07-26).** Core mechanism is done: `PersonalizedSection.tsx`
-renders a "Based on your browsing" strip on the homepage
-(`web/src/app/page.tsx`), backed by `POST /api/personalized`
-(`web/src/app/api/personalized/route.ts`) — no accounts, no server-side
-session, just a `viewed_designs` list in `localStorage`. Not yet done: the
-differentiated suggestion types below (simpler alternatives, palette
-matches, size variants) aren't distinct — it currently returns generic
-similarity neighbors only.
+**Done, including differentiated categories (2026-08-03).** Core mechanism
+(`PersonalizedSection.tsx` + `POST /api/personalized`) was already live; the
+remaining "differentiate beyond generic similarity" work shipped 2026-08-03
+by reusing existing derived facets instead of adding new computation:
+`colorBucket`/`sizeCategory`/`subject` (`data-access.ts`, already used
+elsewhere for filters) are now compared between each candidate and the
+viewed design it was matched against, tagging candidates `simpler`,
+`larger`/`smaller` (same `subject`, different `sizeCategory`), or
+`similar-palette` (same `colorBucket`) where applicable. `PersonalizedSection.tsx`
+shows a small label on the thumbnail when a tag applies; untagged
+(generic-similarity) candidates still render with no label, same as before.
+Deliberately labeled "Similar color count" rather than "Same palette" in
+the UI — there's no actual per-design DMC color-list data behind this
+(only `NColors`-derived buckets), so the honest claim is complexity-tier
+similarity, not literal shared colors. Verified against real data
+(`DesignID 4217`, colorBucket `few`/sizeCategory `small`/subject `animals`):
+correctly produced `similar-palette` and `larger` tags, and correctly
+produced *no* `simpler` tags since `few` is already the lowest tier.
 
 ## Goal
 
@@ -219,12 +228,14 @@ Recommend designs based on the visitor's current session — no user accounts or
   (`getSimilarIds`), round-robins across the neighbor lists so all viewed
   designs get equal influence, returns up to 12 designs
 * Rendered on the homepage only, below the fold
+* **2026-08-03:** candidates tagged `simpler` / `larger` / `smaller` /
+  `similar-palette` relative to the viewed design they matched against,
+  surfaced as a label on the thumbnail (see Status above for exact logic
+  and caveats)
 
 ## Remaining work
 
-* Suggest specifically: simpler alternatives, comparable color palettes,
-  larger/smaller versions of the same subject — today it's generic
-  embedding-similarity only, not these differentiated categories
+None currently planned.
 
 ## Priority
 
