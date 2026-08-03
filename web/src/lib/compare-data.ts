@@ -44,6 +44,7 @@ export const comparisons: ComparisonEntry[] = [
       { label: 'Pattern-quality scoring', them: '✅ FLOW Score (0-100, predicts how enjoyable a pattern is to stitch)', us: 'Not offered' },
       { label: 'Confetti cleanup (stray single-stitch removal)', them: '✅ One-click cleanup tool', us: '✅ Automatic — runs on every generated pattern, no click needed' },
       { label: 'Photo → pattern', them: '✅', us: '✅' },
+      { label: 'DMC color-matching accuracy control', them: 'Not advertised as a feature', us: '✅ Choose Standard, Better, or Best Color Match before converting', usWins: true },
       { label: 'Free pattern catalog to browse', them: '❌', us: '✅ Thousands, free', usWins: true },
       { label: 'Real (non-watermarked) PDF export', them: '$3.99/pattern or $99 lifetime — not on the free tier', us: '✅ Free right now (account required)', usWins: true },
       { label: 'Progress tracking while stitching', them: 'Not advertised as a feature', us: '✅ Free (Stitch Mode — mark cells, spotlight a color, syncs across devices)', usWins: true },
@@ -94,6 +95,7 @@ export const comparisons: ComparisonEntry[] = [
     tableRows: [
       { label: 'Platform', them: 'Windows/Mac desktop app, install required', us: '✅ Browser-based — any device, nothing to install', usWins: true },
       { label: 'Photo → pattern', them: '✅', us: '✅' },
+      { label: 'DMC color-matching accuracy control', them: 'Not advertised as a feature', us: '✅ Choose Standard, Better, or Best Color Match before converting', usWins: true },
       { label: 'Try before you buy', them: 'Free demo (limited)', us: '✅ Full converter and editor, free, no account', usWins: true },
       { label: 'Price', them: 'One-time ~£46 (regional tax varies), optional paid yearly upgrades', us: '✅ Free right now, no paid tier live yet', usWins: true },
       { label: 'Free pattern catalog to browse', them: '❌', us: '✅ Thousands, free', usWins: true },
@@ -135,6 +137,7 @@ export const comparisons: ComparisonEntry[] = [
       "Cross-stitch only, but photo-to-pattern conversion is free on the free tier — not a paid upgrade. Convert a photo, edit the result, and generate as many patterns as you like with no account; the catalog also has thousands of free, ready-to-stitch patterns to browse without using the editor at all.",
     tableRows: [
       { label: 'Photo → pattern on the free tier', them: '❌ Free tier has no photo upload — Premium only', us: '✅ Free, no account needed', usWins: true },
+      { label: 'DMC color-matching accuracy control', them: 'Not advertised as a feature', us: '✅ Choose Standard, Better, or Best Color Match before converting', usWins: true },
       { label: 'Saved charts on free tier', them: '15', us: '✅ Unlimited', usWins: true },
       { label: 'Free pattern catalog to browse', them: '❌', us: '✅ Thousands, free', usWins: true },
       { label: 'Grid size', them: 'Free: 300×300 · Premium: 1,000×1,000', us: 'Set any width/height in stitches, independently' },
@@ -176,6 +179,7 @@ export const comparisons: ComparisonEntry[] = [
       "Also converts a photo to a pattern for free, but the result opens straight into a full editor — repaint cells, change or merge colors, resize, mirror, undo — the same one used for every design in the catalog, so you're never stuck with the first automatic result.",
     tableRows: [
       { label: 'Photo → pattern', them: '✅', us: '✅' },
+      { label: 'DMC color-matching accuracy control', them: 'Not advertised as a feature', us: '✅ Choose Standard, Better, or Best Color Match before converting', usWins: true },
       { label: 'Edit the pattern after converting', them: '❌ No built-in editor', us: '✅ Full editor: repaint, resize, mirror, fill, undo', usWins: true },
       { label: 'Free pattern catalog to browse', them: '❌', us: '✅ Thousands, free', usWins: true },
       { label: 'Save and come back later', them: 'Not applicable — no accounts/editor', us: '✅ Free account, resume anytime' },

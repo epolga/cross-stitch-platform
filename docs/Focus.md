@@ -1,13 +1,14 @@
 # Focus
 
 Session-start guide — current goal, active work, and genuinely open items
-only. Resolved narrative lives in `docs/session-log/2026-07.md` (detailed
-history) and git log (what changed, when). Longer-term ideas with no
-urgency live in `web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`.
-Big-picture roadmap lives in `web/plan/Pinterest AI Agent — Milestones and
-Roadmap.md` and `web/plan/Cross-Stitch.com — Site Technology Milestones.md`.
-Split into these four files on 2026-07-26 — this file had grown to ~430
-lines of mostly-resolved history.
+only. Resolved narrative lives in `docs/session-log/2026-07.md` and
+`docs/session-log/2026-08.md` (detailed history) and git log (what
+changed, when). Longer-term ideas with no urgency live in
+`web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`. Big-picture roadmap
+lives in `web/plan/Pinterest AI Agent — Milestones and Roadmap.md` and
+`web/plan/Cross-Stitch.com — Site Technology Milestones.md`. Split into
+these four files on 2026-07-26; archived again on 2026-08-03 after
+growing back to ~510 lines.
 
 ## Current goal
 
@@ -51,298 +52,31 @@ below) — the next S6 step would be the actual prefetch/`content-visibility`
 work itself (`web/plan/Cross-Stitch.com — Site Technology Milestones.md`),
 not yet started. Otherwise pull from Open items below.
 
-**Shipped 2026-08-03:**
-- [x] **Editor: defaults to "Whole Chart" zoom on every load path** (new
-  conversion, saved pattern with no stored `cellSize`, catalog design,
-  resumed draft) instead of the old width-only `computeInitialCellSize`
-  (which never zoomed in on small designs and ignored height). Reuses the
-  same math as the existing "Whole Chart" View-menu preset
-  (`fitCellSizeToWholeChart()`); the old function is deleted, now unused.
-  Verified on both a large design (Black Cat, zooms out to fit) and a
-  small one (Horseshoe, zooms in to fill the screen — this is the actual
-  behavior change from before). Commit `3fdf9e6`, deployed, Health: Green.
-- [x] **Open item #11 (CIE76 → CIEDE2000) — admin-only experiment shipped,
-  not a default-behavior change.** Regular users unaffected (still CIE76).
-  Implemented CIEDE2000 in `pattern-converter.ts` alongside CIE76;
-  `convertImage()` takes a new `colorDistanceMode` param (`'cie76'` |
-  `'final-only'` | `'everywhere'`), enforced server-side in
-  `/api/convert/route.ts` via session + `ADMIN_EMAILS` (not just hidden
-  client-side) — Olga wants to try it herself over time before deciding
-  which to keep. Import-from-Photo dialog shows a picker only when
-  `/api/admin/me` confirms admin. Comparison script
-  `web/scripts/compare-ciede2000.ts` measured on a real sample photo:
-  `everywhere` is ~7-25x slower than `cie76` (k-means clustering calls
-  CIEDE2000 millions of times per conversion) and both CIEDE2000 modes
-  reassign ~26-29% of cells to a different (usually adjacent-tone) DMC
-  color vs. the `cie76` baseline — visually a subtle warm/cool shift, not
-  dramatic. Commit `a93f1b5`, deployed, Health: Green.
-- [x] **Editor: mobile scroll affordances for canvas + palette panel, found
-  via a live report from Olga** ("на телефоне не вижу скрола" testing the
-  Black Cat design in the photo-to-cross-stitch editor). Root cause:
-  mobile browsers hide native scrollbars until actively scrolling, so an
-  oversized pattern canvas gave no hint it could be scrolled at all.
-  Iterated through a few approaches with Olga before landing on the final
-  one: a background-color fade wasn't visible over dark/matching-color
-  pattern content, so replaced with an opaque rose-colored chevron pill
-  (with a white ring so it stays legible even against a same-hue or
-  near-black patch) plus a soft shadow as secondary polish — shown/hidden
-  per actual `scrollLeft`/`scrollWidth`/`clientWidth`, all 4 edges
-  (`ConvertClient.tsx`). Verified interactively via an Artifact demo
-  (canvas colored to test both a dark patch and an accent-matching patch
-  directly under the indicator) before touching the real code.
-  Separately found while investigating (same session): the palette color
-  list (`PaletteBar.tsx`) reused the desktop side-by-side height formula
-  (`window.innerHeight - 150`) even when stacked below the canvas on
-  mobile, making the combined page ~2x viewport height. Fixed: mobile gets
-  its own ~45%-of-viewport cap with the same scroll-indicator technique
-  applied to its internal list (required switching the list from `h-full`
-  to `absolute inset-0` — a classic nested-flex height-percentage bug) and
-  clamping the previously-unconditional `minHeight` formula so it can't
-  re-exceed the new smaller `maxHeight`. A follow-up question ("what
-  happens on phone rotation?") surfaced one more real edge case: at ≥768px
-  width the layout switches to the desktop side-by-side branch, whose
-  400px floor can exceed a landscape phone's actual viewport height (e.g.
-  844×390 measured a real 400px panel against a 390px-tall screen) — fixed
-  by clamping the final value to `innerHeight - 40` regardless of branch.
-  All three fixes verified directly on production (not just locally) via
-  a live Chromium session at correct device dimensions — worth noting for
-  future sessions: this environment's real Chrome runs under 133% Windows
-  display scaling, so `browser_resize(W, H)` must be called with
-  `W*0.75, H*0.75` to land on the intended CSS-pixel viewport, discovered
-  after several confusing mismatched-viewport readings this session.
-  Commits `b6fa808`, `79d9cd1`; deployed twice, Health: Green both times.
-- [x] **Milestone S5 — differentiated personalization shipped.**
-  `/api/personalized` now tags each recommendation `simpler` / `larger` /
-  `smaller` / `similar-palette` relative to the viewed design, reusing
-  existing `colorBucket`/`sizeCategory`/`subject` facets (no new
-  computation). `PersonalizedSection.tsx` shows the tag as a label on the
-  thumbnail. Verified against real data (DesignID 4217). Commit `f47ede8`,
-  deployed, Health: Green.
-- [x] **Milestone S6 first step — real navigation-performance baseline
-  measured**, via a live Chromium tab (Playwright) reading Performance-API
-  entries directly on `cross-stitch.com` (PageSpeed Insights' anonymous
-  quota was exhausted for the day). Homepage LCP 832ms, design page LCP
-  896ms, `/albums` LCP 276ms; CLS ~0 everywhere — no urgent problem in this
-  baseline. Single unthrottled desktop run per page, not Lighthouse/CrUX —
-  full numbers and caveats in the milestone doc's new "Baseline" section.
-  Noted in passing, not investigated: 33 console errors on the design page
-  and 18 on `/albums` during the run (vs. 0-10 on homepage).
-- [x] **Password-reset end-to-end — confirmed working, one follow-on bug found
-  and fixed.** Verified the 2026-07-28 IAM fix holds: a direct DynamoDB
-  write→immediate-consume round-trip through the real `/api/auth/reset-password`
-  endpoint succeeded cleanly. Olga's own first real attempt hit "The reset
-  link is invalid or has expired" — root cause not conclusively pinned down
-  (table was already empty by the time it was investigated; CloudWatch log
-  streaming for this environment was found to be stalled, ~80+ min behind
-  real traffic, a separate infra issue not yet followed up on), most likely
-  a stale/pre-fix link. A second real attempt through the actual site UI
-  succeeded. While testing, found and fixed a real UX bug: `ResetPasswordForm.tsx`
-  showed a static "Password has been updated" message with no next step —
-  now redirects to `/` two seconds after success. Commit `93855f3`, deployed
-  same day, `eb status` Health: Green post-deploy.
-- [x] **Ann persona — Nitka already introduced, no new work needed.** Item 1
-  below (carried from 2026-07-28) was stale: `blog-posts.ts`'s
-  `the-story-behind-black-cat` post (dated 2026-08-01) already names and
-  introduces Nitka in-depth (origin story, name meaning, present-day
-  behavior). Confirmed via grep, not re-written.
+**Shipped 2026-08-03** (full detail: `docs/session-log/2026-08.md`):
+- [x] Editor defaults to "Whole Chart" zoom on every load path (commit `3fdf9e6`).
+- [x] Open item #11 (CIE76 → CIEDE2000) shipped as a public "Thread color
+  accuracy" picker on `/photo-to-cross-stitch`, plus matching SEO content
+  (FAQ, structured data, `/compare/*` table rows) — commits `a93f1b5`, `3c9011c`.
+- [x] Editor mobile scroll affordances (canvas + palette panel) — found via
+  Olga's live phone testing; also fixed a landscape-viewport edge case —
+  commits `b6fa808`, `79d9cd1`.
+- [x] Milestone S5 — differentiated homepage personalization tags (commit `f47ede8`).
+- [x] Milestone S6 first step — real navigation-performance baseline measured (no urgent issues found).
+- [x] Password-reset end-to-end confirmed working; found+fixed a UX bug (no post-success redirect) — commit `93855f3`.
+- [x] Ann persona — confirmed Nitka already introduced (no new writing needed).
+- [x] Design-vote "Previous vote: none" — first clean recurrence check (no recurrence in ~2 days), re-check in a week or two.
+- Also found: CloudWatch log streaming for `cross-stitch-com-env-clone` appears stalled — see Open item #15.
 
-**Shipped 2026-07-28** (all 6 quick-wins from the 2026-07-27 ChatGPT-doc
-mining, plus same-day follow-ups — full detail in git log / commit messages,
-condensed here per Focus.md's own size-management rule):
-- Pattern-quality feedback widget (Yes/Mostly/No + reason) after generation,
-  logged via `editor-events.ts`; surfaced in `/admin/editor-analytics`.
-- Return-visit pattern-generation analytics event — changed same day from a
-  one-time milestone alert to firing (and emailing) every occurrence, after
-  the first trigger turned out to be Olga's own testing.
-- `web/plan/ann_story_timeline.md` created (dated log of published vs.
-  not-yet-mentioned Ann persona facts).
-- PDF forensic fingerprint — initially only landed on chart pages, fixed
-  same day to appear on every page (cover/key/notes/chart) via a shared
-  `drawFingerprint()` helper.
-- Catalog metadata consistency-check: `web/scripts/check-catalog-metadata-consistency.ts`
-  found 54 mismatches across 32 designs (DB Width/Height/NColors vs. actual
-  PDF content); `fix-catalog-metadata-mismatches.ts` applied all 32
-  (Olga: treat PDF as ground truth throughout), re-verified at 0 mismatches.
-- AI-decision framework folded into `Cross-Stitch.com — Site Technology
-  Milestones.md` as a standing "Standing protocol" section.
-- Homepage notice banner announcing the online editor (links to
-  `/photo-to-cross-stitch` for internal-link SEO).
-- New Ann blog post `how-to-turn-a-photo-into-a-cross-stitch-pattern`
-  (SEO-oriented); fixed two pre-existing blog bugs found while writing it —
-  paragraph spacing (missing `@tailwindcss/typography`) and blog posts
-  never being in `sitemap.xml` (only the `/short-stories` index was).
-- **Real bug found via a live user report (Christa,** `christabythesea@yahoo.co.uk`,
-  **"goes in circles back to the registration form") and fixed same day:**
-  `register-only/verify/route.ts` marked email `Verified` but never
-  created a session cookie, so verifying left the visitor logged out — the
-  next login-gated action bounced them back to registration. Now logs the
-  user in via the same mechanism `/api/auth/login` uses. Deployed; reply
-  sent to Christa suggesting a plain login (account was already verified
-  with a working password) rather than re-registering.
-
-Source note: these came from reviewing 7 untracked `web/plan/*_ChatGPT.md`
-files (ChatGPT-generated recommendations, not yet acted on). Their
-own priority-1 recommendation ("save/reopen projects" and "customize an
-existing catalog design") turned out to already be built (shipped
-2026-07-27, see Step 2 below) — those docs are partially stale. A
-Pinterest-pin-format suggestion in the same docs was skipped as
-out-of-scope per the 2026-07-27 Pinterest deprioritization (see
-`Pinterest AI Agent — Milestones and Roadmap.md`, Milestones 5/6b/11).
-Bigger items from the same docs
-(competitor benchmark, stitch-progress tracker, OXS import/export,
-backstitch/special stitches, anti-scraping S3/CloudFront migration, new
-SEO landing pages, retention-analytics overhaul, text-to-pattern) were
-judged too large for one session — noted but not scheduled.
-
-The catalog PDF-to-editable conversion (Steps 1 and 2 below) is complete
-and shipped (batch run finished, announcement sent) — remaining follow-ups
-(134 hard failures, DMC-data warnings, Announcement send metrics) are
-optional cleanup, not gating.
-
-**Catalog PDF-to-editable conversion (Olga's idea, 2026-07-26) — agreed plan, 2026-07-27:**
-
-1. **Step 1: get the editor's own PDF output (`/api/convert/pdf`) to a
-   quality Olga is happy with. Signed off 2026-07-27** — Olga confirmed
-   "будем считать, что сделано" after reviewing the full cycle of fixes
-   below, tested against `Stitch26_Kit.pdf`/"Evening Lake" and
-   `Stitch744_Kit.pdf`/"Fox" as references, across 1, 2, 4, 6, and 36-page
-   designs. **Next session should start on Step 2.**
-   What shipped: cover title Helvetica→Times New Roman Bold 30pt +
-   optional "by {author}" line; cover image resized from ~84%-of-page-
-   height to a contained ~40% box; Notes page recolored/refonted to match
-   (Times New Roman, brown info block, blue page-map intro), overlap
-   explanation moved to its own caption; page-map grid cells capped at a
-   fixed ~60×75pt instead of stretching to fill the page; per-chart-page
-   overlap footer reworded ("stitch it once") and enlarged to 9pt on its
-   own line. Single-page designs (Fox) specifically: chart cell size now
-   adapts to fill the page (10-30pt, was fixed 10pt) and centers both ways
-   instead of top-left-anchored; the page-map/intro-text section is
-   skipped entirely (matches the original, which shows nothing there for
-   a single page). Fallback cover thumbnail (no live `previewImage`) now
-   ports the client's own Aida+shadow+fabric-hole recipe from
-   `PatternCanvas.tsx`'s `capturePreview()`, as a tiled canvas pattern
-   (a naive per-cell/per-intersection version took 5+ minutes on a large
-   design — fixed). **Decided 2026-07-27: keep the live site's converter
-   sending a client-captured `previewImage` as the primary path — this
-   richer server-side fallback stays fallback-only** (used when no
-   capture is sent, e.g. future batch regeneration), not switched to
-   the default for live users: server-side render costs ~20s for a large
-   design, unacceptable as an always-on tax on every live PDF download
-   when the client already does this work for free.
-2. **Step 2, clarified 2026-07-27 — narrower than earlier drafts of this
-   plan: the batch run does NOT generate or regenerate any PDFs.** It
-   only needs to: (a) run the extractor across all 5000+ catalog designs
-   to produce each one's grid+palette JSON, (b) save those JSON files to
-   a separate S3 bucket, (c) add a link/button on each design's page that
-   opens that saved representation in the editor. Actual PDF
-   generation/export happens later, on demand, only if/when a user opens
-   a design in the editor and chooses to save or download it — not
-   preemptively for all 5000+ designs as part of the batch job.
-   **Built and tested end-to-end 2026-07-27** (not yet run at scale — only
-   design 744/"Fox" processed for real so far, plus a 3-design dry-run):
-   - S3 bucket `cross-stitch-editor-designs` created (us-east-1), **fully
-     private** (Block Public Access on) — Olga's call: unlike the public
-     kit-PDF bucket, this one is reachable only through the site's own
-     server. No extra IAM policy needed — the EB EC2 role
-     (`aws-elasticbeanstalk-ec2-role`) already has `AmazonS3FullAccess`.
-   - `web/scripts/batch-extract-catalog-patterns.ts` — loops
-     `DesignsByID-index` with `ScanIndexForward: false` (newest DesignID
-     first, per Olga's request), skips designs that already have
-     `EditorPatternKey` (marker attribute) unless `--force`, uploads
-     `patterns/{designId}.json` to the bucket, stamps
-     `EditorPatternKey`/`LastModifiedAt`. Flags: `--report`,
-     `--designIds=`, `--limit`, `--all`, `--dry-run`, `--force`,
-     `--concurrency` (default 3) — same shape as
-     `automation/pinterest-agent/scripts/backfill-visual-seo.ts`. Needed a
-     `withRetry` wrapper (4 attempts, exponential backoff) around every
-     DDB/S3/fetch call after two transient `ETIMEDOUT`s killed early test
-     runs — a full-catalog run makes thousands of sequential network
-     calls, so a single blip can't be allowed to abort the whole thing.
-   - New route `web/src/app/api/converter/catalog-pattern/[designId]/route.ts`
-     — the only way to read a catalog pattern's JSON: looks up the
-     design's `EditorPatternKey` via `getDesignById`, fetches it from S3
-     server-side with the app's own credentials, re-serves it to the
-     client. No direct/public S3 or CloudFront URL exists for these files.
-   - `web/src/app/types/design.ts` + `web/src/lib/data-access.ts` —
-     `Design.EditorPatternKey?: string`, mapped from the DDB attribute in
-     the same cache-building scan `SeoSubjectBlurb`/`CanonicalDesignId`
-     already go through.
-   - `ConvertClient.tsx` — new `?catalogPatternId=<designId>` URL param
-     (parallel to the existing `?pattern=<uuid>` for a user's own saved
-     patterns), fetches from the new route and loads `grid`/`palette`/
-     `title` into the editor. Deliberately does NOT set `savedPatternId`
-     — this is a read-only starting point, so hitting Save creates a new
-     pattern owned by the current user rather than overwriting the
-     catalog source.
-   - `web/src/app/designs/[designId]/page.tsx` — a second CTA button,
-     "Open this pattern in the editor", shown only when
-     `design.EditorPatternKey` is set (cloned from the existing "Turn
-     your own photo into a pattern" `EditorCTAButton`).
-   - Verified end-to-end in the browser: design 744 ("Fox") page → new
-     button → editor loads the actual 27×36/9-color pattern from S3
-     through the new route, no console errors.
-   - **Full batch run completed 2026-07-27** (`--all`, 5271 designs,
-     descending DesignID): 5136 ok / 134 failed / 364 warnings. Failure/
-     warning breakdown written to
-     `docs/web/catalog-pattern-extraction-issues.md` (commit `532bcad`).
-     Not yet investigated: the 134 hard failures (72 no-color-key-page, 44
-     no-chart-page, 17 HTTP 403, 1 HTTP 503) or the dominant warning cause
-     (3 missing DMC numbers — 779, 967, 505 — would resolve ~96% of the
-     364 warnings, per code inspection; not yet fixed or re-run).
-   - Daily editor-analytics summary now also tracks `catalog_pattern_opens`
-     (`editor_opened` events with `source=design_page_catalog`) — commit
-     `832fe15`.
-
-Parser at `web/src/lib/pdf-pattern-extractor.ts` + CLI at
-`web/scripts/extract-catalog-pattern.ts <designId>` reverse-parses a
-catalog kit PDF into the same grid+palette format `/photo-to-cross-stitch`
-uses. Tested end-to-end (parse → regenerate PDF via `/api/convert/pdf` →
-visually compare) on 3 samples spanning the size range (5/50/100 colors,
-single-page and 8/36-page charts) — all exact matches. Two debug/visual-
-check CLI scripts added 2026-07-27: `web/scripts/preview-pattern.ts`
-(renders a pattern JSON straight to PNG) and
-`web/scripts/render-pdf-from-pattern.ts` (calls the real `/api/convert/pdf`
-route handler directly, no dev server needed).
-
-**Found and fixed 2026-07-27** (deployed, commit `538a78c`): `SYMBOLS[]`
-(`web/src/lib/symbols.ts`) only has 151 distinct glyphs — any palette past
-that index used to collapse every overflow color onto a shared `'?'`
-glyph, making them indistinguishable on the chart. Added
-`symbolForIndex()`, falling back to unique plain numbers instead; fixed in
-both `pdf-pattern-extractor.ts` and `pattern-converter.ts`. Note: no
-catalog design currently in the DB actually exceeds 100 colors, so this
-specific bug couldn't be reproduced live — fixed from code inspection +
-Olga's description, not a confirmed live repro.
-
-**Found and fixed 2026-07-27** (commit `29a6cc0`, pushed+deployed):
-`parseChartPage`'s cumulative step-cursor regex didn't track PDF `q`/`Q`
-graphics-state nesting, so backstitch decoration markers (French-knot/
-direction indicators, drawn via their own "cm ... Do" inside a nested
-q/Q) were mistaken for extra grid steps and corrupted the cursor for
-every real cell after them. Confirmed via Fox1.scc: its one "black"
-cross-stitch cell was actually one of these markers — the original only
-ever uses black for backstitch there (which this converter still doesn't
-render — separate, not-yet-built feature). Fixed by tracking q/Q depth
-and only accumulating steps at the same depth as the first real one; this
-also silently resolved the unrelated-looking "N cell(s) had conflicting
-values" warning seen on the same design — same root cause.
-
-**Found and fixed 2026-07-27** (same session, following up on the "Zebra"
-DesignID 406/AlbumID 37 anomaly found while looking for 6-page test
-designs): extraction warned `PDF declares 4 chart pages but only 2 were
-found/parsed` and reconstructed at 134×91 instead of the true 134×103.
-Root cause: the loop deciding which content streams are chart pages
-gated on `doCount > 100` ("/N Do" placement count) alone — Zebra's last
-two of four chart pages (the mostly-blank bottom row) only had 39 and 58
-Do calls, below the threshold, so they were silently skipped even though
-each one carries an unambiguous `(Page N of M Position X:Y)` label. Fixed
-by checking for that label first, falling back to doCount > 100 only for
-the single-page case where no label exists at all to check. Verified: Zebra
-now reconstructs at the correct 134×103 with no warnings; Fox and Evening
-Lake re-checked clean (no regression).
-
-Full background/algorithm:
-`docs/plan/web/Catalog PDF-to-Editable Conversion — Feasibility Findings.md`.
+**Shipped 2026-07-27/07-28** (full detail: `docs/session-log/2026-07.md`):
+catalog PDF-to-editable conversion end to end (PDF-quality signoff, S3
+batch extraction of all 5271 designs, "Open in editor" button on design
+pages), three parser bugs found and fixed along the way (symbol overflow,
+backstitch-marker miscount, Zebra chart-page miscount), and 6 quick-wins
+from a ChatGPT-doc review (pattern-quality feedback widget, return-visit
+analytics, Ann story-timeline doc, PDF fingerprint on every page, catalog
+metadata consistency fix across 32 designs, homepage editor banner, new
+SEO blog post) plus a real live-user bug fix (Christa — verify-email
+didn't log the user in).
 
 ## Open items
 
@@ -407,22 +141,8 @@ Full background/algorithm:
     to the daily Lambda pipeline, gated on day-of-month === 26. Verified
     via manual local test runs only so far; first real scheduled trigger is
     **2026-08-26**.
-11. **Switch photo converter's DMC matching from CIE76 to CIEDE2000 — admin
-    experiment shipped 2026-08-03, decision pending.** CIEDE2000 now exists
-    in `pattern-converter.ts` alongside CIE76, selectable via
-    `convertImage()`'s `colorDistanceMode` param, but only a verified admin
-    account can actually invoke a non-default mode (`/api/convert/route.ts`
-    checks session + `ADMIN_EMAILS` server-side) — regular users still
-    always get CIE76, unchanged. Olga is trying it herself over time via a
-    picker in the Import-from-Photo dialog (visible to admins only) before
-    deciding whether to make one the new default. Comparison numbers
-    (`web/scripts/compare-ciede2000.ts` against a real sample photo):
-    `everywhere` mode is ~7-25x slower than `cie76` (CIEDE2000 called
-    millions of times inside k-means clustering) with both CIEDE2000 modes
-    reassigning ~26-29% of cells to a different (usually adjacent-tone) DMC
-    color — a real but subtle shift, not dramatic, in the rendered preview.
-    Next step: no code work — just Olga using the admin picker for a while,
-    then telling us which mode (if any) to make the new default.
+11. ~~Switch photo converter's DMC matching from CIE76 to CIEDE2000~~ —
+    **done 2026-08-03**, see Shipped block above / `docs/session-log/2026-08.md`.
 12. **Adopt DINOHash for near-duplicate catalog image detection** — found
     via the 2026-07-26 AI-tools-scan. Current pipeline
     (`automation/pinterest-agent/scripts/find-duplicate-designs.ts` +
@@ -507,7 +227,7 @@ Full background/algorithm:
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
-- [ ] Photo converter's DMC color matching: admin-only picker shipped 08-03, Olga to test and pick a default
+- [x] Photo converter's DMC color matching: public "Thread color accuracy" picker shipped 08-03, `cie76` stays the default
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
