@@ -555,7 +555,7 @@ export default function ConvertPage() {
     const before = strokeSnapshot.current;
     strokeSnapshot.current = null;
     if (!before || before === gridRef.current) return; // nothing changed
-    setUndoStack(s => [...s.slice(-49), { grid: before, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: before, palette: paletteRef.current }]);
     setRedoStack([]);
   }
 
@@ -570,7 +570,7 @@ export default function ConvertPage() {
       if (r >= 0 && r < newGrid.length && c >= 0 && c < newGrid[0].length)
         newGrid[r][c] = paintColor;
     }
-    setUndoStack(s => [...s.slice(-49), { grid: snapshot, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: snapshot, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     if (!hasTrackedEditingStartRef.current) {
@@ -590,7 +590,7 @@ export default function ConvertPage() {
     if (!g.length) return;
     const next = floodFill(g, row, col, selectedColor);
     if (next === g) return;
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
     if (!hasTrackedEditingStartRef.current) {
@@ -610,7 +610,7 @@ export default function ConvertPage() {
     if (!g.length || g[row][col] === -1) return;
     const next = floodFill(g, row, col, -1);
     if (next === g) return;
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(next);
     if (!hasTrackedEditingStartRef.current) {
@@ -1204,7 +1204,7 @@ export default function ConvertPage() {
     for (let r = b.rMin; r <= b.rMax; r++)
       for (let c = b.cMin; c <= b.cMax; c++)
         newGrid[r][c] = -1;
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -1225,7 +1225,7 @@ export default function ConvertPage() {
         const r = rStart + dr, c = cStart + dc;
         if (r < rows && c < cols) newGrid[r][c] = clipboard[dr][dc];
       }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     // Move selection to cover the pasted area
@@ -1248,7 +1248,7 @@ export default function ConvertPage() {
       for (let c = b.cMin; c <= b.cMax; c++) row.push(g[r]?.[c] ?? -1);
       newGrid.push(row);
     }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -1260,7 +1260,7 @@ export default function ConvertPage() {
     if (!result.changed) return;
     // Grid dimensions and cell coordinates are unchanged (unlike resize/crop) —
     // stitch progress stays valid, no need to clear it.
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(result.grid);
   }
@@ -1278,7 +1278,7 @@ export default function ConvertPage() {
     } else {
       for (const row of newGrid) row.reverse();
     }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
   }
@@ -1298,7 +1298,7 @@ export default function ConvertPage() {
     } else {
       newGrid.reverse();
     }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
   }
@@ -1311,7 +1311,7 @@ export default function ConvertPage() {
     const rows = g.length, cols = g[0].length;
     const b = selectionBounds();
 
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
 
     if (!b) {
@@ -1485,7 +1485,7 @@ export default function ConvertPage() {
     if (!g.length) return;
     const b = selectionBounds();
     if (!b) {
-      setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
+      setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
       updateGrid(fn(g));
       return;
     }
@@ -1506,7 +1506,7 @@ export default function ConvertPage() {
         const r = b.rMin + dr, c = b.cMin + dc;
         if (r < rows && c < cols) newGrid[r][c] = rotated[dr][dc];
       }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]); setRedoStack([]);
     updateGrid(newGrid);
     setSelection({ r0: b.rMin, c0: b.cMin,
       r1: Math.min(b.rMin + rotated.length - 1, rows - 1),
@@ -1541,7 +1541,7 @@ export default function ConvertPage() {
     if (idx === null) return;
     const alreadyUsed = paletteRef.current.some((p, i) => i !== idx && p.symbol === symbol);
     if (alreadyUsed) return;
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette(paletteRef.current.map((p, i) => i === idx ? { ...p, symbol } : p));
     setSymbolPickerIndex(null);
@@ -1550,7 +1550,7 @@ export default function ConvertPage() {
   function handleChangeColor(dmcColor: DmcColor) {
     const idx = colorPickerIndex;
     if (idx === null) return;
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette(paletteRef.current.map((p, i) =>
       i === idx ? { ...p, ...dmcColor } : p
@@ -1564,7 +1564,7 @@ export default function ConvertPage() {
     const usedSymbols = new Set(pal.map(p => p.symbol));
     const symbol = SYMBOLS.find(s => !usedSymbols.has(s)) ?? '?';
     const newEntry: PatternPalette = { ...dmcColor, symbol, stitchCount: 0 };
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette([...pal, newEntry]);
     setSelectedColor(pal.length);
@@ -1609,7 +1609,7 @@ export default function ConvertPage() {
       row.map(ci => (ci < 0 ? ci : oldToNew[ci]))
     );
 
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette(newPal);
     updateGrid(newGrid);
@@ -1656,7 +1656,7 @@ export default function ConvertPage() {
       newHidden.add(ci > index ? ci - 1 : ci);
     }
 
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette(finalPal);
     updateGrid(finalGrid);
@@ -1700,7 +1700,7 @@ export default function ConvertPage() {
       newHidden.add(ci > sourceIdx ? ci - 1 : ci);
     }
 
-    setUndoStack(s => [...s.slice(-49), snap()]);
+    setUndoStack(s => [...s.slice(-99), snap()]);
     setRedoStack([]);
     updatePalette(finalPal);
     updateGrid(finalGrid);
@@ -1713,7 +1713,7 @@ export default function ConvertPage() {
     const g = gridRef.current;
     if (!g.length) return;
     const blank = g.map(r => r.map(() => -1));
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(blank);
   }
@@ -1760,7 +1760,7 @@ export default function ConvertPage() {
         })
       );
     }
-    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
     setRedoStack([]);
     updateGrid(newGrid);
     setSelection(null);
@@ -1963,7 +1963,7 @@ export default function ConvertPage() {
                     const next = sizeToDesign(g);
                     if (!next) return;
                     clearStitchProgress();
-                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+                    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
                     setRedoStack([]);
                     updateGrid(next);
                     setSelection(null);
@@ -1986,7 +1986,7 @@ export default function ConvertPage() {
                     let ni = 0;
                     for (let i = 0; i < palette.length; i++) if (used.has(i)) remap[i] = ni++;
                     const newGrid = g.map(row => row.map(ci => (ci >= 0 ? remap[ci] ?? -1 : -1)));
-                    setUndoStack(s => [...s.slice(-49), { grid: g, palette: paletteRef.current }]);
+                    setUndoStack(s => [...s.slice(-99), { grid: g, palette: paletteRef.current }]);
                     setRedoStack([]);
                     updatePalette(newPalette);
                     updateGrid(newGrid);

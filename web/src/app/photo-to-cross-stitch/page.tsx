@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { buildCanonicalUrl } from '@/lib/url-helper';
 import { stitchesToSize } from '@/lib/fabric-size';
+import dmcColors from '@/data/dmc-colors.json';
 import ConvertClient from './ConvertClient';
 import HeroCta from './HeroCta';
 
@@ -64,7 +65,7 @@ const structuredData = {
     'Convert any JPEG, PNG or WebP photo to a cross-stitch pattern',
     'Start from a blank canvas and design a pattern by hand, no photo required',
     'Choose stitch width and height independently',
-    'Automatic DMC thread color matching from 454 colors, with a choice of quick Standard matching or closer-to-photo Better/Best Color Match accuracy modes',
+    `Automatic DMC thread color matching from ${dmcColors.length} colors, with a choice of quick Standard matching or closer-to-photo Better/Best Color Match accuracy modes`,
     'Automatic confetti cleanup — removes stray single-color stitches after conversion, plus a manual Remove Confetti tool for later touch-ups',
     'Reduce palette to 10, 15, 20 or 25 colors',
     'Color preview and symbol grid views',
@@ -101,7 +102,7 @@ const FAQ = [
   {
     id: 'faq-colors',
     q: 'Which DMC colors will be used?',
-    a: 'The converter picks the closest DMC floss color from a library of 454 standard shades for each part of your photo. If you set a color limit, the rarest shades are swapped for the nearest remaining one until your chosen number of colors is reached.',
+    a: `The converter picks the closest DMC floss color from a library of ${dmcColors.length} standard shades for each part of your photo. If you set a color limit, the rarest shades are swapped for the nearest remaining one until your chosen number of colors is reached.`,
   },
   {
     id: 'faq-confetti',

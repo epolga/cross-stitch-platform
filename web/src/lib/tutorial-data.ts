@@ -188,7 +188,7 @@ export const tutorials: TutorialGuide[] = [
       },
       {
         heading: 'Undo and redo',
-        paragraphs: ['Ctrl+Z undoes up to 50 steps; Ctrl+Y (or Ctrl+Shift+Z) redoes. Each pencil stroke, fill, or shape counts as a single undo step, not each individual cell.'],
+        paragraphs: ['Ctrl+Z undoes up to 100 steps; Ctrl+Y (or Ctrl+Shift+Z) redoes. Each pencil stroke, fill, or shape counts as a single undo step, not each individual cell.'],
       },
     ],
     faq: [
@@ -202,10 +202,10 @@ export const tutorials: TutorialGuide[] = [
       },
       {
         q: 'How many undo steps are available?',
-        a: 'Up to 50 steps back, via Ctrl+Z.',
+        a: 'Up to 100 steps back, via Ctrl+Z.',
       },
     ],
-    updatedDate: '2026-07-30',
+    updatedDate: '2026-08-04',
   },
   {
     slug: 'selecting-copying-resizing',

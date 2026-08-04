@@ -73,7 +73,7 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
                   <Li icon="✏️"><b>Pen</b> — click cells to paint them with the active color. Click the <b>▾</b> arrow to switch between Point, Line, Rectangle, and Ellipse shapes. Drag the <b>Pen size</b> slider to paint multiple stitches at once.</Li>
                   <Li icon="◻"><b>Pen Eraser</b> (inside the Pen ▾ menu) — erases individual stitches. Same shapes available.</Li>
                   <Li icon="🪣"><b>Fill</b> — click any cell to fill its whole connected area with the active color. Great for recoloring large regions. Use <b>Erase Fill</b> (Pen ▾ menu) to clear a region instead.</Li>
-                  <Li icon="↩"><b>Undo / Redo</b> — undo up to 50 steps with Ctrl+Z, redo with Ctrl+Y.</Li>
+                  <Li icon="↩"><b>Undo / Redo</b> — undo up to 100 steps with Ctrl+Z, redo with Ctrl+Y.</Li>
                 </ul>
               </Section>
 
