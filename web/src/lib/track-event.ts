@@ -13,11 +13,22 @@ export function trackEvent(name: string, params?: Record<string, unknown>) {
   }
 }
 
+// Some in-app browsers (e.g. Facebook/Instagram's iOS WebView) omit
+// crypto.randomUUID even on otherwise-current iOS versions — this only
+// needs to be a unique-enough session grouping key, not cryptographically
+// secure, so a Math.random fallback is fine when the real API is missing.
+function makeSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function getSessionId(): string {
   if (typeof window === 'undefined') return '';
   let sid = sessionStorage.getItem('editor_session_id');
   if (!sid) {
-    sid = crypto.randomUUID();
+    sid = makeSessionId();
     sessionStorage.setItem('editor_session_id', sid);
   }
   return sid;
