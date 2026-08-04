@@ -4,9 +4,9 @@ import { buildCanonicalUrl } from '@/lib/url-helper';
 import dmcColors from '@/data/dmc-colors.json';
 import DmcColorChartClient from './DmcColorChartClient';
 
-const TITLE = 'DMC Color Chart — All 452 DMC Thread Colors';
+const TITLE = `DMC Color Chart — All ${dmcColors.length} DMC Thread Colors`;
 const DESCRIPTION =
-  'Browse and search all 452 DMC embroidery floss colors with swatches, names, and hex codes. ' +
+  `Browse and search all ${dmcColors.length} DMC embroidery floss colors with swatches, names, and hex codes. ` +
   'Used automatically by our free photo-to-cross-stitch pattern maker to match your photo to real DMC thread.';
 
 export const metadata: Metadata = {
