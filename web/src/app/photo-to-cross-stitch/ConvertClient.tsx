@@ -163,6 +163,7 @@ export default function ConvertPage() {
   const [grid, setGrid] = useState<number[][]>(blankGrid);
   const gridRef = useRef<number[][]>(grid);
   const hasDesign = useMemo(() => grid.some(row => row.some(c => c !== -1)), [grid]);
+  const [fullscreen, setFullscreen] = useState(false);
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('simulation');
@@ -171,6 +172,7 @@ export default function ConvertPage() {
   const [penWidth, setPenWidth] = useState(1);
   const [cellSize, setCellSize] = useState(12);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const preFullscreenCellSize = useRef<number | null>(null);
   const canvasHandle    = useRef<PatternCanvasHandle>(null);
   const paletteBarRef = useRef<PaletteBarHandle>(null);
   const [paletteMaxHeight, setPaletteMaxHeight] = useState<number | undefined>(undefined);
@@ -324,6 +326,38 @@ export default function ConvertPage() {
     document.addEventListener('keydown', onKey, { capture: true });
     return () => document.removeEventListener('keydown', onKey, { capture: true });
   }, [undoStack, redoStack, selection, clipboard]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setFullscreen(false);
+    }
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [fullscreen]);
+
+  // Fullscreen fixes the editor to the viewport, but the canvas itself still
+  // rendered at whatever pixel size fit the old (much narrower) in-page
+  // layout — nothing recomputed it, so most of the newly available space
+  // just sat empty. Re-fit to the now-much-bigger wrapper on entry, restore
+  // whatever zoom the user had on exit. Double rAF: the wrapper's new
+  // fixed-inset-0 size isn't in the layout yet on the same frame as the
+  // state update that triggered this effect.
+  useEffect(() => {
+    if (fullscreen) {
+      preFullscreenCellSize.current = cellSize;
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setCellSize(fitCellSizeToWholeChart()));
+      });
+      return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(raf2); };
+    }
+    if (preFullscreenCellSize.current != null) {
+      setCellSize(preFullscreenCellSize.current);
+      preFullscreenCellSize.current = null;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullscreen]);
 
   // Handles Ctrl/Cmd+V for both cases — an image from the OS clipboard
   // (screenshot, copied photo, etc.), which goes to the import dialog same
@@ -1816,10 +1850,12 @@ export default function ConvertPage() {
     <div className="space-y-6">
 
       {/* Editor */}
-      <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <section className={fullscreen
+        ? 'fixed inset-0 z-40 bg-white p-4 overflow-y-auto flex flex-col'
+        : 'bg-white rounded-xl border border-gray-200 shadow-sm p-6'}>
 
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+          <div className="flex-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-gray-900">Cross-Stitch Pattern Editor</h2>
@@ -1858,6 +1894,14 @@ export default function ConvertPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setFullscreen(f => !f)}
+                title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fill the whole screen with the editor'}
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {fullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen'}
+              </button>
               <div className="relative">
                 <button
                   type="button"
@@ -1909,9 +1953,9 @@ export default function ConvertPage() {
             </div>
           </div>
           {!savedPatternId && hasDesign && (
-            <p className="mt-1 text-xs text-gray-400">💾 Save your pattern to a free account to come back and finish editing later.</p>
+            <p className="flex-none mt-1 text-xs text-gray-400">💾 Save your pattern to a free account to come back and finish editing later.</p>
           )}
-          {downloadError && <p className="mt-1 text-xs text-red-600">{downloadError}</p>}
+          {downloadError && <p className="flex-none mt-1 text-xs text-red-600">{downloadError}</p>}
 
           {/* Menu bar */}
           {(() => {
@@ -2070,22 +2114,25 @@ export default function ConvertPage() {
                 ],
               },
             ];
-            return <MenuBar menus={menus} />;
+            return <div className="flex-none"><MenuBar menus={menus} /></div>;
           })()}
 
-          <div className="mb-4" />
+          <div className="flex-none mb-4" />
 
           {/* Editor: sidebar + canvas — stacked on narrow screens (palette's
               fixed min-width otherwise squeezes the canvas/toolbar column
-              down to almost nothing), side by side from md up */}
-          <div className="flex flex-col md:flex-row gap-3">
+              down to almost nothing), side by side from md up.
+              flex-1 min-h-0 + overflow-y-auto so, in fullscreen mode, this
+              row absorbs extra/deficit vertical space and scrolls internally
+              instead of squeezing the header/menu bar rows above it. */}
+          <div className={fullscreen ? 'flex flex-col md:flex-row gap-3 flex-1 min-h-0 overflow-y-auto' : 'flex flex-col md:flex-row gap-3'}>
 
             {/* Canvas column */}
-            <div className="flex-1 flex flex-col gap-2 min-w-0">
+            <div className="flex-1 flex flex-col gap-2 min-w-0 min-h-0">
 
               {/* Draw toolbar — single row; pen/eraser cell is internally split.
                   Scrolls horizontally on narrow screens instead of clipping. */}
-              <div className="flex items-start flex-nowrap gap-1 px-1 pb-1 border-b border-gray-100 overflow-x-auto">
+              <div className="flex-none flex items-start flex-nowrap gap-1 px-1 pb-1 border-b border-gray-100 overflow-x-auto">
 
                 {!stitchMode && <>
 
@@ -2401,10 +2448,10 @@ export default function ConvertPage() {
             )}
 
             {/* Canvas */}
-            <div className="relative flex-1 min-w-0 flex">
+            <div className="relative flex-1 min-w-0 min-h-0 flex">
             <div
               ref={canvasWrapperRef}
-              className={`flex-1 min-w-0 overflow-auto border rounded-lg bg-gray-50 relative transition-colors max-h-[calc(100vh-150px)] ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
+              className={`flex-1 min-w-0 overflow-auto border rounded-lg bg-gray-50 relative transition-colors ${fullscreen ? 'min-h-0' : 'max-h-[calc(100vh-150px)]'} ${dragOverCanvas ? 'border-rose-400 bg-rose-50' : 'border-gray-200'}`}
               onDragOver={e => {
                 e.preventDefault();
                 if (!hasDesign && !dragOverCanvas) trackEvent('image_drop_started', {});

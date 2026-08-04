@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const PATTERN_ID = 'cccccccc-0000-0000-0000-000000000001';
 
@@ -13,7 +13,7 @@ const fakePattern = {
   ownerID: 'test-user',
 };
 
-async function loadPattern(page: Parameters<Parameters<typeof test>[1]>[0]) {
+async function loadPattern(page: Page) {
   await page.route(`/api/converter/patterns/${PATTERN_ID}`, route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fakePattern) }),
   );
@@ -21,7 +21,7 @@ async function loadPattern(page: Parameters<Parameters<typeof test>[1]>[0]) {
   await expect(page.getByText('Mirror Test')).toBeVisible({ timeout: 10_000 });
 }
 
-async function openMirrorRight(page: Parameters<Parameters<typeof test>[1]>[0]) {
+async function openMirrorRight(page: Page) {
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.locator('button').filter({ hasText: /^Mirror/ }).hover();
   await page.getByRole('button', { name: 'Right', exact: true }).click();
