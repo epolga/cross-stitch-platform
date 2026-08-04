@@ -362,6 +362,7 @@ export default function ConvertPage() {
             const file = item.getAsFile();
             if (!file) continue;
             e.preventDefault();
+            if (hasDesign && !window.confirm('Replace your current design with a new photo?')) return;
             trackEvent('image_paste_started', {});
             setImportInitialFile(file);
             setShowImportDialog(true);
@@ -372,7 +373,7 @@ export default function ConvertPage() {
     }
     document.addEventListener('paste', onPaste);
     return () => document.removeEventListener('paste', onPaste);
-  }, [clipboard, selection]);
+  }, [clipboard, selection, hasDesign]);
 
   const [showResizeDialog, setShowResizeDialog] = useState(false);
   const [mirrorDialog, setMirrorDialog] = useState<MirrorDirection | null>(null);
@@ -723,6 +724,7 @@ export default function ConvertPage() {
 
   useEffect(() => {
     async function handler() {
+      if (hasDesign && !window.confirm('Replace your current design with a new photo?')) return;
       try {
         const resp = await fetch('/sample-photo.jpg');
         const blob = await resp.blob();
@@ -735,7 +737,7 @@ export default function ConvertPage() {
     }
     window.addEventListener('openSampleImage', handler);
     return () => window.removeEventListener('openSampleImage', handler);
-  }, []);
+  }, [hasDesign]);
 
   // Auto-load pattern from ?pattern=<id> URL param on mount
   useEffect(() => {
@@ -2057,7 +2059,7 @@ export default function ConvertPage() {
               {
                 label: 'Import',
                 items: [
-                  { type: 'item', label: 'From Photo…', onClick: () => setShowImportDialog(true) },
+                  { type: 'item', label: hasDesign ? 'Redo from Photo…' : 'From Photo…', onClick: () => setShowImportDialog(true) },
                 ],
               },
               {
@@ -2412,6 +2414,7 @@ export default function ConvertPage() {
               onDrop={e => {
                 e.preventDefault();
                 setDragOverCanvas(false);
+                if (hasDesign && !window.confirm('Replace your current design with a new photo?')) return;
                 const file = e.dataTransfer.files[0];
                 if (file?.type.startsWith('image/')) {
                   setImportInitialFile(file);
@@ -2585,8 +2588,10 @@ export default function ConvertPage() {
       <ImportFromPhotoDialog
         open={showImportDialog}
         initialFile={importInitialFile}
-        onClose={() => { setShowImportDialog(false); setImportInitialFile(null); }}
+        onClose={() => setShowImportDialog(false)}
         onImport={handleImport}
+        onRemoveFile={() => setImportInitialFile(null)}
+        hasExistingDesign={hasDesign}
       />
 
       <HelpDialog

@@ -33,9 +33,19 @@ interface Props {
   initialFile?: File | null;
   onClose: () => void;
   onImport: (data: ConvertedPattern, paddedGrid: number[][]) => void;
+  // Called when the photo is explicitly cleared (Load New, or Cancel before
+  // any design exists) — lets the parent forget initialFile too, so a
+  // cleared photo can't resurrect itself the next time this dialog opens.
+  onRemoveFile?: () => void;
+  // Whether the editor already has a design. Drives both the main button's
+  // label (Generate vs Redo) and whether Cancel/× is destructive: with no
+  // design yet, canceling clears the picked photo (nothing to preserve);
+  // once a design exists, this photo IS that design's source — Cancel just
+  // closes and leaves it in place, only "Load New" replaces it.
+  hasExistingDesign?: boolean;
 }
 
-export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport }: Props) {
+export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport, onRemoveFile, hasExistingDesign }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [patWidth, setPatWidth] = useState(100);
   const [patHeight, setPatHeight] = useState(100);
@@ -121,6 +131,25 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
     setAnalyzing(false);
     selectedFile.current = null;
     if (fileRef.current) fileRef.current.value = '';
+    onRemoveFile?.();
+  }
+
+  // The "Load New" button: clears the current photo AND immediately opens
+  // the file picker — unlike a bare removeFile(), this one is an explicit
+  // "replace it" action, so there's no reason to make the user click the
+  // (now-empty) dropzone as a separate second step.
+  function loadNew() {
+    removeFile();
+    fileRef.current?.click();
+  }
+
+  // Cancel/× only clears the photo when there's no design yet to keep it
+  // "as" — once a design exists, this photo is that design's current
+  // source, so canceling just closes without touching it. Load New is the
+  // only way to replace it at that point.
+  function handleCancel() {
+    if (!hasExistingDesign) removeFile();
+    onClose();
   }
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -194,12 +223,11 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
           if (or < patHeight && oc < patWidth) paddedGrid[or][oc] = data.grid[r][c];
         }
 
+      // Deliberately does NOT clear previewUrl/selectedFile — this photo is
+      // now the current design's source. Reopening the dialog shows it
+      // again (ready for Redo with different settings); Load New is the
+      // explicit action to replace it.
       onImport(data, paddedGrid);
-      setPreviewUrl(null);
-      setAnalysis(null);
-      selectedFile.current = null;
-      setAspectRatio(null);
-      if (fileRef.current) fileRef.current.value = '';
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Conversion failed');
       trackEvent('editor_error', { errorCode: 'conversion_failed', step: 'pattern_generation' });
@@ -213,12 +241,12 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
   const detectedLabel = analysis ? TYPE_LABELS[analysis.type] : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleCancel}>
       <div className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-base font-semibold text-gray-900">Import from Photo</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
+          <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
         <p className="text-xs text-gray-500 mb-4">Upload any photo and I&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
 
@@ -249,12 +277,9 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
           )}
         </div>
 
-        {/* Remove + type badge row */}
-        {previewUrl && (
+        {/* Type badge row */}
+        {previewUrl && (analyzing || detectedLabel) && (
           <div className="flex items-center gap-2 mb-3">
-            <button type="button" onClick={removeFile}
-              className="text-xs text-gray-400 hover:text-gray-600"
-            >Remove photo</button>
             {analyzing && (
               <span className="text-xs text-gray-400">Analysing…</span>
             )}
@@ -403,12 +428,26 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2">
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={loadNew} disabled={!previewUrl}
+            title={previewUrl ? 'Remove this photo and pick a different one' : 'No photo loaded yet'}
+            className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:text-gray-400"
+          >Load New</button>
+          <button type="button" onClick={handleCancel}
             className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
           >Cancel</button>
-          <button type="button" onClick={convert} disabled={!previewUrl || loading}
-            className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >{loading ? 'Converting…' : 'Generate pattern'}</button>
+          {hasExistingDesign && !previewUrl ? (
+            // A design exists but this session has no photo tied to it (e.g.
+            // after Resuming a draft — drafts don't carry the source photo,
+            // since File objects can't be saved to localStorage). Nothing to
+            // (re)generate — this just gets out of the way.
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 transition-colors"
+            >Continue</button>
+          ) : (
+            <button type="button" onClick={convert} disabled={!previewUrl || loading}
+              className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >{loading ? (hasExistingDesign ? 'Redoing…' : 'Converting…') : (hasExistingDesign ? 'Redo' : 'Generate pattern')}</button>
+          )}
         </div>
       </div>
     </div>
