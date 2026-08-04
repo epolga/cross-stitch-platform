@@ -177,6 +177,8 @@ export default function ConvertPage() {
   const [fillMode, setFillMode] = useState<FillMode>('flood');
   const [showPencilMenu, setShowPencilMenu] = useState(false);
   const pencilBtnRef = useRef<HTMLDivElement>(null);
+  const [showTransformMenu, setShowTransformMenu] = useState(false);
+  const transformBtnRef = useRef<HTMLDivElement>(null);
   const [selectedColor, setSelectedColor] = useState(0);
   const strokeSnapshot = useRef<number[][] | null>(null);
   const [selection, setSelection] = useState<SelectionRect | null>(null);
@@ -275,6 +277,15 @@ export default function ConvertPage() {
     document.addEventListener('mousedown', onOut);
     return () => document.removeEventListener('mousedown', onOut);
   }, [showPencilMenu]);
+
+  useEffect(() => {
+    if (!showTransformMenu) return;
+    function onOut(e: MouseEvent) {
+      if (!transformBtnRef.current?.contains(e.target as Node)) setShowTransformMenu(false);
+    }
+    document.addEventListener('mousedown', onOut);
+    return () => document.removeEventListener('mousedown', onOut);
+  }, [showTransformMenu]);
 
   const handleSaveRef = useRef<() => void>(() => {});
 
@@ -2160,13 +2171,13 @@ export default function ConvertPage() {
 
                   {/* Size slider — spans full width of the pen/eraser cell */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-gray-500 flex-none">Size</span>
-                    <span className="text-xs font-mono text-gray-800 w-3 text-center flex-none">{penWidth}</span>
+                    <span className="text-xs text-gray-500 flex-none">Pen size</span>
+                    <span className="text-xs font-mono text-gray-800 w-8 text-center flex-none">{penWidth}×{penWidth}</span>
                     <input
                       type="range" min={1} max={9} value={penWidth}
                       onChange={e => setPenWidth(parseInt(e.target.value))}
                       className="w-24 accent-rose-500"
-                      title={`Size ${penWidth} — paints a ${penWidth}×${penWidth} block of stitches at once`}
+                      title={`Pen size ${penWidth}×${penWidth} — paints a ${penWidth}×${penWidth} block of stitches at once`}
                     />
                   </div>
                 </div>
@@ -2245,6 +2256,55 @@ export default function ConvertPage() {
                     className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400"
                   ><span>⎙</span><span>Paste</span></button>
                 )}
+
+                {/* Transform — flip/rotate/mirror, previously Edit-menu-only */}
+                <div ref={transformBtnRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowTransformMenu(s => !s)}
+                    disabled={!hasDesign}
+                    title="Transform — flip, rotate, or mirror the selection (or whole design if none)"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors bg-white text-gray-700 border-gray-200 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span>⟳</span><span>Transform</span><span className="opacity-60">▾</span>
+                  </button>
+                  {showTransformMenu && (
+                    <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40">
+                      {[
+                        { label: 'Flip Horizontal', onClick: handleFlipH },
+                        { label: 'Flip Vertical', onClick: handleFlipV },
+                      ].map(({ label, onClick }) => (
+                        <button key={label} type="button"
+                          onClick={() => { onClick(); setShowTransformMenu(false); }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >{label}</button>
+                      ))}
+                      <div className="border-t border-gray-100 my-1" />
+                      {[
+                        { label: 'Rotate 90° Right', onClick: () => applyRotation(rot90CW) },
+                        { label: 'Rotate 90° Left', onClick: () => applyRotation(rot90CCW) },
+                        { label: 'Rotate 180°', onClick: () => applyRotation(rot180) },
+                      ].map(({ label, onClick }) => (
+                        <button key={label} type="button"
+                          onClick={() => { onClick(); setShowTransformMenu(false); }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >{label}</button>
+                      ))}
+                      <div className="border-t border-gray-100 my-1" />
+                      {([
+                        { label: 'Mirror Right', dir: 'right' },
+                        { label: 'Mirror Left', dir: 'left' },
+                        { label: 'Mirror Top', dir: 'top' },
+                        { label: 'Mirror Bottom', dir: 'bottom' },
+                      ] as const).map(({ label, dir }) => (
+                        <button key={label} type="button"
+                          onClick={() => { setMirrorDialog(dir); setShowTransformMenu(false); }}
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >{label}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 </>}
 

@@ -80,9 +80,8 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
               <Section title="4. Selecting and transforming">
                 <ul className="space-y-1.5 list-none">
                   <Li icon="▦"><b>Select</b> — drag on the canvas to select a rectangular area. Then use <b>Cut</b>, <b>Copy</b> (Ctrl+C), <b>Paste</b> (Ctrl+V), or <b>Crop</b>.</Li>
-                  <Li icon="↔↕"><b>Edit → Flip → Horizontal / Vertical</b> — reverses the design in place, same size. Applies to the selection only if one exists, otherwise the whole design.</Li>
-                  <Li icon="↻↺"><b>Edit → Rotate → 90° Right / 90° Left / 180°</b> — rotates the design in place. Applies to selection or whole design.</Li>
-                  <Li icon="⧉"><b>Edit → Mirror → Right / Left / Top / Bottom</b> — different from Flip: adds a mirrored copy of the design onto one side, growing (or cropping) the canvas, so the result is symmetric across that edge. Choose whether the mirror axis sits at the design&apos;s edge or its center.</Li>
+                  <Li icon="⟳"><b>Transform ▾</b> (toolbar button next to Select, also under the Edit menu) — <b>Flip Horizontal / Vertical</b> reverses the design in place, same size; <b>Rotate 90° Right / Left / 180°</b> rotates it in place. Both apply to the selection only if one exists, otherwise the whole design.</Li>
+                  <Li icon="⧉"><b>Mirror</b> (same Transform ▾ menu) — different from Flip: adds a mirrored copy of the design onto one side, growing (or cropping) the canvas, so the result is symmetric across that edge. Choose whether the mirror axis sits at the design&apos;s edge or its center.</Li>
                 </ul>
               </Section>
 
