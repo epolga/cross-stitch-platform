@@ -14,6 +14,7 @@ interface Props {
   hiddenColors: Set<number>;
   maxHeight?: number;
   remainingCounts?: number[]; // stitches left per palette entry — shown only in Stitch Mode
+  totalCounts?: number[]; // live total stitches per palette entry, recomputed from the grid
   onSelect: (index: number) => void;
   onBlink: (index: number) => void;
   onToggleColor: (index: number) => void;
@@ -30,7 +31,7 @@ type EditMenu = { index: number; top: number; right: number };
 
 const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   palette, selectedIndex, blinkIndex = null,
-  hiddenColors, maxHeight, remainingCounts, onSelect, onBlink, onToggleColor, onToggleAll,
+  hiddenColors, maxHeight, remainingCounts, totalCounts, onSelect, onBlink, onToggleColor, onToggleAll,
   onChangeColor, onChangeSymbol, onMoveTo, onMergeInto, onDeleteColor, onAddColor,
 }: Props, ref) {
   const sel = palette[selectedIndex];
@@ -193,7 +194,7 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
 
               {/* Color square */}
               <span
-                title={`DMC ${c.number} — ${c.name} (${c.stitchCount} stitches) — click to select`}
+                title={`DMC ${c.number} — ${c.name} (${totalCounts?.[i] ?? c.stitchCount} stitches) — click to select`}
                 onClick={handleClick}
                 style={{
                   ...squareBase,
@@ -221,14 +222,22 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
                 }
               </span>
 
-              {/* Remaining-stitches badge (Stitch Mode only) */}
-              {remainingCounts && (
+              {/* Stitch-count badge: remaining/total while stitching, live total otherwise */}
+              {remainingCounts ? (
                 <span
-                  title={`${remainingCounts[i] ?? c.stitchCount} of ${c.stitchCount} stitches left`}
+                  title={`${remainingCounts[i] ?? c.stitchCount} of ${totalCounts?.[i] ?? c.stitchCount} stitches left`}
                   className="flex-none text-[9px] font-mono text-gray-500 px-1"
                   style={{ minWidth: 20, textAlign: 'right' }}
                 >
                   {remainingCounts[i] ?? c.stitchCount}
+                </span>
+              ) : totalCounts && (
+                <span
+                  title={`${totalCounts[i] ?? c.stitchCount} stitches in this design`}
+                  className="flex-none text-[9px] font-mono text-gray-400 px-1"
+                  style={{ minWidth: 20, textAlign: 'right' }}
+                >
+                  {totalCounts[i] ?? c.stitchCount}
                 </span>
               )}
 
@@ -293,6 +302,11 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
         <div className="flex-none w-full mt-1 pt-1.5 border-t border-gray-300 text-[9px] text-gray-400 leading-relaxed space-y-0.5 px-0.5">
           <div title="Click any color swatch to make all its stitches flash on the canvas">Click swatch → flash in chart</div>
           <div title="Click the eye icon next to any color to hide it — stitch one color at a time">👁 Eye → hide while stitching</div>
+          {(remainingCounts || totalCounts) && (
+            <div title="Number of stitches of that color — remaining while stitching, total otherwise">
+              123 → stitch count
+            </div>
+          )}
         </div>
       )}
 

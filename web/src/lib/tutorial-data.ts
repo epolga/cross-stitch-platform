@@ -332,7 +332,7 @@ export const tutorials: TutorialGuide[] = [
       {
         heading: 'Turning it on',
         paragraphs: [
-          "The 🧵 Stitch Mode button sits next to the view-mode buttons (Preview / Color / Symbol / Both) above the canvas. It's disabled with a tooltip until your pattern is saved — progress needs something stable to attach to, and saving already requires a free account. Once saved, click it to switch in.",
+          "The 🧵 Stitch Mode button sits next to the view-mode buttons (Stitched / Color / Symbol / Both) above the canvas. It's disabled with a tooltip until your pattern is saved — progress needs something stable to attach to, and saving already requires a free account. Once saved, click it to switch in.",
           "While Stitch Mode is on, the drawing toolbar hides and a progress bar appears showing how many stitches are marked done, as a count and a percentage.",
         ],
       },

@@ -52,7 +52,7 @@ type FillMode = 'flood' | 'erase';
 type ViewMode = 'color' | 'symbol' | 'both' | 'simulation';
 
 const VIEW_MODES: { id: ViewMode; label: string; title: string }[] = [
-  { id: 'simulation', label: 'Preview', title: 'Preview — approximates how the finished embroidery will look when stitched' },
+  { id: 'simulation', label: 'Stitched', title: 'Stitched — a realistic simulation of the finished embroidery (fabric texture and thread crosses), not just a flat color preview' },
   { id: 'color',      label: 'Color',   title: 'Color view — shows stitches as colored squares' },
   { id: 'symbol',     label: 'Symbol',  title: 'Symbol view — shows stitches as chart symbols (same as in the printed PDF)' },
   { id: 'both',       label: 'Both',    title: 'Color + Symbol — see both at once, useful when editing' },
@@ -436,8 +436,8 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     updatePalette(data.palette);
-    const finalGrid = removeConfetti(paddedGrid).grid;
-    updateGrid(finalGrid);
+    const confettiResult = removeConfetti(paddedGrid);
+    updateGrid(confettiResult.grid);
     setUndoStack([]);
     setRedoStack([]);
     setSelectedColor(0);
@@ -445,6 +445,9 @@ export default function ConvertPage() {
     setHiddenColors(new Set());
     setCellSize(fitCellSizeToWholeChart());
     setShowImportDialog(false);
+    // Only worth a toast when it actually found stray stitches to clean —
+    // silent otherwise, so this doesn't become noise on every conversion.
+    if (confettiResult.changed) showToast('Cleaned up stray stitches ✓');
     hasTrackedEditingStartRef.current = false;
     trackEvent('image_uploaded', {});
     trackEvent('pattern_generated', {
@@ -895,7 +898,7 @@ export default function ConvertPage() {
   function handleCopyLink() {
     if (savedPatternId) {
       const url = `${window.location.origin}/photo-to-cross-stitch?pattern=${savedPatternId}`;
-      navigator.clipboard.writeText(url).then(() => showToast('Link copied ✓'));
+      navigator.clipboard.writeText(url).then(() => showToast('Link copied — opens for your account only ✓'));
     } else {
       setAfterSaveAction('copyLink');
       setSaveDialogOpen(true);
@@ -981,16 +984,25 @@ export default function ConvertPage() {
         if (grid[r][c] >= 0 && stitchedCells.has(`${r},${c}`)) n++;
     return n;
   }, [grid, stitchedCells]);
+  // Live per-color stitch counts, recomputed straight from the grid — unlike
+  // palette[i].stitchCount (set once at conversion/palette-edit time), this
+  // stays correct after plain pencil/fill/paste edits that touch the grid
+  // without going through a palette-restructuring action.
+  const liveCounts = useMemo(() => {
+    const counts = new Array(palette.length).fill(0);
+    for (const row of grid) for (const ci of row) if (ci >= 0 && counts[ci] != null) counts[ci]++;
+    return counts;
+  }, [grid, palette.length]);
   const remainingCounts = useMemo(() => {
     if (!stitchMode) return undefined;
-    const counts = palette.map(p => p.stitchCount);
+    const counts = [...liveCounts];
     for (let r = 0; r < grid.length; r++)
       for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
         const ci = grid[r][c];
         if (ci >= 0 && stitchedCells.has(`${r},${c}`) && counts[ci] != null) counts[ci]--;
       }
     return counts;
-  }, [stitchMode, grid, palette, stitchedCells]);
+  }, [stitchMode, grid, liveCounts, stitchedCells]);
 
   function handleMarkCell(row: number, col: number, marked: boolean) {
     const next = new Set(stitchedRef.current);
@@ -1900,7 +1912,7 @@ export default function ConvertPage() {
                   { type: 'item', label: 'New Pattern', onClick: newPattern },
                   { type: 'item', label: 'Open…', onClick: () => setOpenDialogOpen(true) },
                   { type: 'item', label: 'Save', shortcut: 'Ctrl+S', onClick: handleSave },
-                  { type: 'item', label: 'Copy link', shortcut: '', onClick: handleCopyLink },
+                  { type: 'item', label: 'Copy link (opens for you only)', shortcut: '', onClick: handleCopyLink },
                 ],
               },
               {
@@ -1997,7 +2009,29 @@ export default function ConvertPage() {
                       return next;
                     });
                   }},
-                  { type: 'item', label: 'Sort by Count', disabled: true, onClick: noop },
+                  { type: 'item', label: 'Sort by Count', disabled: !hasDesign, onClick: () => {
+                    const pal = paletteRef.current;
+                    const g = gridRef.current;
+                    const counts = new Array(pal.length).fill(0);
+                    for (const row of g) for (const ci of row) if (ci >= 0) counts[ci]++;
+                    // Most-used color first — the order stitchers plan thread purchases by.
+                    const perm = pal.map((_, i) => i).sort((a, b) => counts[b] - counts[a]);
+                    const oldToNew = new Array(pal.length);
+                    perm.forEach((oldIdx, newIdx) => { oldToNew[oldIdx] = newIdx; });
+                    const newPal = perm.map(oldIdx => ({ ...pal[oldIdx], stitchCount: counts[oldIdx] }));
+                    const newGrid = g.map(row => row.map(ci => (ci < 0 ? ci : oldToNew[ci])));
+                    setUndoStack(s => [...s.slice(-99), { grid: g, palette: pal }]);
+                    setRedoStack([]);
+                    updatePalette(newPal);
+                    updateGrid(newGrid);
+                    setSelectedColor(c => oldToNew[c] ?? 0);
+                    setHiddenColors(prev => {
+                      const next = new Set<number>();
+                      prev.forEach(i => { if (oldToNew[i] != null) next.add(oldToNew[i]); });
+                      return next;
+                    });
+                    trackEvent('palette_changed', { changeType: 'sort_by_count' });
+                  }},
                 ],
               },
               {
@@ -2444,6 +2478,7 @@ export default function ConvertPage() {
               blinkIndex={blinkSwatch}
               hiddenColors={hiddenColors}
               remainingCounts={remainingCounts}
+              totalCounts={liveCounts}
               onSelect={i => {
                 if (stitchMode) {
                   setFocusColorIndex(prev => prev === i ? null : i);
@@ -2538,7 +2573,7 @@ export default function ConvertPage() {
         onSave={handleSavePattern}
         onSaved={(url) => {
           if (afterSaveAction === 'copyLink') {
-            navigator.clipboard.writeText(url).then(() => showToast('Link copied ✓'));
+            navigator.clipboard.writeText(url).then(() => showToast('Link copied — opens for your account only ✓'));
             setAfterSaveAction(null);
           } else {
             showToast('Saved ✓');

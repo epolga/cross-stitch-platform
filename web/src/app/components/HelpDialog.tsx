@@ -71,8 +71,8 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
               <Section title="3. Drawing tools (left toolbar)">
                 <ul className="space-y-1.5 list-none">
                   <Li icon="✏️"><b>Pen</b> — click cells to paint them with the active color. Click the <b>▾</b> arrow to switch between Point, Line, Rectangle, and Ellipse shapes. Drag the <b>Pen size</b> slider to paint multiple stitches at once.</Li>
-                  <Li icon="◻"><b>Pen Eraser</b> (inside the Pen ▾ menu) — erases individual stitches. Same shapes available.</Li>
-                  <Li icon="🪣"><b>Fill</b> — click any cell to fill its whole connected area with the active color. Great for recoloring large regions. Use <b>Erase Fill</b> (Pen ▾ menu) to clear a region instead.</Li>
+                  <Li icon="◻"><b>Eraser</b> (own toolbar button next to Pen) — erases instead of painting, using whichever shape and size Pen last had selected.</Li>
+                  <Li icon="🪣"><b>Fill</b> — click any cell to fill its whole connected area with the active color. Great for recoloring large regions. Use the <b>Fill Erase</b> toolbar button to clear a region instead.</Li>
                   <Li icon="↩"><b>Undo / Redo</b> — undo up to 100 steps with Ctrl+Z, redo with Ctrl+Y.</Li>
                 </ul>
               </Section>
@@ -80,8 +80,9 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
               <Section title="4. Selecting and transforming">
                 <ul className="space-y-1.5 list-none">
                   <Li icon="▦"><b>Select</b> — drag on the canvas to select a rectangular area. Then use <b>Cut</b>, <b>Copy</b> (Ctrl+C), <b>Paste</b> (Ctrl+V), or <b>Crop</b>.</Li>
-                  <Li icon="↔↕"><b>Flip H / Flip V</b> — mirror the design horizontally or vertically. Applies to the selection only if one exists, otherwise the whole design.</Li>
-                  <Li icon="↻↺"><b>Rot R / Rot L / 180°</b> — rotate the design 90° clockwise, counter-clockwise, or 180°. Applies to selection or whole design.</Li>
+                  <Li icon="↔↕"><b>Edit → Flip → Horizontal / Vertical</b> — reverses the design in place, same size. Applies to the selection only if one exists, otherwise the whole design.</Li>
+                  <Li icon="↻↺"><b>Edit → Rotate → 90° Right / 90° Left / 180°</b> — rotates the design in place. Applies to selection or whole design.</Li>
+                  <Li icon="⧉"><b>Edit → Mirror → Right / Left / Top / Bottom</b> — different from Flip: adds a mirrored copy of the design onto one side, growing (or cropping) the canvas, so the result is symmetric across that edge. Choose whether the mirror axis sits at the design's edge or its center.</Li>
                 </ul>
               </Section>
 
@@ -125,10 +126,10 @@ export default function HelpDialog({ open, initialTab = 'howto', onClose }: Prop
 
               <Section title="View modes">
                 <ul className="space-y-1 list-none">
-                  <Li icon="🎨"><b>Color</b> — shows stitches as colored squares (default).</Li>
+                  <Li icon="🧵"><b>Stitched</b> — a realistic simulation of the finished embroidery: fabric texture and thread crosses, not flat squares (default).</Li>
+                  <Li icon="🎨"><b>Color</b> — shows stitches as flat colored squares.</Li>
                   <Li icon="◆"><b>Symbol</b> — shows stitches as chart symbols, exactly as they appear in the printed PDF.</Li>
                   <Li icon="⊞"><b>Both</b> — shows color and symbol together. Useful when editing the pattern.</Li>
-                  <Li icon="🧵"><b>Preview</b> — approximates how the finished embroidery will look when stitched.</Li>
                 </ul>
               </Section>
 

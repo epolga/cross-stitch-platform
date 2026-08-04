@@ -137,12 +137,12 @@ const FAQ = [
   {
     id: 'faq-share',
     q: 'Can I share my pattern with someone else?',
-    a: 'Yes. Once you’ve saved a pattern, click "Copy link" to get a shareable URL — send it to anyone, no account needed on their end, great for showing a gift design before you stitch it.',
+    a: 'Not directly — "Copy link" gives you a URL back to your own saved pattern, but it only opens while logged into your account, so it is for picking up on another device, not showing someone else. To share a design with another person, download the PDF and send that file, or point them at a matching design in the catalog if your pattern started from one.',
   },
   {
     id: 'faq-image-type',
     q: 'Does this work with drawings or logos too, not just photos?',
-    a: 'Yes — there\'s nothing to configure. The converter looks at your image and automatically adjusts itself, whether it\'s a photo, a simple drawing, or a logo, so colors and edges come out clean either way.',
+    a: 'Yes — there\'s nothing to configure. The converter looks at your image and automatically adjusts itself for photos, illustrations, line art, and lettering-heavy images like a quote or a sign, so colors and edges come out clean either way.',
   },
 ];
 
@@ -246,8 +246,8 @@ export default function PhotoToCrossStitchPage() {
             <a href="#faq-share" className="bg-white rounded-lg border border-gray-200 px-3 py-3 flex gap-2 items-start hover:border-rose-300 hover:shadow-sm transition-shadow">
               <span className="text-lg flex-none leading-none mt-0.5">🔗</span>
               <div>
-                <p className="font-semibold text-gray-900 text-xs">Share with a friend</p>
-                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Copy a link to your saved pattern and send it to anyone — great for showing a gift design before you stitch it.</p>
+                <p className="font-semibold text-gray-900 text-xs">Continue on another device</p>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">Copy a link back to your saved pattern, and pick up where you left off on your phone or tablet — same account, no re-uploading.</p>
               </div>
             </a>
           </div>
