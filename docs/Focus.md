@@ -47,10 +47,10 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-Pull from Open item #16 (outline-preservation posterization idea) first if
-picking up where 2026-08-03/04 left off, otherwise S6's next step
-(prefetch/`content-visibility` work, `web/plan/Cross-Stitch.com — Site
-Technology Milestones.md`) or Open items below.
+Open item #16 is now shipped (see the second 2026-08-04 Shipped entry
+below). Next up: S6's next step (prefetch/`content-visibility` work,
+`web/plan/Cross-Stitch.com — Site Technology Milestones.md`) or Open items
+below.
 
 **Shipped 2026-08-04** (commits `38e1cea`, `c7a73fb`, deployed & health-checked Green):
 
@@ -123,12 +123,80 @@ ordinary boundaries between two flat color regions — as an "outline."
     into its dominant surrounding color. More expensive (an extra full-res
     k-means pass) — not started, needs Olga's go-ahead given the cost/risk,
     and should be verified against all 3 test images again before shipping.
-  - Test images used throughout, if picking this back up: puppy —
-    `D:\Stitch Craft\Charts\ReadyCharts\2026_07_04\Puppy.png`; Lady of
-    Perpetual Love — `D:\Stitch Craft\Charts\ReadyCharts\2026_06_26\Lady of
-    Perpetual Love.png`; bull/Style3 — synthetic test asset, regenerate via
-    the session's earlier steps if the scratchpad copy is gone (session
-    temp dirs are not persistent).
+  - **Test images and what to check in each, if picking this back up:**
+    - **Puppy** — `D:\Stitch Craft\Charts\ReadyCharts\2026_07_04\Puppy.png`.
+      Convert at illustration mode, ~150 wide, ~20 colors. Check: the white
+      keyline strokes separating body/ear/head color regions stay white and
+      continuous (not broken into dots); both eyes keep their white
+      specular-highlight dot; no stray 1-2 stitch confetti after the
+      client's automatic cleanup. Known cosmetic issue (Open item #16): a
+      few small stray-color patches (DMC 3776 inside DMC 922) in the ear and
+      a paw — real but very subtle source pixel variation, not visible to
+      the eye in the source PNG, survives median-filter denoising up to
+      radius 7. Not fixed; not blocking.
+    - **Lady of Perpetual Love** —
+      `D:\Stitch Craft\Charts\ReadyCharts\2026_06_26\Lady of Perpetual
+      Love.png`. Convert at illustration mode, width 100 (the specific case
+      Olga tested). Check: white keylines between mantle/robe/halo regions
+      stay crisp; the small gold 8-point star charm on the mantle keeps its
+      shape and color; the dark hairline separating Mary's hair from her
+      face is preserved in its own dark brown (NOT forced white — this was
+      the original bug); the baby's eyebrow and eye each render as a small
+      (~2 stitch) distinct patch rather than disappearing into the skin
+      tone (top-hat threshold 50 was tuned specifically to make this work
+      without over-thickening the eyebrow — see above).
+    - **Bull ("Style3")** — no stable source file. This was a synthetic
+      test asset built earlier in the same session (a "smoothed"/stitched
+      version of an image Olga calls "Style3.png"), created via ad hoc
+      image-editing steps and saved only to the session's scratchpad
+      (`.../scratchpad/Style3-smooth.png`), which is NOT persistent across
+      sessions. Searching `D:\Stitch Craft` for "Style3" or "bull" turns up
+      nothing (only an unrelated `BULLDOG.SCC`). **To retest this case,
+      either ask Olga for the bull image again, or substitute any other
+      flat illustration that uses wavy/curved white keyline strokes** — the
+      case this asset exercised was specifically: do continuous curved
+      white strokes survive intact, and does texture/noise in the fill stay
+      low (this synthetic file had deliberately baked-in dot texture from
+      earlier testing, so some speckle in the body fill is an expected
+      baseline for THIS file, not a regression — judge by whether the white
+      strokes themselves stay continuous and by total color count staying
+      in the ~20 range, not by fill-texture alone).
+
+**Shipped 2026-08-04, second pass** (Open item #16, the k-means
+quantization idea above — implemented, hit a real regression, fixed):
+
+- Added `kmeansQuantize` (`pattern-converter.ts`) — quantizes the
+  full-resolution source to `OUTLINE_QUANTIZE_COLORS` colors via k-means
+  before `detectOutlineMask` runs, instead of feeding it the raw source.
+  Fits centroids on the sample across `KMEANS_RUNS` runs but assigns the
+  full pixel set only once (not once per run, unlike `kmeansLab`) — full-res
+  assignment is the expensive part. Color fidelity is untouched:
+  `downsampleOutlineMask` still samples the ORIGINAL buffer for a stroke's
+  actual color; quantization only decides where the mask fires.
+- **First attempt used 18 colors and had a real regression**, caught by
+  Olga from a rendered comparison: the baby's eyebrow/eye in "Lady of
+  Perpetual Love" — which survive via this SAME outline/stroke path as
+  keylines, not via normal color clustering, per the 2026-08-03 tuning note
+  above — blurred into the skin tone instead of staying a distinct ~2-stitch
+  patch. Root cause: the eyebrow's contrast against skin is subtle, similar
+  in magnitude to the noise this pass exists to erase, so at 18 clusters it
+  lost the fight for cluster budget against the image's larger flat regions.
+  **Fixed by raising `OUTLINE_QUANTIZE_COLORS` to 30** — re-verified the
+  puppy noise fix and the eyebrow/eye together; both hold at this value.
+- Also caught (separately, in the verification script, not production
+  code): the script forced height = width for both test images. The puppy
+  source is square (1254×1254) so it didn't show, but "Lady of Perpetual
+  Love" is 1024×1536 (2:3 portrait) — forcing 100×100 squashed it
+  vertically by 1.5×. Fixed by deriving height from each source's real
+  aspect ratio, same as `ImportFromPhotoDialog.tsx`'s aspect-lock already
+  does for real users; the production conversion path was never affected.
+- **Re-verified against all 3 test images** (puppy, Lady of Perpetual
+  Love, bull/Style3 — Olga recovered the bull file from a prior session's
+  scratchpad): puppy ear/leg noise stays fixed, Lady's keylines/star/
+  hairline/eyebrow/eye all intact at correct 100×150 proportions, bull's
+  wavy white keylines stay continuous (24→27 colors, +3, not a concern —
+  the body's baked-in speckle texture is this synthetic file's own known
+  baseline, unchanged either way). 61/61 Vitest suite passes.
 
 **Shipped 2026-08-03** (full detail: `docs/session-log/2026-08.md`):
 - [x] Editor defaults to "Whole Chart" zoom on every load path (commit `3fdf9e6`).
@@ -292,18 +360,12 @@ didn't log the user in).
     signal. Not yet investigated: whether the CloudWatch agent
     (`amazon-cloudwatch-agent.service`, seen in `eb-engine.log`) is actually
     running on the current instance, or needs a restart/reconfig.
-16. **Outline-preservation: stray small-patch noise in visually-flat
-    regions.** See the 2026-08-04 Shipped entry above for full detail.
-    Median-filter denoising (radii 3/5/7) tried and rejected — didn't touch
-    the noise at all, and radius 7 erased a real thin detail (the Lady's
-    eyebrow). Proposed next step: quantize the full-resolution source to a
-    coarse (~16-20 color) palette via k-means before running outline
-    detection on it, instead of denoising. Not started — needs a go-ahead
-    (adds a full-res k-means pass) and re-verification against all 3 test
-    images (puppy, bull, Lady of Perpetual Love) before shipping. Low
-    priority — cosmetic, not blocking, doesn't affect the deployed fix's
-    correctness on any of the reported real bugs (white-forcing, brow/eye
-    visibility, star, keylines).
+16. ~~Outline-preservation: stray small-patch noise in visually-flat
+    regions~~ — **done 2026-08-04** (second pass), see the "Shipped
+    2026-08-04, second pass" entry above / `docs/session-log/2026-08.md`.
+    K-means quantization pre-pass (`OUTLINE_QUANTIZE_COLORS = 30`) fixed the
+    puppy ear/leg noise; verified against all 3 test images with no
+    regression.
 
 ## Done when
 

@@ -48,6 +48,23 @@ function labDist2(a: Lab, b: Lab): number {
   return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 }
 
+function labToRgb([L, a, b]: Lab): [number, number, number] {
+  const fy = (L + 16) / 116;
+  const fx = fy + a / 500;
+  const fz = fy - b / 200;
+  const finv = (t: number) => (t ** 3 > 0.008856 ? t ** 3 : (t - 16 / 116) / 7.787);
+  const X = finv(fx) * 0.95047;
+  const Y = finv(fy) * 1.00000;
+  const Z = finv(fz) * 1.08883;
+  let R = X * 3.2404542 + Y * -1.5371385 + Z * -0.4985314;
+  let G = X * -0.9692660 + Y * 1.8760108 + Z * 0.0415560;
+  let B = X * 0.0556434 + Y * -0.2040259 + Z * 1.0572252;
+  const gamma = (c: number) => (c > 0.0031308 ? 1.055 * c ** (1 / 2.4) - 0.055 : 12.92 * c);
+  R = gamma(R); G = gamma(G); B = gamma(B);
+  const clamp = (c: number) => Math.max(0, Math.min(255, Math.round(c * 255)));
+  return [clamp(R), clamp(G), clamp(B)];
+}
+
 // CIEDE2000 (Sharma, Wu & Dalal 2005 reference formula) — a perceptually
 // weighted color-distance metric, unlike CIE76's naive Euclidean distance
 // in LAB space. Substantially more expensive (several sqrt/atan2/sin/cos
@@ -210,12 +227,12 @@ interface KMeansResult {
   inertia: number;
 }
 
-function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): KMeansResult {
-  const n = allPixels.length;
+// k-means++ init + Lloyd's iteration, fit on the sample only (cheap — sample
+// is capped at KMEANS_MAX_SAMPLE regardless of source resolution).
+function fitCentroids(sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): { centroids: Lab[]; inertia: number } {
   const ns = sample.length;
   k = Math.min(k, ns);
 
-  // k-means++ initialisation on sample
   const centroids: Lab[] = [[...sample[Math.floor(rand() * ns)]]];
   for (let ci = 1; ci < k; ci++) {
     const dists = sample.map(p => {
@@ -230,7 +247,6 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
     centroids.push([...sample[chosen]]);
   }
 
-  // Iterate k-means on sample
   const sAssign = new Int32Array(ns);
   for (let iter = 0; iter < KMEANS_MAX_ITER; iter++) {
     let changed = false;
@@ -257,19 +273,34 @@ function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => numb
     }
   }
 
-  // Assign all pixels to converged centroids; compute inertia
+  let inertia = 0;
+  for (let i = 0; i < ns; i++) {
+    let bestD = Infinity;
+    for (const c of centroids) { const d = dist(sample[i], c); if (d < bestD) bestD = d; }
+    inertia += bestD;
+  }
+  return { centroids, inertia };
+}
+
+function assignAll(allPixels: Lab[], centroids: Lab[], dist: (a: Lab, b: Lab) => number): { assignments: Int32Array; inertia: number } {
+  const n = allPixels.length;
   const assignments = new Int32Array(n);
   let inertia = 0;
   for (let i = 0; i < n; i++) {
     let best = 0, bestD = Infinity;
-    for (let j = 0; j < k; j++) {
+    for (let j = 0; j < centroids.length; j++) {
       const d = dist(allPixels[i], centroids[j]);
       if (d < bestD) { bestD = d; best = j; }
     }
     assignments[i] = best;
     inertia += bestD;
   }
+  return { assignments, inertia };
+}
 
+function kmeansOnce(allPixels: Lab[], sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): KMeansResult {
+  const { centroids } = fitCentroids(sample, k, rand, dist);
+  const { assignments, inertia } = assignAll(allPixels, centroids, dist);
   return { centroids, assignments, inertia };
 }
 
@@ -280,6 +311,22 @@ function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => numbe
     if (!best || result.inertia < best.inertia) best = result;
   }
   return best!;
+}
+
+// Same idea as kmeansLab, but picks the best of KMEANS_RUNS by SAMPLE
+// inertia and only assigns the full pixel set once at the end, instead of
+// once per run — the full-resolution source this feeds (see
+// OUTLINE_QUANTIZE_COLORS below) can be orders of magnitude larger than the
+// target stitch grid kmeansLab normally runs against, so repeating a full
+// assignment pass per run would be wasteful.
+function kmeansQuantize(allPixels: Lab[], sample: Lab[], k: number, rand: () => number, dist: (a: Lab, b: Lab) => number): { centroids: Lab[]; assignments: Int32Array } {
+  let best: { centroids: Lab[]; inertia: number } | null = null;
+  for (let run = 0; run < KMEANS_RUNS; run++) {
+    const result = fitCentroids(sample, k, rand, dist);
+    if (!best || result.inertia < best.inertia) best = result;
+  }
+  const { assignments } = assignAll(allPixels, best!.centroids, dist);
+  return { centroids: best!.centroids, assignments };
 }
 
 // ── Outline preservation (illustration/line-art mode) ───────────────────────
@@ -313,6 +360,29 @@ function kmeansLab(allPixels: Lab[], sample: Lab[], k: number, rand: () => numbe
 // keyline and a black ink line are found the same way.
 const OUTLINE_STROKE_RADIUS = 2; // px — flags features up to ~2*radius+1 px wide
 const OUTLINE_TOPHAT_THRESHOLD = 50; // luminance units (0-255 scale)
+
+// Some source PNGs carry subtle, structured pixel-level variation in
+// otherwise visually-flat regions (compression-artifact-like, not simple
+// noise — survives median filtering up to radius 7) that the top-hat above
+// misreads as tiny outline candidates. Quantizing the full-resolution image
+// to a coarse palette before edge detection collapses that variation into
+// its dominant surrounding color, while a genuine stroke color — different
+// enough from its surroundings to matter for the pattern — still earns its
+// own cluster at this color count.
+//
+// 18 (the original estimate — coarse relative to the illustration's real
+// palette, fine relative to the stitch grid) was tested against a real
+// regression: a subtle, low-contrast stroke (the baby's eyebrow/eye in
+// "Lady of Perpetual Love", the same feature OUTLINE_TOPHAT_THRESHOLD was
+// tuned for) has a similar contrast magnitude to the noise this pass exists
+// to remove, and at 18 clusters it lost the fight for cluster budget against
+// the image's larger flat regions and got absorbed into the skin tone —
+// smearing into a blur instead of the ~2-stitch dark patch it should be.
+// Verified at 30: the eyebrow/eye survive intact again, and the puppy
+// ear/leg noise this pass was built for stays fixed — enough headroom for a
+// subtle-but-real stroke to keep its own cluster without giving back the
+// noise suppression.
+const OUTLINE_QUANTIZE_COLORS = 30;
 
 // Separable min/max filter (exact for a square structuring element: a 2D
 // min/max over a square equals a 1D min/max over rows then over columns).
@@ -492,6 +562,12 @@ export async function convertImage(
   const h = info.height;
   const n = w * h;
 
+  // Seed the PRNG from the raw file bytes so the same image always produces
+  // the same output regardless of how many times it's run. Created up front
+  // so both the outline-detection quantization pass below and the main
+  // clustering draw from the same deterministic stream.
+  const rand = makePrng(seedFromBuffer(imageBuffer));
+
   // Outline strokes need to be found before any resizing blurs/skips them —
   // decode the source at its own native resolution separately for this.
   // Deliberately over-inclusive at this stage (see detectOutlineMask); the
@@ -500,7 +576,26 @@ export async function convertImage(
   let outlineCandidates: (Lab | null)[] | null = null;
   if (isFlatArtMode) {
     const full = await sharp(imageBuffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-    const fullMask = detectOutlineMask(full.data, full.info.width, full.info.height);
+    const fullN = full.info.width * full.info.height;
+    const fullLab: Lab[] = new Array(fullN);
+    for (let i = 0; i < fullN; i++)
+      fullLab[i] = rgbToLab(full.data[i * 3], full.data[i * 3 + 1], full.data[i * 3 + 2]);
+
+    // Quantize a copy of the full-resolution source before edge detection
+    // (see OUTLINE_QUANTIZE_COLORS) — detection runs on the quantized copy,
+    // but downsampleOutlineMask below still samples color from the
+    // ORIGINAL full.data, so a preserved stroke keeps its true source color.
+    const fullSample = buildSample(fullLab, rand);
+    const { centroids: qCentroids, assignments: qAssignments } =
+      kmeansQuantize(fullLab, fullSample, OUTLINE_QUANTIZE_COLORS, rand, clusterDist);
+    const centroidRgb = qCentroids.map(labToRgb);
+    const quantized = Buffer.alloc(fullN * 3);
+    for (let i = 0; i < fullN; i++) {
+      const [r, g, b] = centroidRgb[qAssignments[i]];
+      quantized[i * 3] = r; quantized[i * 3 + 1] = g; quantized[i * 3 + 2] = b;
+    }
+
+    const fullMask = detectOutlineMask(quantized, full.info.width, full.info.height);
     outlineCandidates = downsampleOutlineMask(fullMask, full.data, full.info.width, full.info.height, w, h);
   }
 
@@ -508,10 +603,6 @@ export async function convertImage(
   const pixelsLab: Lab[] = new Array(n);
   for (let i = 0; i < n; i++)
     pixelsLab[i] = rgbToLab(data[i * 3], data[i * 3 + 1], data[i * 3 + 2]);
-
-  // Seed the PRNG from the raw file bytes so the same image always produces
-  // the same clustering regardless of how many times it's run.
-  const rand = makePrng(seedFromBuffer(imageBuffer));
 
   // Photo mode: overshoot k so rare-colour regions get dedicated cluster slots, then trim.
   // Line-art mode: use exact k — overshoot creates spurious intermediate colours on flat art.
