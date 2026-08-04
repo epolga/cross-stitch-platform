@@ -103,7 +103,7 @@ const PaletteBar = forwardRef<PaletteBarHandle, Props>(function PaletteBar({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch overflow-hidden" style={{ minWidth: 118, minHeight: resolvedMinHeight, ...(maxHeight ? { maxHeight } : {}) }}>
+    <div className="flex-none flex flex-col items-center gap-2 px-2 py-2 bg-gray-100 rounded-lg border border-gray-200 self-stretch overflow-hidden" style={{ minWidth: 152, minHeight: resolvedMinHeight, ...(maxHeight ? { maxHeight } : {}) }}>
 
       {/* Active color preview */}
       <div className="flex flex-col items-center gap-1 flex-none">

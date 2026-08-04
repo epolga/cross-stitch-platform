@@ -239,7 +239,7 @@ function buildTaperedSimpleCrossMask(ecs: number): HTMLCanvasElement {
   c.width = ecs; c.height = ecs;
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = '#fff';
-  const maxLw = Math.max(2, ecs * 0.3);
+  const maxLw = Math.max(2, ecs * 0.42);
 
   function drawTaperedDiagonal(x0: number, y0: number, x1: number, y1: number) {
     const dx = x1 - x0, dy = y1 - y0;
