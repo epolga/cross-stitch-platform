@@ -1,25 +1,23 @@
 [Subject]
-Every pattern in the catalog can now open right in the editor
+The tin I still haven't finished sorting
 
 [Greeting]
 Hi [FName],
 
 [Body1]
-Something I've wanted to build for a long time is finally live: every design in the catalog can now be opened directly in the pattern editor.
+I want to tell you about a tin of thread I still haven't fully sorted — the one my grandmother Milena left me, with not a single label on any of it.
 
-Until now, the editor was really for one thing — turning your own photo into a brand-new pattern. But quite a few of you asked for a way to open a design you found on the site the same way, so you could tweak it before you stitch: swap a color that doesn't quite match your floss stash, adjust the size, hide colors while you work, or just make it a little more yours.
-
-Now you can. Just open any design's page and look for the new button: "Open this pattern in the editor." One click, and the whole chart is right there, fully editable.
+She's the one who taught me to stitch, back when I was seven, and about as sentimental as a brick about it the whole time. To this day I still hunt through that tin for the right shade of green, holding skeins up to the window like it's an interrogation — and somehow, at exactly the wrong moment, Nitka always finds her way onto whatever I need most.
 
 [EditorLink]
 <p>
-👉 <a href="<editor_url>">Browse the catalog and try it on a design you love</a>
+👉 <a href="<changelog_url>">Read the whole story on the site</a>
 </p>
 
 [Body2]
-Getting here took some quiet, unglamorous work behind the scenes — converting thousands of existing patterns, one by one, into a format the editor can actually open, and checking each one for accuracy. A handful are still stubborn and I'm still chasing those down, so if you open a design and something looks off, please tell me — you'll be helping me catch the last few stragglers.
+I wrote the whole thing out — the tin, Milena, the cat sabotage — over on the blog. If you've got an unlabeled stash of your own, handed down from someone, I'd genuinely love to hear about it.
 
-As always, this happened because you asked for it. Keep telling me what you'd change next — through the feedback button inside the editor, or just hit Reply. I read every message myself.
+Keep telling me what's on your mind — reply to this email, or leave a reaction on the post itself. I read every one.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:

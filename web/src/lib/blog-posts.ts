@@ -13,6 +13,30 @@ export interface BlogPost {
 
 export const blogPosts: BlogPost[] = [
   {
+    slug: 'milenas-tin',
+    title: 'The tin I inherited from Milena',
+    date: '2026-08-05',
+    excerpt:
+      "Not one thread in this tin has a label. My grandmother never believed in labels — she believed, apparently, that I'd sort it out eventually.",
+    keywords: [
+      'unlabeled embroidery floss',
+      'identify DMC thread color by eye',
+      'inherited embroidery floss story',
+      'vintage sewing tin',
+      'match floss color without a label',
+    ],
+    imageUrl: '/blog/Milena_round_tin_box_lid_off.png',
+    imageAlt: 'An old round tin box full of unlabeled embroidery floss in muted, faded colors, with a pair of vintage sewing scissors resting nearby',
+    body: [
+      "I keep an old biscuit tin that used to belong to my grandmother, Milena. Inside is embroidery floss with not one label on any of it — she never wrote anything down, just wound up whatever was left over and dropped it in, apparently confident that someday somebody — meaning me — would sort it all out.",
+      "She's the one who taught me to stitch, when I was about seven. Patiently, but without a shred of sentimentality: \"hold the needle like this,\" \"don't pull the thread so tight\" — and not one word of praise the entire time, except once, when she nodded at a row of even crosses I'd finally managed. I decided on the spot that was the highest compliment a person could receive.",
+      "Every few weeks I open that tin again, hunting for one particular shade of green, and there are perhaps fifteen greens in there, all identical under an ordinary lamp. I hold the skein up to the window, then to the desk lamp, then — for reasons I genuinely cannot defend — I smell it, as though that has ever once helped. Some days I'm half convinced Milena mixed every green in there on purpose, just to watch me struggle over it thirty years later.",
+      "And of course, the exact moment I need real concentration — tin open, loose skeins spread across the table, a half-finished piece still on the frame — is precisely when Nitka arrives. Not next to it. On top of it. She seems to have an internal radar tuned to whichever spot I need most right now. Once she managed to knock an entire skein straight into my teacup, and I still haven't decided whether that was an accident.",
+      "So Milena's tin stays half mystery, half quiet joke by evening lamplight. I sort colors slower than I probably should — but I think that's rather the point: not to rush it.",
+      "Do you have a tin like this of your own — someone else's, handed down, full of things with no labels? I'd love to hear about it. Leave a thread below, or just reply if this reached you by email.",
+    ],
+  },
+  {
     slug: 'the-story-behind-black-cat',
     title: 'The story behind Black Cat',
     date: '2026-08-01',

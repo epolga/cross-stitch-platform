@@ -2505,7 +2505,7 @@ namespace Uploader
 
             string eid             = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
             string editorUrl       = AppendTrackingParameters($"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement");
-            string changelogUrl    = AppendTrackingParameters($"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026", "admin", eid, "announcement");
+            string changelogUrl    = AppendTrackingParameters($"{_linkHelper.SiteBaseUrl}/short-stories/milenas-tin", "admin", eid, "announcement");
             string siteUrl         = AppendTrackingParameters(_linkHelper.SiteBaseUrl, "admin", eid, "announcement");
             string unsubscribeUrl = BuildUnsubscribeUrl(AdminPreviewUnsubscribeToken);
 
@@ -2582,7 +2582,7 @@ namespace Uploader
             }
 
             string editorUrl = $"{_linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
-            string changelogUrl = $"{_linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
+            string changelogUrl = $"{_linkHelper.SiteBaseUrl}/short-stories/milenas-tin";
             string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
             string sendLogTable = ConfigurationManager.AppSettings["EmailSendLogTableName"] ?? "EmailSendLog";
             int sent = 0;

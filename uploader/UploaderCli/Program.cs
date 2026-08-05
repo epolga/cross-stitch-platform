@@ -39,6 +39,7 @@ if (args.Length < 1)
 {
     Console.Error.WriteLine("Usage: UploaderCli <batchFolderPath> [--yes]");
     Console.Error.WriteLine("       UploaderCli send-admin-test");
+    Console.Error.WriteLine("       UploaderCli send-announcement-test");
     Console.Error.WriteLine("       UploaderCli send-newsletter --months <N> [--yes]");
     Console.Error.WriteLine("       UploaderCli send-announcement [--months <N>] [--yes]");
     return 2;
@@ -47,6 +48,12 @@ if (args.Length < 1)
 if (string.Equals(args[0], "send-admin-test", StringComparison.OrdinalIgnoreCase))
 {
     await SendAdminTestAsync();
+    return 0;
+}
+
+if (string.Equals(args[0], "send-announcement-test", StringComparison.OrdinalIgnoreCase))
+{
+    await SendAnnouncementTestAsync();
     return 0;
 }
 
@@ -845,6 +852,36 @@ static string AppendQueryParameters(string url, IReadOnlyList<string> parameters
     return $"{baseUrl}{separator}{string.Join("&", parameters)}{fragment}";
 }
 
+// ---------------- send-announcement-test (mirrors MainWindow.xaml.cs's
+// SendAnnouncementTestEmailAsync) ----------------
+
+static async Task SendAnnouncementTestAsync()
+{
+    string? sender = ConfigurationManager.AppSettings["SenderEmail"];
+    string? admin = ConfigurationManager.AppSettings["AdminEmail"];
+    if (string.IsNullOrEmpty(sender) || string.IsNullOrEmpty(admin))
+        throw new InvalidOperationException("SenderEmail/AdminEmail must be configured.");
+
+    var sesClient = new AmazonSimpleEmailServiceClient();
+    var emailHelper = new EmailHelper();
+    var linkHelper = HelperFactory.CreatePatternLinkHelper();
+    string? sesConfigurationSetName = ConfigurationManager.AppSettings["SesConfigurationSetName"];
+
+    string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+    string editorUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement");
+    string changelogUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/short-stories/milenas-tin", "admin", eid, "announcement");
+    string siteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid, "announcement");
+    string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
+
+    var htmlTemplate = LoadAnnouncementHtmlTemplate();
+    var textTemplate = LoadAnnouncementTextTemplate();
+    var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, "Ann", editorUrl, siteUrl, unsubscribeUrl, changelogUrl);
+
+    await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, content.Subject, content.TextBody, content.HtmlBody, configurationSetName: sesConfigurationSetName);
+
+    Console.WriteLine($"Test email sent to {admin}.");
+}
+
 // ---------------- send-announcement (mirrors MainWindow.xaml.cs's SendAnnouncementEmailsAsync /
 // RenderAnnouncementEmailContent) ----------------
 
@@ -892,7 +929,7 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
     var htmlTemplate = LoadAnnouncementHtmlTemplate();
     var textTemplate = LoadAnnouncementTextTemplate();
     string editorUrl = $"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
-    string changelogUrl = $"{linkHelper.SiteBaseUrl}/short-stories/editor-updates-july-2026";
+    string changelogUrl = $"{linkHelper.SiteBaseUrl}/short-stories/milenas-tin";
     string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
 
     string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "send-log-announcement.jsonl");
