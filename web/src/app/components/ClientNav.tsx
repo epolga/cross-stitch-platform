@@ -52,7 +52,7 @@ export default function ClientNav() {
           </Link>
           <span className="text-gray-400 text-xl">&middot;</span>
           <Link href="/short-stories" className={desktopLinkBase}>
-            My thoughts
+            Between Stitches
           </Link>
           <span className="text-gray-400 text-xl">&middot;</span>
           <Link href="/photo-to-cross-stitch" className={desktopLinkBase}>
@@ -249,7 +249,7 @@ export default function ClientNav() {
                 className={mobileLinkBase}
                 onClick={closeMobileMenu}
               >
-                My thoughts
+                Between Stitches
               </Link>
               <Link
                 href="/photo-to-cross-stitch"

@@ -53,7 +53,7 @@ const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/WhyCrossStitch': '2026-06-01', // src/app/WhyCrossStitch/page.tsx
   '/Article070409.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/exercises': '2026-06-01', // src/app/exercises/page.tsx
-  '/short-stories': '2026-07-08', // src/app/short-stories/page.tsx
+  '/short-stories': '2026-08-05', // src/app/short-stories/page.tsx
   '/privacy-policy': '2026-06-01', // src/app/privacy-policy/page.tsx
   '/dmc-color-chart': '2026-07-27', // src/app/dmc-color-chart/page.tsx
   '/cross-stitch-size-calculator': '2026-07-27', // src/app/cross-stitch-size-calculator/page.tsx
