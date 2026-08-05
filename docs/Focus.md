@@ -15,10 +15,11 @@ growing back to ~510 lines.
 Build out Ann as a recurring blog persona: flesh out her backstory/life
 (building on `web/plan/Ann_Persona_and_Newsletter_Content.md`), start writing
 blog posts in her voice, use the existing reactions feature
-(`CrossStitchBlogReactions`, shipped 2026-07-08, 0 items so far) for
-engagement. Full public comments deliberately deferred (see Nice-to-Have
-Ideas). The `why-i-built-this` blog teaser email is the immediate next send
-once there's Ann-voiced content to point it at.
+(`CrossStitchBlogReactions`, shipped 2026-07-08) for engagement. Full public
+comments deliberately deferred (see Nice-to-Have Ideas). The `why-i-built-this`
+blog teaser email has already gone out as a full send (confirmed by Olga
+2026-08-05, exact date not recorded — see `Email_Content_Plan.md`); no email
+currently queued for this persona work.
 
 ## Active work
 
@@ -245,10 +246,9 @@ didn't log the user in).
 
 ## Open items
 
-1. **Blog teaser email** for `why-i-built-this` (excerpt + "read more" link,
-   not full text) — send after Ann-voiced blog content exists, per the
-   established trust-before-vulnerability order in
-   `web/plan/Email_Content_Plan.md`.
+1. ~~Blog teaser email for `why-i-built-this`~~ — **already sent** (full
+   send, confirmed by Olga 2026-08-05; exact date not recorded, see
+   `web/plan/Email_Content_Plan.md`).
 2. **Distributed scraping mitigation** — keep monitoring via `/review-ip`
    (decision 2026-07-10, status confirmed 2026-07-24: 0 watched, 25
    blocked). Revisit the "keep monitoring vs. build WAF Bot Control" call
@@ -388,7 +388,7 @@ didn't log the user in).
 
 ## Done when
 
-- [ ] Blog teaser email sent
+- [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
 - [ ] Distributed scraping mitigation — decide + implement if volume keeps growing (see Open item #2)
 - [ ] Thank-you reply sent to Leisa — waiting on her email address
 - [ ] Olga has read through the `docs/srs/` documentation set

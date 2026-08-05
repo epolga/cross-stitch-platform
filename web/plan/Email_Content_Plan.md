@@ -27,6 +27,7 @@ backstory post, so trust is built first. Don't reorder without a reason.
 | 2026-07-08/09 | "You spoke, I listened" rewrite — **test send only**, not the full list. | GA4: only 2 sessions on 07-09 landing on `/short-stories/editor-updates-july-2026` (the rewrite's `<changelog_url>`) — volume consistent with an admin-only "Test Announcement Email" send, not a blast to the full ~672-person recipient list. |
 | ~2026-07-11/13 (exact date not recorded at the time; Olga confirmed the real send happened 2026-07-26, ~2 weeks before that conversation, but couldn't recall the precise day) | "You spoke, I listened" — **real send to the full list**, not just a test. | Not independently verified here (no GA4/SES cross-check redone as of 2026-07-26) — recorded from Olga's recollection only. If this needs firming up later, check GA4 `src=newsletter medium=email` sessions landing on `/short-stories/editor-updates-july-2026` in the 07-10 to 07-14 window, and SES send stats for that period. |
 | 2026-07-27 | "Every pattern in the catalog can now open right in the editor" — announces the catalog-to-editor feature (`EditorPatternKey` CTA button on design pages, built 2026-07-26/27). New content in the same Announcement template slot (`AnnouncementEmailText.txt` / `AnnouncementEmailHtml.txt`, rewritten again). | Sent via a new `UploaderCli send-announcement` CLI command (added this session — the GUI's "Send Announcement Emails" button has no headless equivalent; new command mirrors `MainWindow.xaml.cs`'s `SendAnnouncementEmailsAsync` exactly: same recipient filter, per-recipient unsubscribe token/header, SES send). Admin test copy sent first, reviewed, then real send: 723/723 delivered in 5:08, 0 errors. Per-send log: `uploader/UploaderCli/send-log-announcement.jsonl` + `EmailSendLog` DDB table. Recipient filter used: verified + subscribed + not BotSuspect + visited (`LastSeenAt`) within 3 months (cutoff 2026-04-27) + has unsubscribe token (0 skipped). Note: `editorUrl` in this send still points to `/photo-to-cross-stitch` (old destination, left as-is per Olga's explicit choice 2026-07-27, not `/XStitch-Charts.aspx`). |
+| date not recorded (before 2026-08-05, exact day unknown) | Blog teaser: "The real reason I built this site" — excerpt + "Read the rest on the site →" link to `/short-stories/why-i-built-this`. | **Full send to the list**, confirmed by Olga 2026-08-05 — not independently verified via GA4/SES here (recorded from Olga's recollection only, same caveat as the "You spoke, I listened" real-send row above). If this needs firming up later, check GA4 `src=newsletter medium=email` sessions landing on `/short-stories/why-i-built-this`. |
 
 ## Sent (individual replies, not the periodic newsletter)
 
@@ -44,35 +45,11 @@ periodic newsletter — logged here for completeness / to avoid re-contacting.
 
 ## Periodic newsletter — queue
 
-Not yet sent. Planned order:
-
-1. **"You spoke, I listened" — changelog + thank-you to feedback-givers**
-   ("friends" framing collectively, no individual names — mass email, naming
-   specific people without consent felt wrong). Built into the existing
-   **Announcement** email slot in the Uploader (same template that originally
-   asked people to test the editor — Jacky/Leisa/Sarah/Bianca/Céline all
-   replied to that one) rather than a new button — this is the natural
-   continuation of that same thread.
-   - Templates: `Uploader/Templates/AnnouncementEmailText.txt` +
-     `AnnouncementEmailHtml.txt` — rewritten 2026-07-08.
-   - Recipient filter: verified + subscribed + not BotSuspect (existing) +
-     **new**: `LastSeenAt` within the last 3 months (added 2026-07-08 via
-     `minLastSeenAtUtc` param on `FetchAllUserEmailsAsync`) — excludes people
-     who registered once and never came back, per Olga's request.
-   - Links included: `<editor_url>` (photo-to-cross-stitch) +
-     `<changelog_url>` → `/short-stories/editor-updates-july-2026` (added
-     2026-07-08, both tokens live in the `[EditorLink]` section — that's the
-     only section where token substitution + HTML both work reliably, see
-     `email-template-usage` skill).
-   - Status: **built and compiles clean; not yet sent**. Before a real send:
-     open Uploader → "Reload Email Template" → "Test Announcement Email" to
-     admin first, review, then "Send Announcement Emails".
-2. **Blog teaser: "The real reason I built this site"** — excerpt (first
-   2-3 paragraphs) + "Read the rest on the site →" link to
-   `/short-stories/why-i-built-this`. Distribution format decided 2026-07-08:
-   teaser + link, not full text, so the goal (site traffic + on-site
-   reaction) actually gets served. Status: **post is live on site, email not
-   yet sent**.
+Both items originally planned here (the "You spoke, I listened" changelog
+email and the `why-i-built-this` blog teaser) have since gone out as full
+sends — see the Sent table above. Nothing currently queued; next content
+decision is whatever comes out of the "Ann as recurring blog persona" work
+in `docs/Focus.md`.
 
 ## Blog posts (live on `/short-stories`)
 
