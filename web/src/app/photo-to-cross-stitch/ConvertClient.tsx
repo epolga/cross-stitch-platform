@@ -7,6 +7,7 @@ import MenuBar, { type MenuDef } from '@/app/components/MenuBar';
 import ResizeDialog, { type ResizeMode, type ResizeAnchor } from '@/app/components/ResizeDialog';
 import HelpDialog, { type HelpTab } from '@/app/components/HelpDialog';
 import ImportFromPhotoDialog from '@/app/components/ImportFromPhotoDialog';
+import PublishToCatalogDialog from '@/app/components/PublishToCatalogDialog';
 import SymbolPickerDialog from '@/app/components/SymbolPickerDialog';
 import ColorPickerDialog from '@/app/components/ColorPickerDialog';
 import PickPaletteEntryDialog from '@/app/components/PickPaletteEntryDialog';
@@ -163,6 +164,9 @@ export default function ConvertPage() {
   const [grid, setGrid] = useState<number[][]>(blankGrid);
   const gridRef = useRef<number[][]>(grid);
   const hasDesign = useMemo(() => grid.some(row => row.some(c => c !== -1)), [grid]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [publishPreviewImage, setPublishPreviewImage] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [undoStack, setUndoStack] = useState<Snapshot[]>([]);
   const [redoStack, setRedoStack] = useState<Snapshot[]>([]);
@@ -683,6 +687,16 @@ export default function ConvertPage() {
       window.removeEventListener('storage', handler);
     };
   }, []);
+
+  // Admin check, for the "Publish to Catalog" button — silently stays false
+  // for everyone else, no redirect (unlike /admin, this page is for all users).
+  useEffect(() => {
+    if (!isLoggedIn) { setIsAdmin(false); return; }
+    fetch('/api/admin/me', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((d: { isAdmin?: boolean }) => setIsAdmin(Boolean(d.isAdmin)))
+      .catch(() => setIsAdmin(false));
+  }, [isLoggedIn]);
 
   function loadPatternById(id: string) {
     setPatternLoading(true);
@@ -1950,6 +1964,20 @@ export default function ConvertPage() {
               >
                 {downloading ? 'Generating…' : '↓ Download PDF'}
               </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPublishPreviewImage(canvasHandle.current?.capturePreview() ?? null);
+                    setShowPublishDialog(true);
+                  }}
+                  disabled={!hasDesign}
+                  className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  title="Admin: publish this design to the live catalog and create a real Pinterest pin"
+                >
+                  ⬆ Publish to Catalog
+                </button>
+              )}
             </div>
           </div>
           {!savedPatternId && hasDesign && (
@@ -2640,6 +2668,19 @@ export default function ConvertPage() {
         onRemoveFile={() => setImportInitialFile(null)}
         hasExistingDesign={hasDesign}
       />
+
+      {isAdmin && (
+        <PublishToCatalogDialog
+          open={showPublishDialog}
+          onClose={() => setShowPublishDialog(false)}
+          title={patternName}
+          width={grid[0]?.length ?? 0}
+          height={grid.length}
+          grid={grid}
+          palette={palette}
+          previewImage={publishPreviewImage}
+        />
+      )}
 
       <HelpDialog
         open={helpTab !== null}
