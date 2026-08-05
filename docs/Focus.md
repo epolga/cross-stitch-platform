@@ -48,6 +48,22 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
+**Send the "milenas-tin" Announcement mass-send.** New blog post
+(`/short-stories#milenas-tin`, "The tin I inherited from Milena") and its
+teaser email are built, tested, and deployed as of 2026-08-05 — see Shipped
+entry below. Olga wants the mass send launched **Thursday 2026-08-06
+around 16:00 Israel time** (a CronCreate reminder was also set for this,
+but that's session-only and may not survive — this note is the durable
+copy). If it's already past that time and the send hasn't gone out yet,
+just ask Olga whether to send now or she already sent it herself via the
+GUI. To send: `UploaderCli send-announcement` from `uploader/UploaderCli`
+(prompts for confirmation with the real recipient count before sending —
+this hits the full eligible list, not a test). A test copy already went to
+admin 2026-08-05 and confirmed correct (anchor link `/short-stories#milenas-tin`
+lands on the right post in the feed, tracking params intact). Once sent,
+log it in `web/plan/Email_Content_Plan.md`'s Sent table and mark this item
+resolved here.
+
 "Publish to Catalog" (see 2026-08-04/05 Shipped entry below) shipped and
 verified live (DesignID 5461 "Giraffes") — no known open follow-up on it.
 Otherwise: S6's next step (prefetch/`content-visibility` work,

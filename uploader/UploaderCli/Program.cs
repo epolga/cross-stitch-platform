@@ -869,7 +869,7 @@ static async Task SendAnnouncementTestAsync()
 
     string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
     string editorUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement");
-    string changelogUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/short-stories/milenas-tin", "admin", eid, "announcement");
+    string changelogUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/short-stories#milenas-tin", "admin", eid, "announcement");
     string siteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid, "announcement");
     string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
 
@@ -929,7 +929,7 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
     var htmlTemplate = LoadAnnouncementHtmlTemplate();
     var textTemplate = LoadAnnouncementTextTemplate();
     string editorUrl = $"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch";
-    string changelogUrl = $"{linkHelper.SiteBaseUrl}/short-stories/milenas-tin";
+    string changelogUrl = $"{linkHelper.SiteBaseUrl}/short-stories#milenas-tin";
     string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
 
     string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "send-log-announcement.jsonl");
