@@ -174,7 +174,12 @@ export async function POST(request: NextRequest) {
         NPage: nPagePadded,
         AlbumID: albumId,
         Caption: title,
-        Description: '',
+        // Short technical line, same format the desktop Uploader writes
+        // (parsed from the source PDF there; synthesized here since this
+        // flow has no source PDF to parse). The long-form prose lives in
+        // SeoDescription below — this field is what design pages fall back
+        // to showing when SeoDescription is absent, so it must never be ''.
+        Description: `${width} x ${height} stitches ${nColors} colors`,
         DesignID: designId,
         EntityType: 'DESIGN',
         Height: height,

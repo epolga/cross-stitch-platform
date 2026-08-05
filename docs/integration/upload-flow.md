@@ -206,7 +206,7 @@ Reader side (consumed by cross-stitch Next.js) is **not** part of this contract:
 ## 7. Ownership & Contacts
 
 - **Maintainer:** Olga (epolga).
-- **Code owner (writer):** `Uploader/` repo (this code path is the sole writer of DESIGN rows and design-related S3 objects).
+- **Code owner (writer):** `Uploader/` repo. **As of 2026-08-04, no longer the sole writer** — a second implementation of this same contract exists in the web app itself (an admin-only "Publish to Catalog" button in `/photo-to-cross-stitch`, no `.scc` file or desktop tool required). See [publish-to-catalog-web.md](./publish-to-catalog-web.md) (F1b) for the full contract; it writes the same `DESIGN` row shape and the same S3 key templates, minus the `.scc` chart and the EB restart.
 - **Reader (downstream impact):** `cross-stitch/` (Next.js app on `cross-stitch.com`); changes to step 4’s attribute set or step 2 key templates will silently break the reader. See `cross-stitch/src/lib/data-access.ts` for the consumer code path.
 
 ---
@@ -383,6 +383,7 @@ There is also **no audit for orphaned Pinterest pins** (case 9.1 row 4): a pin w
 
 ### Related contracts (do not duplicate)
 
+- `publish-to-catalog-web.md` — F1b, the second (web-admin) implementation of this same contract, added 2026-08-04.
 - `s3-paths.md` — full S3 key naming rules (chart, PDF, photo).
 - `dynamodb-schema.md` — table layout, PK/SK, GSIs, attribute types.
 - `pinterest-metadata.md` — Pinterest pin payload shape, theme detection, hashtag rules.

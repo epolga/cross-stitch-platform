@@ -47,10 +47,29 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-Open item #16 is now shipped (see the second 2026-08-04 Shipped entry
-below). Next up: S6's next step (prefetch/`content-visibility` work,
+"Publish to Catalog" (see 2026-08-04/05 Shipped entry below) shipped and
+verified live (DesignID 5461 "Giraffes") — no known open follow-up on it.
+Otherwise: S6's next step (prefetch/`content-visibility` work,
 `web/plan/Cross-Stitch.com — Site Technology Milestones.md`) or Open items
 below.
+
+**Shipped 2026-08-04/05** (full detail: `docs/session-log/2026-08.md`,
+new contract doc: `docs/integration/publish-to-catalog-web.md`):
+- [x] Editor fullscreen mode added; two real layout bugs found+fixed (menu/
+  toolbar row compression, canvas overflow past the screen) — both from a
+  `flex flex-col` + `overflow-x-auto` interaction removing flex items'
+  automatic min-height protection.
+- [x] Palette panel width-clipping bug found+fixed (missing `flex-none`,
+  stale `minWidth` from before the stitch-count column existed).
+- [x] Simulation-mode cross stitch thickness increased per Olga's request.
+- [x] **New admin feature: "Publish to Catalog"** — full new-design-
+  onboarding pipeline (NPage/DesignID allocation, kit PDFs, S3 upload, real
+  Pinterest pin, AI SEO description, DynamoDB insert, editor-pattern stamp,
+  cache refresh) now available as a button in the web editor itself, no
+  desktop Uploader app or `.scc` file needed. First live design (5461
+  "Giraffes") published and verified; found+fixed a `Description`-field
+  bug from that first run. Required a real production IAM fix (EB role was
+  missing `CrossStitchBusinessHistory` access for the Pinterest token).
 
 **Shipped 2026-08-04** (commits `38e1cea`, `c7a73fb`, deployed & health-checked Green):
 

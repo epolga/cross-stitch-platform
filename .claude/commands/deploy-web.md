@@ -4,6 +4,8 @@ Build the Next.js app, deploy to Elastic Beanstalk, then check environment statu
 
 ## Steps
 
+0. **Check CI status after every push, before building.** After pushing the commit being deployed, run `gh run list --branch main --limit 1` and confirm the run's `headSha` matches the pushed commit and its status is `completed`/`success` — poll (`sleep`-and-recheck) until it finishes if it's still `in_progress`. **Do not proceed to build/deploy on an unverified or failing commit** — stop and report the failure instead. This is a hard rule, not a suggestion: local build/typecheck passing is not sufficient on its own (see the 2026-08-04 incident where local `npm run build` missed an ESLint error CI caught) — CI is the actual gate.
+
 1. **Kill dev server** — stop any running `next dev` process before building. A running dev server contaminates webpack module IDs in the production build, causing homepage 500 errors. On Windows, kill by port: `Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue`. Confirm port 3000 is no longer listening before continuing. If it still shows LISTENING, do not proceed until it's gone.
 
 2. **Clean** — delete the `web/.next/` directory to avoid stale or mixed artifacts from any running dev server.
