@@ -33,7 +33,7 @@ export const blogPosts: BlogPost[] = [
       "Every few weeks I open that tin again, hunting for one particular shade of green, and there are perhaps fifteen greens in there, all identical under an ordinary lamp. I hold the skein up to the window, then to the desk lamp, then — for reasons I genuinely cannot defend — I smell it, as though that has ever once helped. Some days I'm half convinced Milena mixed every green in there on purpose, just to watch me struggle over it thirty years later.",
       "And of course, the exact moment I need real concentration — tin open, loose skeins spread across the table, a half-finished piece still on the frame — is precisely when Nitka arrives. Not next to it. On top of it. She seems to have an internal radar tuned to whichever spot I need most right now. Once she managed to knock an entire skein straight into my teacup, and I still haven't decided whether that was an accident.",
       "So Milena's tin stays half mystery, half quiet joke by evening lamplight. I sort colors slower than I probably should — but I think that's rather the point: not to rush it.",
-      "Do you have a tin like this of your own — someone else's, handed down, full of things with no labels? I'd love to hear about it. Leave a thread below, or just reply if this reached you by email.",
+      "Do you have a tin like this of your own — someone else's, handed down, full of things with no labels? I'd love to hear about it. Tap the thread below if this resonates, or just reply if this reached you by email.",
     ],
   },
   {
@@ -57,7 +57,7 @@ export const blogPosts: BlogPost[] = [
       "She's the reason I named her Nitka — \"little thread\" in Czech — the day she was finally strong enough to climb into my workbasket and calmly unravel half a spool of DMC while I pretended to be annoyed about it.",
       "\"Black Cat\" is my thank-you to her, stitched instead of spoken: a black cat with golden eyes, settled into a cottage garden of poppies, lavender, daisies, and roses, with a blue bird keeping her company. I wanted her to have a garden and someone watching over her, since for a while nobody was watching over her at all.",
       "These days Nitka is unbothered by almost everything, and has an uncanny talent for lying down on exactly the section of fabric I need next. She has no idea any of this is about her, which is probably for the best.",
-      "If you've got a rescue of your own — cat, dog, or something stranger — I'd love to hear the story. Leave a reaction below, or just reply if this reached you by email.",
+      "If you've got a rescue of your own — cat, dog, or something stranger — I'd love to hear the story. Tap the thread below if this resonates, or just reply if this reached you by email.",
     ],
     ctaHref: '/Black-Cat-15-210-Free-Design.aspx',
     ctaLabel: 'Download the free Black Cat pattern →',
@@ -132,7 +132,7 @@ export const blogPosts: BlogPost[] = [
       "I didn't want to give up stitching. I really didn't want to give up stitching. So I started experimenting: a bigger screen instead of a small paper grid, being able to zoom in without holding anything steady, being able to walk away mid-row and find my place again without hunting for it.",
       "That tinkering is, quite literally, where this site came from. Every feature that lets you hide colors while you stitch, save your place, or read a chart on a tablet propped against your kettle — I built those for myself first, on the evenings my hands needed the help.",
       "I still keep threads from my grandmother Milena's old sewing box, most of them long unlabeled, and I still lose an embarrassing amount of time each week trying to match a scrap of pale green floss to a DMC number. Some things paper and screens both can't fix.",
-      "If your hands give you trouble too — I'd love to hear how you've adapted. Just reply to this email, or leave a thread below.",
+      "If your hands give you trouble too — I'd love to hear how you've adapted. Tap the thread below if this resonates, or just reply to this email.",
     ],
   },
   {
