@@ -141,6 +141,44 @@ Do not slow routine implementation unnecessarily.
 
 ---
 
+## Python Background (important, read before Phase 1)
+
+Olga has **no prior Python experience**. Her background is C#/.NET. This
+changes how Phase 1 must be taught, and changes what "Python: NOT STARTED"
+in `SKILLS_MATRIX.md` actually means — it is not a formality for an
+experienced developer picking up a new backend language; it is a genuine
+gap that must be closed with real teaching, not just by writing the code
+for her.
+
+**Do not explain generic programming concepts** (what a variable, loop,
+class, or function is) — she already knows those cold from C#/.NET.
+Instead, teach Python specifically as a *contrast* to what she already
+knows, at the level of an experienced engineer picking up a new language.
+Topics to cover as they become relevant to the actual work (not as an
+upfront course):
+
+- Python syntax and idioms (vs. C# syntax/idioms she already has);
+- dynamic typing vs. type hints (vs. C#'s static typing);
+- `dataclass` / Pydantic models (vs. C# records/POCOs);
+- `async`/`await` in Python (vs. C#'s Task-based async — where the
+  semantics genuinely differ, e.g. the GIL, event loop, `asyncio`);
+- modules/packages/imports (vs. C# namespaces/assemblies);
+- virtual environments and dependency management (vs. NuGet/.csproj);
+- `pytest` (vs. her existing C# test framework experience);
+- FastAPI (request/response models, dependency injection style, routing);
+- Python exception handling peculiarities (vs. C# try/catch/finally);
+- packaging/deployment (vs. how .NET projects are packaged/deployed);
+- typical Python pitfalls (mutable default arguments, late-binding
+  closures, `is` vs `==`, GIL-related concurrency surprises, etc.).
+
+**Phase 1's real milestone is not "a Python/FastAPI service exists."** It
+is: Olga can independently read, modify, and debug that Python/FastAPI
+code herself. A service that only Claude can maintain does not satisfy
+Phase 1, regardless of whether it is deployed. See `ROADMAP.md` Phase 1
+for the updated milestone definition.
+
+---
+
 ## Proactive Progress Tracking
 
 Maintain:

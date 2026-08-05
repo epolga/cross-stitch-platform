@@ -10,6 +10,11 @@ Inspect frontend/backend structure, AWS infrastructure, databases, authenticatio
 ## Phase 1 — Production Python Service
 Create an independent Python service that can host future AI functionality.
 
+**Real milestone (not just "service exists"):** Olga has no prior Python
+experience (C#/.NET background) — see `Learning.md` § Python Background.
+Phase 1 is only satisfied when Olga can independently read, modify, and
+debug this Python/FastAPI code herself, not merely when it is deployed.
+
 **Skills:** Python, typing, async/await, FastAPI, Pydantic, pytest, configuration, logging, secrets, API integration.
 
 ## Phase 2 — Natural-Language Pattern Search
