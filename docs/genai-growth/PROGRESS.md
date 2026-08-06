@@ -54,11 +54,10 @@
   found+fixed a real API Gateway quick-create bug (missing Lambda invoke
   permission) and a real PowerShell parser bug (em-dash inside a string
   literal). See ADR-008 for full detail. Earlier skeleton committed to
-  git (`bb455e5`); today's deploy-script/Lambda additions not yet
-  committed. Step 3 (real
-  feature, likely retrieval evaluation against live `SearchQueries` data
-  rather than a vector DB — see `ROADMAP.md` Phase 1 Step 3 note) not
-  started.
+  git (`bb455e5`), deploy-script/Lambda additions committed same day
+  (`36cfdc2`), pushed. **Step 3 explicitly deferred to the next session**
+  (Olga's call, 2026-08-06) — not started today. See Next Actions below
+  for exactly where to pick it up.
 - **Track 2 (Node.js)**: Opportunity 9 (design generation) scoped and
   logged 2026-08-06, not started. Needs: trend detection (reuse
   `aiToolsScan.ts`'s web_search pattern), an image-generation model
@@ -68,13 +67,26 @@
   fine-tuning was ruled out).
 
 ## Next Actions
-1. **Track 1**: Step 3 — decide concretely what retrieval evaluation looks
-   like against real `SearchQueries` data (needs a way to know what the
-   user actually engaged with after a search — not yet logged, see
-   `ARCHITECTURE_SUMMARY.md` §1's note on `search-log.ts`).
-2. **Track 2**: pick a starting point — likely trend detection first (lowest
-   risk, reuses an existing proven pattern) before the new, unevaluated
-   image-generation integration.
+1. **Track 1 — pick up here next session:** Step 3 — decide concretely
+   what retrieval evaluation looks like against real `SearchQueries` data.
+   First sub-problem: there's currently no logged signal for what a user
+   actually engaged with *after* a search (clicked/downloaded which
+   design) — without that, there's no ground truth to compute precision/
+   recall/MRR against. See `ARCHITECTURE_SUMMARY.md` §1's note on
+   `search-log.ts`. Deployed Lambda (`search-service`, live at
+   `https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`) is ready to
+   receive this logic once scoped — no further deploy-plumbing work
+   needed, just the actual feature code.
+2. **Track 2 — pick up here next session:** Build order decided 2026-08-06
+   (see `OPPORTUNITIES.md` Opportunity 9 "UX vision" / "Build-order
+   decision"): build the core pipeline first (trend detection → image
+   generation → `pattern-converter.ts` → editor review → diff/feedback
+   questions → publish via the existing "Publish to Catalog" button),
+   decide the trigger mechanism (button vs. scheduled) later — it's a
+   thin, swappable front end that doesn't affect the core build. Start
+   with trend detection specifically (lowest risk, reuses the proven
+   `aiToolsScan.ts` pattern) before the new, unevaluated image-generation
+   integration.
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
