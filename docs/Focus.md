@@ -64,6 +64,24 @@ lands on the right post in the feed, tracking params intact). Once sent,
 log it in `web/plan/Email_Content_Plan.md`'s Sent table and mark this item
 resolved here.
 
+**Start GenAI Phase 0 (Repository and Architecture Review) today,
+2026-08-06.** This is a parallel initiative — read
+`docs/genai-growth/Learning.md` first (it's the methodology doc; the
+`CLAUDE.md` pointer to it is a soft trigger that turned out not to fire
+reliably at the start of a fresh session, so this is the durable backstop).
+Also read `docs/genai-growth/PROGRESS.md` (Next Actions — the Python
+version discrepancy that used to be item 1 is resolved as of 2026-08-06:
+removed the Microsoft Store Python package, `python` and `py` now both
+resolve to `C:\Python313\` 3.13.2; next up is inspecting the repo
+architecture)
+and `docs/genai-growth/ROADMAP.md` (Phase 0/1 definitions). Important
+constraint from `Learning.md` § Python Background: Olga has **no prior
+Python experience** (C#/.NET background) — teach Python as a contrast to
+C#/.NET at an experienced-engineer level, not basic programming concepts.
+Also worth logging while doing this review: Opportunity 8 in
+`OPPORTUNITIES.md` (on-demand catalog translation) was added 2026-08-05
+and doesn't depend on the Python service at all — could ship in parallel.
+
 "Publish to Catalog" (see 2026-08-04/05 Shipped entry below) shipped and
 verified live (DesignID 5461 "Giraffes") — no known open follow-up on it.
 Otherwise: S6's next step (prefetch/`content-visibility` work,
