@@ -162,6 +162,12 @@ explicit user picker).
 7. The preference document (§ Proposed Capability step 5 above) grows silently across sessions; over time drafts should need fewer corrections.
 **Build-order decision (2026-08-06):** Build the core pipeline (steps 2-6 above) first; decide the exact trigger mechanism (step 1) later, once there's something real to trigger.
 
+**Outcome evaluation — did the trend guess actually pay off? (added 2026-08-06, not yet implemented):** Distinct from step 5's editorial feedback loop (which captures whether Olga liked the *execution*) — this measures whether the *theme choice itself* resonated with real demand, using real post-publish performance:
+- Tag AI-trend-sourced designs (e.g. a `Source: "ai-trend"` field on the DynamoDB item) and compare their performance against normally-sourced designs over a matched time window (design age matters — downloads accumulate over weeks/months mostly via organic SEO, not instantly, so compare designs at the same post-publish age, not raw totals).
+- **Known limitation — small early sample:** with only a handful of AI-sourced designs at first (see the "open-ended exploration" note above), any single design's numbers are noisy; don't trust the comparison until enough examples accumulate.
+- **Known limitation — raw downloads conflate two different questions:** "was the trend real" and "was this specific design well-executed" are different things, and a single download number can't distinguish a good-trend-bad-execution design from a bad-trend-good-execution one.
+- **Partial fix — split into two metrics instead of one:** (1) **reach** — traffic/impressions landing on the design's page (via GA4 / `SearchQueries`, keyword-level where possible) as a proxy for "was the theme actually searched for," largely independent of how well any one image was drawn; (2) **conversion** — `downloads ÷ page views` for that specific design, as a proxy for "did execution satisfy the people the theme already attracted." High reach + low conversion → right theme, weak execution. Low reach → wrong theme, regardless of execution quality. Imperfect (a page can get traffic for unrelated SEO reasons unrelated to the trend call), but meaningfully better than one blended number, and uses data mostly already collected (GA4, `SearchQueries`) rather than new infrastructure.
+
 ## Opportunity Template
 ### Opportunity — [Name]
 **Status:**  
