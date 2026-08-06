@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from mangum import Mangum
 
 from app.metrics import precision_at_k, recall_at_k, reciprocal_rank
 from app.schemas import EvaluateRequest, EvaluateResponse
@@ -19,3 +20,11 @@ def evaluate(req: EvaluateRequest) -> EvaluateResponse:
         recall_at_k=recall_at_k(req.retrieved_ids, relevant, req.k),
         mrr=reciprocal_rank(req.retrieved_ids, relevant),
     )
+
+
+# Entry point AWS Lambda calls once deployed behind API Gateway. Local
+# development (pytest, uvicorn) never touches this — both call `app`
+# directly. Mangum translates the API Gateway event into an ASGI call
+# into the same `app`, so /health and /evaluate need no Lambda-specific
+# code of their own.
+handler = Mangum(app)

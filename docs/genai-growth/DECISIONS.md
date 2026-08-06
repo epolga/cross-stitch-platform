@@ -47,6 +47,22 @@
 **Trade-offs:** Slightly slower to reach the "real feature" milestone than diving straight in, but lower risk of the first Python session being overwhelming enough to stall momentum.
 **Revisit When:** Step 1 (bare skeleton) is done and Olga can read/explain it — reassess whether step 2/3 pacing feels right or needs adjusting.
 
+## ADR-008 — search-service deploys as Lambda behind API Gateway
+**Status:** ACTIVE
+**Decision date:** 2026-08-06 (Olga's call)
+**Decision:** `search-service` will be deployed as an AWS Lambda function (via the Mangum ASGI adapter), not Elastic Beanstalk or ECS/Fargate — resolving the "which deployment option" question raised earlier the same session.
+**Reasoning:** Matches the existing `automation/pinterest-agent` Lambda pattern Olga already operates; near-$0 cost while this service has low/no real traffic; no server to manage/patch, consistent with running as a single operator with no dedicated ops team.
+**What's done (2026-08-06) — actually deployed and live:**
+- Added `mangum` to `search-service/requirements.txt`; `app/main.py` exports `handler = Mangum(app)` at the bottom, unchanged `/health` and `/evaluate` routes underneath.
+- `tests/test_lambda_handler.py` — 2 tests simulating a real API Gateway v2 event and calling `handler(event, {})` directly (no AWS involved), both passing (12/12 total suite).
+- **Real AWS resources created:** IAM role `search-service-lambda` (`AWSLambdaBasicExecutionRole` only — CloudWatch Logs, no other access, since current code calls no other AWS service); Lambda function `search-service` (Python 3.13, 256MB, 10s timeout); API Gateway HTTP API `search-service-api` (`https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`).
+- **Packaging solved:** Python deps for Lambda must be Linux (manylinux) wheels, not whatever the local dev machine builds — `pydantic-core` specifically ships a compiled binary (`.pyd` on Windows vs `.so` on Linux, same fact discussed earlier the same session re: what a "package" contains). Fixed via `pip install --platform manylinux2014_x86_64 --only-binary=:all: --python-version 3.13 --target build -r requirements.txt`, no Docker needed since all deps have published manylinux wheels.
+- **Real bug found and fixed:** `create-api --target` (API Gateway's "quick create" flow) did NOT actually wire the Lambda invoke permission despite documentation suggesting it does — curl through the real API URL returned `Internal Server Error` with zero matching Lambda invocation logs (proof the request never reached the function). Fixed with an explicit `aws lambda add-permission --principal apigateway.amazonaws.com`, made idempotent (remove-then-add) in the deploy script since quick-create's behavior here isn't reliable.
+- **Reusable deploy script:** `search-service/deploy.ps1`, mirroring `automation/pinterest-agent/lambda/deploy.ps1`'s structure (build → ensure role → zip → create-or-update function → wire trigger), adapted for Python/Lambda-behind-API-Gateway. Ran successfully end-to-end against already-existing resources (idempotent update path). One real PowerShell bug found+fixed while writing it: an em-dash character inside a double-quoted string literal (not inside a `#` comment, those are fine) broke PowerShell 5.1's parser with a misleading "missing closing brace" error reported several lines later — root-caused via `[System.Management.Automation.Language.Parser]::ParseFile` on isolated fragments, not obvious from the error message alone.
+- Verified end-to-end with real `curl` requests against the live public API endpoint for both `/health` and `/evaluate`.
+**What's NOT done:** No scoped permissions beyond basic execution (fine — current code needs none). No custom domain/DNS for the API endpoint (using the raw `execute-api.amazonaws.com` URL). No monitoring/alerting wired up beyond what CloudWatch captures automatically.
+**Revisit When:** Step 3 (the real feature) is scoped enough to know what additional IAM permissions the Lambda needs (e.g. DynamoDB read on `SearchQueries` for retrieval evaluation) — add via `aws iam put-role-policy` on the existing role, same iterative-policy pattern as `pinterest-agent`'s role.
+
 ## ADR Template
 ### ADR-XXX — [Title]
 **Status:** PROPOSED / ACTIVE / SUPERSEDED  

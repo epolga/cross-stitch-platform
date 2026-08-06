@@ -12,6 +12,12 @@ class EvaluateRequest(BaseModel):
 
 
 class EvaluateResponse(BaseModel):
-    precision_at_k: float
-    recall_at_k: float
-    mrr: float
+    precision_at_k: float = Field(
+        ..., description="Fraction of the top-k retrieved IDs that were relevant"
+    )
+    recall_at_k: float = Field(
+        ..., description="Fraction of all relevant IDs that appeared in the top-k"
+    )
+    mrr: float = Field(
+        ..., description="Reciprocal rank of the first relevant ID (0 if none found)"
+    )

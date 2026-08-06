@@ -44,7 +44,18 @@
   top-level folder, `.venv`, FastAPI+uvicorn+pytest+httpx). `/health` and
   `/evaluate` (precision@k, recall@k, MRR over `app/metrics.py`, pure
   functions + Pydantic schemas in `app/schemas.py`) both implemented and
-  tested (10/10 pytest passing). Not yet committed to git. Step 3 (real
+  tested. **Deployed for real (ADR-008):** Lambda `search-service`
+  (Python 3.13) behind API Gateway HTTP API, live at
+  `https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com` — both
+  `/health` and `/evaluate` verified with real `curl` requests against
+  the public endpoint. `search-service/deploy.ps1` (mirrors
+  `automation/pinterest-agent/lambda/deploy.ps1`) makes this repeatable.
+  Solved Linux-wheel packaging for `pydantic-core`'s compiled component;
+  found+fixed a real API Gateway quick-create bug (missing Lambda invoke
+  permission) and a real PowerShell parser bug (em-dash inside a string
+  literal). See ADR-008 for full detail. Earlier skeleton committed to
+  git (`bb455e5`); today's deploy-script/Lambda additions not yet
+  committed. Step 3 (real
   feature, likely retrieval evaluation against live `SearchQueries` data
   rather than a vector DB — see `ROADMAP.md` Phase 1 Step 3 note) not
   started.
