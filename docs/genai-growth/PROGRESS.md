@@ -2,7 +2,7 @@
 
 ## Current Status
 **Current milestone:** Two parallel tracks as of 2026-08-06 (Olga's decision — split working time between them rather than sequencing):
-1. **Phase 1, Python, `search-service/`** — Step 1 (bare FastAPI skeleton) and Step 2 (Pydantic models + `/evaluate` endpoint computing retrieval metrics) both done. Step 3's data-collection groundwork (Parts A/B/C — logging what was shown, click engagement, and weighted downloads) all shipped 2026-08-07 in the Node.js web app. Remaining: let real traffic accumulate, then write the actual Python-side `/evaluate` consumer script against `SearchQueries` + `SearchEngagement`.
+1. **Phase 1, Python, `search-service/`** — Step 1 (bare FastAPI skeleton) and Step 2 (Pydantic models + `/evaluate` endpoint computing retrieval metrics) both done. Step 3 is now fully built end-to-end, shipped 2026-08-07: Node.js data-collection (Parts A/B/C — logging what was shown, click engagement, weighted downloads) plus the Python evaluation consumer (`app/evaluation.py` + `scripts/evaluate_recent_searches.py`), verified with a real (empty-result) dry-run against production. Remaining: nothing to build — just wait for real search traffic to accumulate, then re-run the script for real numbers.
 2. **Opportunity 9, Node.js** — automated design generation from trending themes with a feedback-learning loop. Not started. See `OPPORTUNITIES.md` Opportunity 9 for scope and the Language decision (Node.js, not Python — depends on reusing `pattern-converter.ts`; likely lives inside `web/`, not a separate service).
 **Overall state:** Architecture review done. Python skeleton exists, runs locally, not deployed anywhere. Opportunity 9 not yet started.
 
@@ -135,10 +135,34 @@
    Binary relevance only so far for `/evaluate` itself —
    `search-service/app/metrics.py`'s `relevant_ids` is still a plain set;
    a weighted precision/recall variant is future work, not scoped yet.
-   **All of Track 1 Step 3's data-collection plan (Parts A/B/C) is now
-   shipped** — next real step is letting real traffic accumulate, then
-   writing the actual Python-side `/evaluate` consumer against
-   `SearchQueries` + `SearchEngagement`.
+
+   **Python `/evaluate` consumer shipped 2026-08-07** (same day, once
+   Olga caught that "wait for real traffic" only blocks getting
+   *meaningful numbers*, not writing/testing the code itself — corrected
+   mid-session): `search-service/app/evaluation.py` — pure functions
+   (`evaluate_search`, `evaluate_all`) that turn `SearchQueryRecord`/
+   `EngagementRecord` data into per-search and aggregate precision@k/
+   recall@k/MRR via the existing `app/metrics.py`. Deliberately zero I/O,
+   so it's fully unit-tested on synthetic fixtures
+   (`tests/test_evaluation.py`, 5 new tests, 17/17 passing overall) without
+   needing real accumulated traffic — mirrors keeping business logic out
+   of a repository/DbContext layer in C#/.NET. The actual DynamoDB-reading
+   side is a separate, deliberately thin script,
+   `search-service/scripts/evaluate_recent_searches.py` (boto3, kept in a
+   new `requirements-dev.txt` rather than `requirements.txt` since the
+   deployed Lambda itself never touches DynamoDB — bundling boto3 into
+   the Lambda zip would be dead weight). Ran it for real against
+   production (read-only Scan): correctly reports `0` evaluable
+   searches right now — `SearchEngagement` doesn't exist yet since no
+   real click/download has landed since today's deploy — confirming the
+   whole pipeline is wired correctly end-to-end, just waiting on traffic
+   for real numbers. Verified: `pytest` 17/17, live dry-run against real
+   AWS.
+
+   **Track 1 Step 3 is now fully built, both data-collection (Parts A/B/C)
+   and the evaluation consumer** — nothing left to code; next step is
+   purely waiting for real search traffic to accumulate, then re-running
+   `evaluate_recent_searches.py` for actual numbers.
 2. **Track 2 — pick up here next session:** Build order decided 2026-08-06
    (see `OPPORTUNITIES.md` Opportunity 9 "UX vision" / "Build-order
    decision"): build the core pipeline first (trend detection → image

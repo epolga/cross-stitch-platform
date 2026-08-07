@@ -1,0 +1,8 @@
+# Extra dependencies for local/admin scripts (scripts/) that are never
+# deployed to the Lambda — deploy.ps1 packages requirements.txt only.
+# boto3 is kept out of requirements.txt on purpose: the deployed /health
+# and /evaluate endpoints never touch DynamoDB, so bundling it there would
+# just be unused dead weight in the Lambda zip (and AWS's own Python
+# runtime already ships boto3 anyway, for code that does need it there).
+-r requirements.txt
+boto3
