@@ -1123,7 +1123,12 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
 
         sent++;
         if (sent % 50 == 0 || sent == toSend.Count)
-            Console.WriteLine($"Sent {sent}/{toSend.Count} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}");
+        {
+            int remaining = toSend.Count - sent;
+            TimeSpan avgPerItem = stopwatch.Elapsed / sent;
+            TimeSpan eta = avgPerItem * remaining;
+            Console.WriteLine($"Sent {sent}/{toSend.Count} | Remaining {remaining} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss} | ETA {eta:hh\\:mm\\:ss}");
+        }
     }
 
     Console.WriteLine($"Done. Sent {sent}/{toSend.Count} in {stopwatch.Elapsed:hh\\:mm\\:ss}.");

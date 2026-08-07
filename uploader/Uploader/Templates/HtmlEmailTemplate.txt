@@ -1,20 +1,22 @@
 [Subject]
-The pattern I made for a stray kitten I once found 🐾
+A new free pattern: Capybara 🦫
 
 [Greeting]
 Hi [FName],
 
 [BeforeImage]
-This one isn't like the others. I didn't just design it — I designed it for someone.
+A new pattern just went up in the free collection.
 
-Black Cat
+Capybara
 
-A black cat with golden eyes, resting in a cottage garden full of poppies, lavender, daisies, and roses, with a blue bird keeping her company. 174 × 218 stitches, 29 DMC colors.
+Capybaras have quite the reputation for being the calmest animals around — nothing seems to ruffle them. This one captures that easygoing look in warm orange and brown, with a bold black outline that keeps it simple and satisfying to stitch. Just 58 × 67 stitches and 6 colors — small enough to finish in an evening or two.
+
+Perfect if you want something quick and cheerful to work on between bigger projects.
 
 [ImageWithLink]
 <p>
 	<a href="<pattern_url>">
-		<img src="<image_url>" alt="Black Cat cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
+		<img src="<image_url>" alt="Capybara cross-stitch pattern" style="max-width:150px; max-height:150px; width:auto; height:auto; border:0;"/>
 	</a>
 </p>
 <p>
@@ -23,12 +25,9 @@ A black cat with golden eyes, resting in a cottage garden full of poppies, laven
 
 
 [AfterImage]
-A few years ago I found a kitten outside, thin and half-frozen, who shouldn't really have made it. She did — and she's been asleep on my stitching ever since. I named her Nitka ("little thread," in Czech), and this pattern is my thank-you to her.
+This one works nicely as a quick gift tag or a small hoop for a desk — no need to save it for a big project.
 
-I wrote the whole story on the site, if you'd like to read it:
-https://cross-stitch.com/short-stories/the-story-behind-black-cat
-
-Do you have a rescue of your own, four-legged or otherwise? I'd love to hear about them.
+Is there an animal you'd love to see turned into a pattern next?
 
 Just hit Reply and tell me.
 
