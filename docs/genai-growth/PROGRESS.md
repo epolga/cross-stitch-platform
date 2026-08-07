@@ -58,9 +58,46 @@
   (`36cfdc2`), pushed. **Step 3 explicitly deferred to the next session**
   (Olga's call, 2026-08-06) — not started today. See Next Actions below
   for exactly where to pick it up.
-- **Track 2 (Node.js)**: Opportunity 9 (design generation) scoped and
-  logged 2026-08-06, not started. Needs: trend detection (reuse
-  `aiToolsScan.ts`'s web_search pattern), an image-generation model
+- **Track 2 (Node.js)**: Opportunity 9 (design generation) scoped
+  2026-08-06. **Step 1 (trend detection) built 2026-08-07**:
+  `web/src/lib/trend-detection.ts` — `detectTrend()` reuses
+  `aiToolsScan.ts`'s proven `web_search` + `pause_turn`-continuation
+  pattern, but asks for structured JSON (`{ theme, imagePrompt,
+  signalSource, reasoning }`) instead of that file's free-text email
+  body, since this feeds the next pipeline step automatically. Prompt
+  restricts sources to cross-stitch-specific signals (Pinterest
+  cross-stitch tags, Etsy cross-stitch bestsellers, r/CrossStitch,
+  cross-stitch Google Trends) per the OPPORTUNITIES.md design, and passes
+  a sample of existing catalog album captions (`getAllAlbumCaptions()`)
+  as a soft "don't repeat these" list. Guards against hallucinated trends
+  by checking the response actually contains a `server_tool_use` block
+  (real search evidence, confirmed via
+  `automation/pinterest-agent/scripts/_diag_search_error.ts`) before
+  trusting the result — refuses (returns `null`) rather than trusting an
+  ungrounded answer. Same split as the Python evaluation consumer: pure,
+  no-I/O helpers (`extractJson`, `hasRealWebSearchEvidence`, `buildPrompt`)
+  are exported and unit-tested (`trend-detection.test.ts`, 8 tests, no
+  API calls); the actual Anthropic call stays in the thin, untested
+  `detectTrend()`.
+
+  **Run live for real 2026-08-07** (`web/scripts/run-trend-detection.ts`,
+  kept as the only trigger that currently exists — the real trigger
+  mechanism is still an open, deferred decision): found **"capybara"** —
+  cited real evidence (a Pinterest board "44 Capybara Cross Stitch ideas
+  in 2026", Etsy kawaii-capybara listings, Lord Libidan's Etsy-bestseller
+  trend analysis), confirming `server_tool_use` fired for real, not a
+  hallucinated answer. Manually verified against the live catalog: **zero**
+  existing capybara-themed albums (checked all 114, not just the
+  avoid-list sample) — genuinely uncovered, the dedup worked correctly
+  this run. **Found and fixed a real gap during that verification**:
+  `MAX_AVOID_LIST_SIZE` was 80 but the catalog already has 114 albums,
+  so the alphabetically-last ~30% were silently excluded from the
+  "don't repeat these" list — didn't cause a wrong result this run
+  ("capybara" sorts well inside the first 80), but was a live bug
+  nonetheless. Raised to 200 (comfortable headroom) and updated the
+  matching test.
+
+  Still needed for the rest of the pipeline: an image-generation model
   (new integration, not yet evaluated), wiring into `pattern-converter.ts`,
   and a feedback-capture/preference-document mechanism (in-context
   learning, not fine-tuning — see `OPPORTUNITIES.md` Opportunity 9 for why
@@ -169,10 +206,84 @@
    generation → `pattern-converter.ts` → editor review → diff/feedback
    questions → publish via the existing "Publish to Catalog" button),
    decide the trigger mechanism (button vs. scheduled) later — it's a
-   thin, swappable front end that doesn't affect the core build. Start
-   with trend detection specifically (lowest risk, reuses the proven
-   `aiToolsScan.ts` pattern) before the new, unevaluated image-generation
-   integration.
+   thin, swappable front end that doesn't affect the core build.
+   **Trend detection (step 1) built AND run live 2026-08-07** — found
+   "capybara", see the In Progress entry above for full detail.
+   **Image-generation model comparison (step 2) started same day** —
+   pivoted away from Bedrock (Titan end-of-life, Stability's Bedrock
+   catalog is edit-only tools, Nova Canvas Legacy/AccessDenied) to
+   calling Stability AI and OpenAI directly; round 1 done, OpenAI 1-0,
+   full detail and running score in the new
+   `docs/genai-growth/IMAGE_GENERATION_PREFERENCES.md`. More rounds
+   planned before drawing a real conclusion. Still open: decide the
+   trigger mechanism (button vs. scheduled — Olga wants to revisit this
+   once the pipeline is more settled).
+
+   **First real end-to-end run, same day:** the OpenAI capybara image
+   (raw, with its vignette background — Olga's explicit pick, not the
+   background-removed version) went through `pattern-converter.ts`
+   (`illustration` mode, `final-only`/CIEDE2000, 120px wide, cap 25
+   colors) and came out at **120x120, 18 colors** — saved to Olga's own
+   account as a normal `ConverterPattern`
+   (`web/scripts/save-capybara-draft.ts`, pattern id
+   `e7ec7a26-512e-41fa-9701-011547a937a7`), viewable at
+   `/profile/patterns` like any manually-saved pattern. Deliberately
+   **not** run through "Publish to Catalog" (`/api/admin/publish-to-catalog`)
+   — that creates a real Pinterest pin and a live, publicly-indexed
+   catalog entry with no automatic rollback; Olga explicitly asked for
+   the lower-stakes "save to my account" step instead, matching
+   `OPPORTUNITIES.md`'s UX vision step 3 (she reviews the draft in the
+   editor before any decision to actually publish). The script calls
+   `pattern-storage.ts`'s `savePattern()` directly with her admin `cid`
+   (looked up once via a throwaway script,
+   `CrossStitchUsers` PK `USR#<email>` → `cid` attribute) — bypassing the
+   HTTP/session-cookie layer the same way existing admin scripts like
+   `stamp-editor-pattern.ts` already do, not a new pattern.
+
+   Post-conversion cleanup needed real iteration to match what the editor
+   normally does automatically (confetti removal, background erasure via
+   a border flood-fill since pattern-converter.ts has no alpha
+   awareness, Size to Design, Remove Unused, server-side thumbnail) —
+   `save-capybara-draft.ts` is now the reference implementation of the
+   full pipeline; see `feedback_script_pattern_full_pipeline` memory.
+
+   **Next real discussion (Olga's ask, 2026-08-07, after she edits this
+   capybara draft herself and sends her newsletter): a real version of
+   step 5's diff/feedback loop.** She wants Claude to remember her manual
+   corrections to an AI draft, ask *why* she made each one, and
+   accumulate that into the preference document — not just for image
+   models (already doing that manually in
+   `IMAGE_GENERATION_PREFERENCES.md`) but as a general mechanism so the
+   *next* AI-generated design comes out closer to what she wants without
+   repeating the same corrections. This is exactly `OPPORTUNITIES.md`
+   Opportunity 9 step 5 as originally scoped — next step is designing the
+   concrete mechanics (what counts as a "correction" worth asking about,
+   where the diff comes from given the editor has no automatic AI-draft
+   vs. edited-version comparison yet, how the accumulated preferences
+   actually get fed back into future `imagePrompt`/conversion-parameter
+   choices).
+
+   **Full spec written same day: `docs/genai-growth/DESIGN_FEEDBACK_LOOP.md`.**
+   Olga dictated the complete mechanism in detail — diff → short reason
+   tag → correction-example database → three levels of what to do with
+   it (accumulating rules now / similar-example retrieval next / real
+   fine-tuning deferred), plus a periodic self-formulated-preferences
+   pass every ~50 accepted patterns that Olga approves or rejects rule by
+   rule. Not yet implemented (no UI/diff tooling) — that doc is the spec
+   to build against.
+
+   **Decided: 5 domains identified (image-prompt composition,
+   image-provider choice, conversion parameters, stitch-level manual
+   touch-ups, newsletter/Ann-voice copy), each with its own provisional
+   record-count threshold before attempting Level-1 rule extraction —
+   see `DESIGN_FEEDBACK_LOOP.md`'s "Domains and per-domain advancement
+   plan."** Starting with Domain 1 (image-prompt composition), manual
+   log only, no tooling yet. Records now actually being kept in the new
+   `docs/genai-growth/CORRECTIONS_LOG.md` — 2 real entries logged
+   2026-08-07 (Domain 1: the capybara composition fix; Domain 5: the
+   newsletter stitching-claim/trending-framing fix). Next: keep logging
+   real corrections as they happen; revisit each domain's threshold once
+   its record count gets close.
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.

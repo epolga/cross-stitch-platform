@@ -1,0 +1,388 @@
+# Design Feedback Loop — Track 2 (Opportunity 9) Step 5, detailed spec
+
+Full specification for the accumulated-preference / feedback-learning
+mechanism referenced as "step 5" in `OPPORTUNITIES.md`'s Opportunity 9
+("the system diffs the AI draft against her edited version and asks 1-2
+targeted questions"). Written 2026-08-07, dictated by Olga in full during
+a design conversation that grew directly out of the first real Track 2
+run (the "Capybara" design — trend detection → image generation →
+conversion → manual cleanup, same session). Not yet implemented — this
+is the spec to build against, once the open questions at the end are
+resolved.
+
+## Why now, and why this shape
+
+`OPPORTUNITIES.md` already ruled out fine-tuning for this pipeline (needs
+hundreds of examples, real training cost, catastrophic-forgetting risk,
+opaque/unauditable result vs. a plain document Olga can read and hand-edit
+— see that doc's Opportunity 9 section). This spec is the concrete,
+buildable alternative: **in-context learning from a growing, structured
+record of Olga's real corrections**, not model retraining.
+
+## The optimal flow (Olga's diagram)
+
+```
+AI result
+   ↓
+Olga's manual correction
+   ↓
+compare BEFORE / AFTER
+   ↓
+automatic diff
+   ↓
+Olga gives a short reason
+   ↓
+database of correction examples
+   ↓
+rules for future generations
+```
+
+**Worked example, as Olga described it:** the AI result has 3 isolated
+dark stitches around a cat's eye. She deletes them. The system can see
+*what* changed:
+
+```
+Removed:
+(42,31) DMC 3371
+(44,29) DMC 3371
+(46,32) DMC 3371
+```
+
+...but not *why*. So it asks — either free text, or a pick from a preset
+reason list (see Reason Tags below). That answer is what turns a diff
+into a usable training signal.
+
+## UI/UX flow
+
+1. Olga reviews a generated pattern in the editor.
+2. She clicks either:
+   - **Approve** (no changes) — the pattern is accepted as-is. **This
+     case must be recorded too, explicitly** — it's a positive example,
+     showing what Olga considers already correct. Without capturing
+     "nothing needed fixing" cases, the record only ever shows what's
+     wrong, never what's right.
+   - **Approve with changes** — she edits with the normal editor tools,
+     then saves.
+3. On "Approve with changes," the system already knows the diff (grid
+   cells changed, colors merged/added/removed) and shows a short summary,
+   e.g.:
+   > 36 cells changed · 2 colors merged
+4. It asks **one question**: *"What were you mainly fixing?"* — answered
+   via preset buttons (see Reason Tags) plus a free-text "Other" option.
+5. That's the entire interaction cost to Olga — she is explicitly not
+   expected to narrate every individual edit. One summary, one reason,
+   done.
+
+Olga's own framing: *"Объяснять каждое движение невыносимо. Но ты можешь
+автоматически агрегировать edit"* — explaining every single move is
+unbearable, but the diff can be auto-aggregated and reduced to one
+question.
+
+## Reason tags (starting preset list)
+
+- Remove visual noise
+- Too much detail
+- Preserve important detail
+- Wrong color
+- Merge similar colors
+- Improve silhouette
+- Simplify background
+- Fix anatomy
+- Improve composition
+- Other (free text)
+
+## Correction record — data schema
+
+Per reviewed pattern (approved as-is, or approved with changes), store:
+
+- `sourceImage` — the original input (e.g. the generated image before
+  conversion)
+- `aiResult` — the AI-generated grid/palette before Olga touched it
+- `correctedResult` — Olga's final saved grid/palette (identical to
+  `aiResult` if she approved without changes)
+- `gridDiff` — cell-level diff (added/removed/recolored cells)
+- `paletteBefore` / `paletteAfter`
+- `imageType` — subject/category (e.g. "black cat", "animal silhouette",
+  "flower illustration") — needed later for Level 2 similarity retrieval
+- `dimensions` (width × height)
+- `numberOfColors` (before/after)
+- `reasonTags` — one or more from the preset list
+- `freeTextComment` — optional
+- `acceptedOrRejected` — approve / approve-with-changes (and implicitly:
+  every stored record IS an accepted pattern — see Open Questions on
+  whether outright-rejected drafts should also be logged)
+
+## Example-record format (human-readable rollup)
+
+For review and for feeding Level 2 few-shot retrieval, individual
+corrections roll up into short entries like:
+
+```
+Example 17
+Input: black cat illustration
+AI result: 8 isolated grey stitches around ears
+Correction: removed
+Reason: visual noise / unnecessary detail
+
+Example 31
+Input: dog portrait
+AI result: eye simplified too much
+Correction: restored 4 dark stitches
+Reason: preserve facial detail
+
+Example 54
+Input: flower illustration
+AI result: 5 similar reds
+Correction: merged into 3
+Reason: excessive palette complexity
+```
+
+## Three levels of what to do with the accumulated corrections
+
+**Level 1 — continuously updated rules (buildable now, no training).**
+After enough verified patterns (Olga's benchmark: ~100), analyze the
+correction log and look for recurring patterns, e.g.: *"In small animal
+patterns, the user regularly removes isolated highlight stitches around
+the outer silhouette."* Turn that into an explicit rule appended to the
+relevant generation prompt:
+
+> For small animal patterns, avoid isolated highlight stitches around
+> the outer silhouette unless they represent an important recognizable
+> feature.
+
+The next generation receives this rule directly. (Track 1-style parallel:
+this already happened once by hand this session — the capybara
+composition feedback got written straight into `trend-detection.ts`'s
+`buildPrompt()`. Level 1 is that same move, made systematic and
+data-driven instead of ad hoc.)
+
+**Level 2 — library of similar corrected examples (stronger than generic
+rules).** Before generating e.g. a new black cat design, find the most
+relevant past corrections by similarity:
+
+```
+New black cat
+   ↓
+find 5 most relevant corrections
+   ↓
+AI sees what was wrong before (before → corrected-after pairs)
+   ↓
+new generation
+```
+
+Similarity dimensions Olga named: subject (black cats), broader category
+(animal silhouettes), visual property (dark fur), and pattern size.
+Stronger than a generic rule like "avoid unnecessary detail" because the
+model sees concrete before/after pairs matched to the actual new input.
+
+**Level 3 — real model fine-tuning.** If the specific model in use
+supports it, accumulated `(input → undesirable output → corrected
+target)` triples could become a training set. **Not where to start.**
+Olga's own reasoning: first accumulate enough corrections and find out
+whether there are stable, recurring patterns at all — Levels 1 and 2 may
+turn out to cover nearly everything needed, making 3 unnecessary.
+
+## Periodic self-formulated-preferences pass
+
+Every ~50 accepted patterns, Olga would prompt (paraphrased, her exact
+framing):
+
+> Analyze all my corrections. Don't recount individual cases. Find
+> durable rules that explain my decisions. For each rule, show
+> supporting and contradicting examples.
+
+Expected output shape:
+
+```
+RULE 1
+Preserve detail preferentially in faces, especially eyes.
+Evidence: 14 corrections. Exceptions: 2.
+
+RULE 2
+Remove isolated stitches from smooth backgrounds.
+Evidence: 21 corrections. Exceptions: 1.
+
+RULE 3
+Prefer larger contiguous color regions over exact local color matching.
+Evidence: 17 corrections.
+```
+
+Olga then **approves or rejects each rule individually** — this becomes
+her own explicit, readable "design policy," extracted from her actual
+decisions rather than guessed at. Rejected rules don't get applied even
+if the evidence count looks reasonable — she has final say.
+
+## Domains and per-domain advancement plan
+
+Added 2026-08-07, same conversation: Olga's worked examples in this doc
+happened to all come from one domain (stitch-level pattern edits) — not
+because the other domains don't matter, but because that's what she
+happened to illustrate with. This section is the explicit list of every
+domain identified so far, so none get silently dropped, plus a concrete
+per-domain plan: what one record looks like, a provisional threshold for
+moving from manual logging to rule-extraction (Level 1), and where that
+domain's rules actually get applied once extracted.
+
+**On thresholds:** Olga's "~100 verified patterns" / "every ~50" numbers
+were said generally, not necessarily as a fixed rule for every domain.
+Today's own image-prompt correction (subject size/background) showed an
+actionable pattern after a single real example, not 100 — a narrow,
+low-variability domain can reach "obviously worth turning into a rule"
+much sooner. Treat the numbers below as provisional starting points, not
+fixed law — revisit per domain once records actually accumulate.
+
+**Decided 2026-08-07: start with Domain 1 (image-prompt composition),
+manual accumulation only — no tooling/UI yet.** Records live in
+`docs/genai-growth/CORRECTIONS_LOG.md`, one section per domain.
+
+### Domain 1 — Image-prompt composition (STARTING DOMAIN)
+
+- **What:** corrections to `trend-detection.ts`'s `imagePrompt` output —
+  subject framing/size, background presence, style directives.
+- **One record:** the imagePrompt text before, what Olga said was wrong,
+  the corrected framing/instruction, and (once available) the resulting
+  image.
+- **Already has one real example:** today's "subject too small, drop the
+  scene/background" correction — already folded directly into
+  `buildPrompt()`'s literal template text (a Level-1 rule applied by
+  hand, before any formal accumulation process existed).
+- **Provisional threshold to formalize into Level 1:** low (3-5 records)
+  — this domain has few degrees of freedom (framing, background, style),
+  so patterns should show up fast.
+- **Where rules apply:** directly in `trend-detection.ts`'s
+  `buildPrompt()` template.
+
+### Domain 2 — Image-provider / model style choice
+
+- **What:** which provider/model (Stability, OpenAI, others later)
+  produces results Olga actually prefers, and why.
+- **One record:** already the exact shape of
+  `IMAGE_GENERATION_PREFERENCES.md`'s per-round entries (prompt used,
+  providers compared, Olga's pick, her stated reason).
+- **Status:** informally started 2026-08-07 (round 1: OpenAI 1-0
+  Stability, reason = "sharper, reads as backgroundless without an
+  extra step").
+- **Provisional threshold:** ~5-8 rounds before drawing any real
+  provider preference conclusion (explicitly flagged as premature at
+  n=1 in that file already).
+- **Where rules apply:** which `generateImage*` function
+  `image-generation.ts`'s pipeline calls by default, and/or provider-
+  specific prompt phrasing if one model responds better to different
+  wording.
+
+### Domain 3 — Pattern-conversion parameters
+
+- **What:** the scalar/categorical choices in `convertImage()` calls —
+  target width, max colors, `mode` (photo/illustration/line-art),
+  `colorDistanceMode`, and the script-side background-erasure tolerance
+  (`detectBackgroundByFloodFill`'s threshold).
+- **One record:** parameters used, what Olga changed about the result
+  (e.g. "too many colors, merge these two"), corrected parameter value
+  if there's a direct one, or a qualitative note if not.
+- **Status:** not started — today's capybara run picked these values by
+  judgment (25 colors, 80px width, `final-only`), not from any prior
+  record.
+- **Provisional threshold:** ~8-10 records — more degrees of freedom
+  than Domain 1, likely needs more evidence before a rule is safe to
+  generalize (e.g. "always use N colors" could easily be true only for
+  simple flat-illustration subjects, not photo-mode conversions).
+- **Where rules apply:** default arguments in whatever script/UI path
+  calls `convertImage()` for a new AI-generated design.
+
+### Domain 4 — Stitch-level manual touch-ups
+
+- **What:** Olga's worked example throughout most of this doc — local
+  edits to an already-converted grid (isolated stitches removed,
+  specific detail preserved near a recognizable feature, colors merged).
+- **One record:** the full schema in "Correction record — data schema"
+  above (diff, reason tag, before/after palette, etc.) — this is the
+  domain that section was written against.
+- **Status:** not started as a formal log (today's real touch-ups —
+  confetti/background/size-to-design/remove-unused — were pipeline bugs,
+  not preference data; see Notes below, item 2 unchanged).
+- **Caution (already raised, still stands):** examples like "preserve
+  detail near the eyes" are spatially/semantically local — a global
+  Level-1 rule can't easily express "near an eye" without some spatial
+  understanding of the specific image (a vision-model read, most
+  likely). This domain may need to reach Level 2 (similar-example
+  retrieval) sooner than the others, rather than living comfortably in
+  Level 1 rules for long. Provisional threshold for attempting Level 1
+  anyway: ~15-20 records, specifically to see whether *global* rules
+  ("prefer larger contiguous regions over exact local color match" —
+  Olga's own Rule 3 example) turn out to cover most cases even without
+  spatial awareness, before concluding Level 2 is actually necessary.
+- **Where rules apply:** either the conversion pipeline's own heuristics
+  (`removeConfetti`, `detectBackgroundByFloodFill`, `removeUnusedColors`
+  parameters) for global rules, or a retrieval step feeding example
+  pairs to a review-assist prompt for local/contextual ones.
+
+### Domain 5 — Newsletter / Ann-voice copy
+
+- **What:** corrections to generated newsletter/email copy — tone,
+  factual accuracy about what Ann did or didn't do, framing choices.
+- **One record:** the draft text, what was wrong, the corrected text,
+  the reason.
+- **Status:** two real examples already happened today (informally, not
+  logged): don't claim Ann personally stitched an AI-sourced design;
+  drop "trending everywhere" framing when it doesn't fit. Not yet
+  written down anywhere as structured records — first thing to do if
+  this domain gets picked up.
+- **Provisional threshold:** ~5-8 records — text tone corrections tend
+  to be somewhat repeatable ("don't do X") once a few surface.
+- **Where rules apply:** a short "Ann voice — do/don't" addendum,
+  either inside `Ann_Persona_and_Newsletter_Content.md` or a new
+  sibling doc, consulted before drafting any AI-sourced-design
+  announcement copy.
+
+### Explicitly out of scope for this mechanism
+
+**Trend/theme selection quality** (was "capybara" a *good* theme to
+pick?) is deliberately **not** part of this correction-log system — it
+already has its own evaluation mechanism, the reach/conversion
+outcome-evaluation plan in `OPPORTUNITIES.md`'s Opportunity 9 (real
+post-publish traffic/download data, not a manual correction Olga makes
+in an editor). Don't conflate the two.
+
+## Notes and open questions (Claude's additions, not yet resolved with Olga)
+
+These came up while reviewing the spec against today's real pipeline —
+flagging them rather than deciding unilaterally:
+
+1. **Different domains need separate rule sets.** Today alone produced
+   three distinct kinds of correction: image-prompt composition (subject
+   size/background), pattern-conversion pipeline gaps, and Ann-voice/
+   newsletter copy tone. A rule mined from image-prompt corrections
+   ("avoid isolated highlight stitches") has no bearing on newsletter
+   copy, and vice versa. The correction log and the Level-1 rule sets it
+   produces should be scoped per domain, not pooled into one undifferentiated
+   pile — otherwise Level 1's pattern-mining will either miss real
+   signal (diluted across unrelated domains) or produce rules that get
+   misapplied in the wrong context.
+2. **Not every correction is a "preference" to learn — some are just bugs.**
+   Today's post-conversion pipeline gaps (missing confetti removal,
+   missing background erasure, missing thumbnail, stale palette entries)
+   weren't stylistic choices Olga made differently each time — they were
+   the script simply not doing what the editor always does. Those get
+   fixed once in code (already done, `save-capybara-draft.ts` +
+   `feedback_script_pattern_full_pipeline` memory) and should **not**
+   pollute the correction-learning dataset as if they were recurring
+   design preferences.
+3. **Where does the diff actually get computed?** The spec assumes the
+   system already has both `aiResult` and `correctedResult` to diff at
+   save time. The real editor currently has no concept of "this pattern
+   started as an AI draft" — that provenance (and the original AI-draft
+   grid/palette to diff against) needs to be tracked from the moment a
+   Track 2 draft is created through to when Olga saves her edited
+   version.
+4. **Where does the correction database live?** Needs a real store (new
+   DynamoDB table, most likely, matching every other structured log in
+   this codebase) — not decided yet.
+5. **Scope for the first build:** Olga has confirmed starting with a
+   single domain before generalizing to all three — which domain to
+   start with is still open (image-prompt composition is the natural
+   candidate: it already has one real logged example from today, in
+   `IMAGE_GENERATION_PREFERENCES.md`).
+6. **Should outright-rejected drafts (never approved at all) get logged
+   too?** Not addressed explicitly in the spec above — worth deciding,
+   since a fully-discarded draft is arguably as informative as a
+   heavily-corrected one.

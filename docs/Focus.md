@@ -62,6 +62,15 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
+**2026-08-08 (tomorrow): walk through `search-service/app/evaluation.py`
+line by line with Olga.** Requested 2026-08-07 explicitly for tomorrow —
+the goal is the real Phase 1 milestone per `ROADMAP.md` ("Olga can
+independently read, modify, and debug this Python code herself"), not
+just that the code exists. Cover `evaluation.py` and its dependency
+`app/metrics.py` (both pure, no I/O — good for a first walkthrough).
+Explain in detail, not tersely — this is the GenAI learning track (see
+`feedback_genai_track_explain_in_detail` memory).
+
 ~~Send the "milenas-tin" Announcement mass-send.~~ — **done 2026-08-06**,
 733 recipients, `eid=260806`, sent 13:09 UTC (16:09 Israel time, on
 schedule). Logged in `web/plan/Email_Content_Plan.md`'s Sent table. Not
