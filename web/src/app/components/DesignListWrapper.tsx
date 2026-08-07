@@ -14,6 +14,8 @@ interface DesignListWrapperProps {
   baseUrl?: string;
   caption?: string;
   className?: string;
+  /** Present only when this list is an AI/semantic search result page — enables click-engagement logging (Track 1 Step 3 Part B). Absent for plain catalog/album browsing. */
+  searchId?: string;
 }
 
 export function DesignListWrapper({
@@ -24,6 +26,7 @@ export function DesignListWrapper({
   baseUrl,
   caption,
   className,
+  searchId,
 }: DesignListWrapperProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Initialize to false for SSR
 
@@ -70,6 +73,7 @@ export function DesignListWrapper({
       caption={caption}
       className={className}
       isLoggedIn={isLoggedIn}
+      searchId={searchId}
     />
   );
 }

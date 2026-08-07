@@ -9,6 +9,7 @@ import {
 } from './AuthControl';
 import { Design } from '../types/design';
 import { devLog } from '@/lib/devLog';
+import { logSearchEngagementClient } from '@/lib/search-engagement-client';
 //import { CreateDesignUrl } from '@/lib/url-helper';
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
   formatLabel?: string;
   formatNumber?: string;
   isMissing?: boolean;
+  /** Present when this design was reached via an AI/semantic search hand-off — attributes the download back to that search as a (higher-weighted) relevance signal (Track 1 Step 3 Part C). */
+  searchId?: string;
 };
 
 type PaidDownloadAccessResponse = {
@@ -38,7 +41,7 @@ type PaidDownloadAccessResponse = {
 
 const PDF_BASE = 'https://d2o1uvvg91z7o4.cloudfront.net/pdfs';
 
-export default function DownloadPdfLink({ design, className, formatLabel, formatNumber, isMissing }: Props) {
+export default function DownloadPdfLink({ design, className, formatLabel, formatNumber, isMissing, searchId }: Props) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [referrerBypass, setReferrerBypass] = useState(false);
   const [isCheckingPaidAccess, setIsCheckingPaidAccess] = useState(false);
@@ -83,7 +86,11 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
         ...(fromNewsletter ? { fromNewsletter: true } : {}),
       }),
     }).catch((error) => console.error('Failed to increment download count', error));
-  }, [design.DesignID]);
+
+    if (searchId) {
+      logSearchEngagementClient(searchId, design.DesignID, 'download');
+    }
+  }, [design.DesignID, searchId]);
 
   const fallbackPdfUrl = useMemo(() => {
     if (!design?.AlbumID || !design?.DesignID) return null;

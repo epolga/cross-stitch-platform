@@ -10,6 +10,20 @@ lives in `web/plan/Pinterest AI Agent — Milestones and Roadmap.md` and
 these four files on 2026-07-26; archived again on 2026-08-03 after
 growing back to ~510 lines.
 
+## Session-start check — GSC growth (do this every session)
+
+Run a GSC growth check (`automation/pinterest-agent/scripts/gsc-explore.ts`
+or `gsc-compare.ts`, dimension=date, last ~2-3 weeks vs. the prior period —
+see the 2026-08-07 check-back in Open item #7 below for the exact pattern).
+If clicks/impressions growth has genuinely flattened or reversed (not just
+normal day-to-day noise — see `feedback_dont_overinvestigate_realtime_noise`),
+**propose discussing introducing a paid subscription tier** — don't
+implement anything, just raise it. Otherwise report status briefly and move
+on. Decided 2026-08-07 (Olga: "если увидишь, что рост прекратился,
+предложишь переходить на введение платной версии"); ties to the paywall
+deprioritization decision in `project_no_paid_subscription_tier` memory
+("revisit if organic growth plateaus").
+
 ## Current goal
 
 Build out Ann as a recurring blog persona: flesh out her backstory/life
@@ -296,11 +310,14 @@ didn't log the user in).
    07-26). Also worth directly confirming in the GSC UI whether the
    original 2026-07-09 "Crawled – currently not indexed" Validate Fix
    actually passed (checkpoint was due 07-23, never explicitly confirmed).
-7. **GSC average position monitoring** — softened ~11-12 → ~15-17 since
-   2026-07-22/23 (all other causes already ruled out: deploys, Manual
-   Actions, Security Issues, AdSense RPM). Check back ~2026-08-07. Reusable
-   tools from this investigation: `gsc-explore.ts`, `gsc-compare.ts`,
-   `ga4-explore.ts` in `automation/pinterest-agent/scripts/`.
+7. ~~GSC average position monitoring~~ — **resolved, confirmed 2026-08-07**.
+   Softening was transient: peaked at 14.8 on 07-23, recovered to 10.9-11.6
+   by 07-25/26, and has stayed in the healthy 9.9-14.4 range through 08-05
+   (latest finalized day; 08-06/07 not yet processed by GSC). Impressions
+   and clicks both trended up over the same window (1531→2590 impr.,
+   80→117 clicks), confirming no real degradation. Reusable tools from this
+   investigation: `gsc-explore.ts`, `gsc-compare.ts`, `ga4-explore.ts` in
+   `automation/pinterest-agent/scripts/`.
 8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
    Perpetual Love", 07-24) checked 2026-07-27 and looks healthy: ~47 GA4
    sessions with `src=newsletter&medium=email` landing on the design page
@@ -414,7 +431,7 @@ didn't log the user in).
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
-- [ ] GSC position softening check-back (~2026-08-07)
+- [x] GSC position softening check-back — resolved 2026-08-07, transient dip, recovered
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)

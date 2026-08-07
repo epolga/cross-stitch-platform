@@ -26,6 +26,7 @@ const DEFAULT_OG_IMAGE = 'https://d2o1uvvg91z7o4.cloudfront.net/images/default.j
 
 interface Props {
   params: Promise<{ designId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function toAbsoluteUrl(url: string | null | undefined): string | null {
@@ -152,8 +153,11 @@ devLog("Generating metadata for designId:", designId);
   };
 }
 
-export default async function DesignPage({ params }: Props) {
+export default async function DesignPage({ params, searchParams }: Props) {
   const { designId } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const searchIdParam = resolvedSearchParams.searchId;
+  const searchId = typeof searchIdParam === 'string' ? searchIdParam : Array.isArray(searchIdParam) ? searchIdParam[0] : undefined;
   const adsEnabled = !isPaidDownloadMode();
   const adSlotTop = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_TOP ?? '';
   const adSlotBottom = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ?? '';
@@ -308,7 +312,7 @@ export default async function DesignPage({ params }: Props) {
             </div>
 
             {/* TOP download control (gated) */}
-            <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} />
+            <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} searchId={searchId} />
             <p className="text-sm text-gray-600 mb-4">Download the free PDF chart once you sign in.</p>
 
             {adsEnabled && adSlotTop && (
@@ -452,7 +456,7 @@ export default async function DesignPage({ params }: Props) {
             )}
 
             {/* BOTTOM download control (gated) */}
-            <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} />
+            <DesignDownloadControls design={design} align="center" isMissingOverride={isMissing} searchId={searchId} />
           </div>
 
         </div>

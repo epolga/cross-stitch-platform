@@ -49,8 +49,8 @@ export async function POST(request: NextRequest) {
 
     const designIds = await semanticSearch(description, 60);
     console.log('[image-search] Top-10 IDs:', designIds.slice(0, 10));
-    logSearch({ query: description, source: 'image', hasResults: designIds.length > 0 });
-    return NextResponse.json({ designIds, description });
+    const searchId = logSearch({ query: description, source: 'image', hasResults: designIds.length > 0 });
+    return NextResponse.json({ designIds, description, searchId });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[image-search] Unhandled error:', e);

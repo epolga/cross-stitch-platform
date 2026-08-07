@@ -10,6 +10,7 @@ import DownloadPdfLink from './DownloadPdfLink';
 import EditorCTAButton from './EditorCTAButton';
 import { CreateDesignUrl } from '@/lib/url-helper';
 import { devLog } from '@/lib/devLog';
+import { logSearchEngagementClient } from '@/lib/search-engagement-client';
 
 type ChartFormat = 'color-symbol' | 'symbol-chart' | 'color-chart';
 
@@ -30,6 +31,17 @@ const chartFormatOptions: ChartFormat[] = ['color-symbol', 'symbol-chart', 'colo
 interface DesignCardProps {
   design: Design;
   priority?: boolean;
+  searchId?: string;
+}
+
+// Appends searchId to the design-page URL so a download that happens
+// after clicking through (rather than the list's own DownloadPdfLink)
+// can still be attributed back to this search (Track 1 Step 3 Part C).
+function designUrlWithSearchId(design: Design, searchId?: string): string {
+  const base = CreateDesignUrl(design);
+  if (!searchId) return base;
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}searchId=${encodeURIComponent(searchId)}`;
 }
 
 let missingDesignsPromise: Promise<Set<number>> | null = null;
@@ -89,7 +101,7 @@ function useMissingDesign(designId: number) {
   return { isMissing, loaded };
 }
 
-function DesignCard({ design, priority = false }: DesignCardProps) {
+function DesignCard({ design, priority = false, searchId }: DesignCardProps) {
   const [selectedFormat, setSelectedFormat] = useState<ChartFormat>('color-symbol');
   const { isMissing, loaded } = useMissingDesign(design.DesignID);
   const showFormatSelector = loaded && !isMissing; // add combo only after list is loaded
@@ -124,7 +136,11 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
 
   return (
     <div className={styles.card}>
-      <Link href={CreateDesignUrl(design)} className="no-underline">
+      <Link
+        href={designUrlWithSearchId(design, searchId)}
+        className="no-underline"
+        onClick={searchId ? () => logSearchEngagementClient(searchId, design.DesignID, 'click') : undefined}
+      >
         <div className="text-center">
           {design.ImageUrl ? (
             <div className={styles.imageContainer}>
@@ -178,6 +194,7 @@ function DesignCard({ design, priority = false }: DesignCardProps) {
           formatLabel={showFormatSelector ? chartFormatLabels[selectedFormat] : undefined}
           formatNumber={showFormatSelector ? chartFormatNumbers[selectedFormat] : undefined}
           isMissing={isMissing ?? undefined}
+          searchId={searchId}
         />
       </div>
       {design.EditorPatternKey && (
@@ -204,6 +221,7 @@ interface DesignListProps {
   baseUrl?: string;
   className?: string;
   isLoggedIn: boolean;
+  searchId?: string;
 }
 
 export function DesignList({
@@ -215,6 +233,7 @@ export function DesignList({
   baseUrl,
   className,
   isLoggedIn,
+  searchId,
 }: DesignListProps) {
   // Log when isLoggedIn prop changes
   useEffect(() => {
@@ -240,7 +259,7 @@ export function DesignList({
       ) : (
         <div className={styles.grid}>
           {designs.map((design, index) => (
-            <DesignCard key={`${design.AlbumID}-${design.DesignID}`} design={design} priority={index < 4} />
+            <DesignCard key={`${design.AlbumID}-${design.DesignID}`} design={design} priority={index < 4} searchId={searchId} />
           ))}
         </div>
       )}

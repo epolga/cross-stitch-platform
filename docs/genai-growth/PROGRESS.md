@@ -2,7 +2,7 @@
 
 ## Current Status
 **Current milestone:** Two parallel tracks as of 2026-08-06 (Olga's decision — split working time between them rather than sequencing):
-1. **Phase 1, Python, `search-service/`** — Step 1 (bare FastAPI skeleton) and Step 2 (Pydantic models + `/evaluate` endpoint computing retrieval metrics) both done. Step 3 (real feature) not started.
+1. **Phase 1, Python, `search-service/`** — Step 1 (bare FastAPI skeleton) and Step 2 (Pydantic models + `/evaluate` endpoint computing retrieval metrics) both done. Step 3's data-collection groundwork (Parts A/B/C — logging what was shown, click engagement, and weighted downloads) all shipped 2026-08-07 in the Node.js web app. Remaining: let real traffic accumulate, then write the actual Python-side `/evaluate` consumer script against `SearchQueries` + `SearchEngagement`.
 2. **Opportunity 9, Node.js** — automated design generation from trending themes with a feedback-learning loop. Not started. See `OPPORTUNITIES.md` Opportunity 9 for scope and the Language decision (Node.js, not Python — depends on reusing `pattern-converter.ts`; likely lives inside `web/`, not a separate service).
 **Overall state:** Architecture review done. Python skeleton exists, runs locally, not deployed anywhere. Opportunity 9 not yet started.
 
@@ -67,16 +67,78 @@
   fine-tuning was ruled out).
 
 ## Next Actions
-1. **Track 1 — pick up here next session:** Step 3 — decide concretely
-   what retrieval evaluation looks like against real `SearchQueries` data.
-   First sub-problem: there's currently no logged signal for what a user
-   actually engaged with *after* a search (clicked/downloaded which
-   design) — without that, there's no ground truth to compute precision/
-   recall/MRR against. See `ARCHITECTURE_SUMMARY.md` §1's note on
-   `search-log.ts`. Deployed Lambda (`search-service`, live at
+1. **Track 1 Step 3 — in progress, three-part plan (2026-08-07):**
+   decided with Olga: (A) log the actual displayed `retrievedIds` per
+   search — **done 2026-08-07**, see below; (B) click-through logging on
+   search-result design cards, tied by `searchId`, into a new
+   `SearchEngagement` table — **not started, pick up here next**; (C)
+   weight downloads higher than plain clicks in the eventual relevance
+   signal — deferred until (B) exists and real data can be compared.
+   Deployed Lambda (`search-service`, live at
    `https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`) is ready to
-   receive this logic once scoped — no further deploy-plumbing work
-   needed, just the actual feature code.
+   receive the actual `/evaluate`-consuming logic once (A)+(B) have
+   accumulated enough real data — no further deploy-plumbing needed.
+
+   **Part A shipped 2026-08-07:** `SearchQueries` now captures what was
+   actually shown, not just the query. Two-phase write, since neither
+   search API route computes the final merged/ranked list —
+   `data-access.ts`'s `fetchFilteredDesigns()` does that later and can
+   reorder relative to either route's own raw ranking (e.g. text search:
+   semantic ranking is subordinate to the hard text filter). `logSearch()`
+   (`web/src/lib/search-log.ts`) now returns a `searchId`; `ai-search`/
+   `image-search` routes return it to `HeroSearch.tsx`, which round-trips
+   it through the URL (`?searchId=...`) back to `page.tsx`; once
+   `fetchFilteredDesigns()` resolves, `page.tsx` calls the new
+   `logSearchResults(searchId, designs.map(d => d.DesignID))` to
+   `UPDATE` the same `SearchQueries` row with the real displayed list.
+   Only fires when `searchId` is present — plain catalog browsing/
+   pagination never sets it, so this doesn't touch normal traffic. Full
+   schema detail: `docs/integration/dynamodb-schema.md` §4.14. Verified:
+   `tsc --noEmit` clean, Vitest 61/61 still passing, `next lint` shows
+   only pre-existing warnings in unrelated files.
+
+   **Part B shipped 2026-08-07:** new self-provisioning `SearchEngagement`
+   table (`web/src/lib/search-engagement.ts`, following the
+   `EmailEntryEvents`/`EditorEvents` self-provision pattern, not
+   `SearchQueries`' manual one) — one row per `(searchId, designId)` pair,
+   `action`/`weight` (`click`=1, `download`=2) upgraded-never-downgraded
+   via a `ConditionExpression`. New `POST /api/search-engagement` endpoint.
+   `searchId` threaded as an optional prop through `page.tsx` →
+   `DesignListWrapper` → `DesignList` → `DesignCard` — only set on an
+   actual AI/semantic search hand-off, so plain catalog/album browsing
+   never logs anything. `DesignCard`'s link now fires a fire-and-forget
+   `fetch(..., { keepalive: true })` click log on click (survives the
+   navigation the click itself causes). Full schema:
+   `docs/integration/dynamodb-schema.md` §4.17. Verified: `tsc --noEmit`
+   clean, Vitest 61/61, `next lint` no new warnings.
+
+   **Part C shipped 2026-08-07: the `download` action is now wired,
+   both download paths.** New shared client helper
+   (`web/src/lib/search-engagement-client.ts`, `logSearchEngagementClient`)
+   used by both `DesignList.tsx` (click) and `DownloadPdfLink.tsx`
+   (download), replacing the Part B version's inline fetch. `searchId`
+   reaches a download two ways: (1) directly as a prop when downloaded
+   straight from a search-result card; (2) appended to the design-page
+   URL (`designUrlWithSearchId()` in `DesignList.tsx`) when the user
+   clicks through first — threaded `app/[slug]/page.tsx` →
+   `app/designs/[designId]/page.tsx` (new `searchParams` prop, wasn't
+   accepted before) → `DesignDownloadControls` (new `searchId` prop) →
+   `DownloadPdfLink`. Both paths funnel through `DownloadPdfLink`'s
+   existing `recordDownload()` callback, the one place all three download
+   modes (free/register/paid) already converge before opening the PDF.
+   Known gap, judged acceptable: prev/next/"you may also like" links on
+   the detail page don't carry `searchId` forward. Verified: `tsc --noEmit`
+   clean, Vitest 61/61, `next lint` no new warnings, full `next build`
+   run to confirm the page-signature changes (`searchParams` added to
+   `app/designs/[designId]/page.tsx`) don't break routing.
+
+   Binary relevance only so far for `/evaluate` itself —
+   `search-service/app/metrics.py`'s `relevant_ids` is still a plain set;
+   a weighted precision/recall variant is future work, not scoped yet.
+   **All of Track 1 Step 3's data-collection plan (Parts A/B/C) is now
+   shipped** — next real step is letting real traffic accumulate, then
+   writing the actual Python-side `/evaluate` consumer against
+   `SearchQueries` + `SearchEngagement`.
 2. **Track 2 — pick up here next session:** Build order decided 2026-08-06
    (see `OPPORTUNITIES.md` Opportunity 9 "UX vision" / "Build-order
    decision"): build the core pipeline first (trend detection → image

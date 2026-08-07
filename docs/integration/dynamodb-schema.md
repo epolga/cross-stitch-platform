@@ -293,8 +293,9 @@ Key schema: PK `date` (S), SK `ts` (S) = `<ISO-timestamp>#<6-char-random>`.
 | `hasResults` | BOOL | required | `search-log.ts:25` | — | |
 | `ttl` | N (epoch) | required | `search-log.ts:18,26` | not read back | **Intended** 90-day expiry — see TTL note below |
 | `filters` | S (JSON) | optional | `search-log.ts:29-31` | — | Only written if provided |
+| `retrievedIds` | S (JSON `number[]`) | optional | `search-log.ts` `logSearchResults()`, called from `web/src/app/page.tsx` (2026-08-07, GenAI Track 1 Step 3 prep) | not yet read back — future retrieval-eval consumer | **Two-phase write**: the initial `PutItemCommand` (`logSearch()`, called from `ai-search/route.ts`/`image-search/route.ts`) creates the row with the raw query but no results yet, since neither API route computes the final displayed list — `data-access.ts`'s `fetchFilteredDesigns()` does that later (filter/semantic merge, can reorder relative to either search API's own raw ranking). `logSearch()` returns a `searchId` (`<date>\|<ts>`) that `HeroSearch.tsx` round-trips through the URL (`?searchId=...`) back to `page.tsx`, which calls `logSearchResults(searchId, designs.map(d => d.DesignID))` — an `UpdateItemCommand` on the same row — once the real list is known. Plain catalog browsing/pagination never sets `searchId`, so this update only fires for actual search hand-offs. |
 
-Writes are fire-and-forget (`search-log.ts:33-34`, `.catch(err => console.error(...))`) — a missing table or any write failure is logged but never surfaced to the caller or retried, matching the "silently swallows write errors" note in Focus.md Pending #11.
+Writes are fire-and-forget (`search-log.ts:33-34`, `.catch(err => console.error(...))`) — a missing table or any write failure is logged but never surfaced to the caller or retried, matching the "silently swallows write errors" note in Focus.md Pending #11. The `logSearchResults()` update call follows the same fire-and-forget pattern.
 
 **TTL gap (found 2026-07-25, live-verified) — same bug as `EditorEvents`.** `search-log.ts` computes and writes a correct 90-day `ttl` value on every row, but nothing in this codebase ever calls `UpdateTimeToLiveCommand` for `SearchQueries` (there's no bootstrap function here at all, self-provisioning or otherwise). Live check confirms **`TimeToLiveStatus: DISABLED`**. Net effect: 2 084 items and growing, no cleanup. Same one-off fix as `EditorEvents`: `aws dynamodb update-time-to-live --table-name SearchQueries --time-to-live-specification "Enabled=true,AttributeName=ttl"`.
 
@@ -340,6 +341,25 @@ Writes are best-effort: `LogSendAsync` always appends to the pre-existing local 
 Purpose: (1) joins with `EmailEntryEvents` (§4.15) to compute true per-user send/engagement history (was this person sent N campaigns, did they ever click any of them) — the missing piece flagged when `EmailEntryEvents` was first built, since that table alone only knows about clicks, not who received what; (2) direct complaint/inquiry lookup by email via `check-email-recipient.ts`, without grepping whichever machine happened to run a given send.
 
 Reporting: `automation/pinterest-agent/scripts/check-email-campaign.ts <eid>` (joins both tables, lists sent-but-never-entered recipients) and `check-email-recipient.ts <email>` (full send history for one address via the GSI).
+
+### 4.17 `SearchEngagement` (search-result click/download relevance signal)
+
+Table name resolved from env `DDB_SEARCH_ENGAGEMENT_TABLE` (default `"SearchEngagement"`) in `web/src/lib/search-engagement.ts`. **Self-provisions** (`ensureTable()`, following the `EmailEntryEvents`/`EditorEvents` pattern). Built 2026-08-07 for GenAI Track 1 Step 3 Part B (retrieval-evaluation ground truth) — not yet live-verified against AWS (no writes yet at doc time; first real search-result click will create it).
+
+Key schema: PK `searchId` (S) — the composite id `SearchQueries` (§4.14) hands back from `logSearch()`. SK `designId` (S, stringified number). **One row per (searchId, designId) pair**, not one row per click event — a repeat click or a later download on the same pair updates the existing row rather than creating a new one.
+
+| Attribute | DDB type | Required? | Written by | Read by | Notes |
+|---|---|---|---|---|---|
+| `searchId` | S | required | `search-engagement.ts` `logSearchEngagement` (key) | PK | Joins back to the `SearchQueries` row this signal belongs to |
+| `designId` | S (stringified N) | required | `search-engagement.ts` `logSearchEngagement` (key) | SK | The design the user engaged with |
+| `action` | S (`'click'`\|`'download'`) | required | `search-engagement.ts` `logSearchEngagement` | future `/evaluate` consumer | Whichever action produced the current (highest-seen) weight — see below |
+| `weight` | N | required | `search-engagement.ts` `logSearchEngagement` | future `/evaluate` consumer | `click`=1, `download`=2 (Olga's call 2026-08-07: download is a stronger relevance signal). Write uses a `ConditionExpression` (`attribute_not_exists(weight) OR weight < :w`) so a later click never downgrades an already-recorded download |
+| `createdAt` / `updatedAt` | S (ISO) | required | `search-engagement.ts` `logSearchEngagement` | audit only | `createdAt` set once via `if_not_exists`, `updatedAt` overwritten every successful write |
+| `ttl` | N (epoch) | required | `search-engagement.ts` `logSearchEngagement` | not read back | 90-day expiry, same window as `SearchQueries` |
+
+Writes are fire-and-forget from the client side: `DesignList.tsx`'s `logSearchClick()` POSTs to `/api/search-engagement` with `fetch(..., { keepalive: true })` so the request survives the click's own page navigation, and swallows any error (`.catch(() => {})`) — a failed engagement log never blocks or delays following the link. Only fires when `DesignList`'s `searchId` prop is set, which `page.tsx` only passes through `DesignListWrapper` when the current view came from an AI/semantic search hand-off (`?searchId=...` in the URL) — plain catalog/album browsing never carries a `searchId`, so this table stays empty for ordinary traffic.
+
+**`download` action wired 2026-08-07 (Part C).** `searchId` now reaches `DownloadPdfLink` two ways: (1) directly as a prop when the download button is clicked straight from a search-result card (`DesignList.tsx` → `DesignCard` → `DownloadPdfLink`); (2) via the design detail page, if the user clicks through to `/…-Free-Design.aspx` first — `DesignList.tsx`'s `designUrlWithSearchId()` appends `?searchId=...` to that link, `app/[slug]/page.tsx` forwards `searchParams` into `app/designs/[designId]/page.tsx`, which reads `searchId` and passes it to both `DesignDownloadControls` instances (top/bottom of the page). Either path calls the shared `logSearchEngagementClient()` (`web/src/lib/search-engagement-client.ts`) from `DownloadPdfLink`'s existing `recordDownload()` callback — the single point all three download modes (free/register/paid) already funnel through before opening the PDF. Not covered: prev/next/"you may also like" navigation on the detail page doesn't carry `searchId` forward, so a download after following one of those links from a search-originated design page won't be attributed — acceptable gap, out of scope for Part C.
 
 ## 5. API Endpoints / Interfaces
 

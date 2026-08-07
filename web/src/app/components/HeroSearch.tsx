@@ -48,6 +48,7 @@ export default function HeroSearch() {
       const filters = await aiResult.value.json();
 
       const params = new URLSearchParams();
+      if (filters.searchId) params.set('searchId', filters.searchId);
       if (filters.searchText) params.set('searchText', filters.searchText);
       if (filters.widthFrom > 0) params.set('widthFrom', String(filters.widthFrom));
       if (filters.widthTo < 10000) params.set('widthTo', String(filters.widthTo));
@@ -105,10 +106,11 @@ export default function HeroSearch() {
         const { error: msg } = await resp.json().catch(() => ({ error: 'Search failed' }));
         throw new Error(msg || 'Search failed');
       }
-      const { designIds, description } = await resp.json() as { designIds: number[]; description?: string };
+      const { designIds, description, searchId } = await resp.json() as { designIds: number[]; description?: string; searchId?: string };
       if (!designIds?.length) throw new Error('No results found');
       if (description) setImageDescription(description);
       const params = new URLSearchParams({ semanticIds: designIds.join(',') });
+      if (searchId) params.set('searchId', searchId);
       router.push(`/?${params.toString()}#results`, { scroll: false });
       document.getElementById('results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {

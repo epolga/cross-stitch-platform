@@ -1,6 +1,7 @@
 import { DesignListWrapper } from '@/app/components/DesignListWrapper';
 import SearchForm from '@/app/components/SearchForm';
 import { fetchFilteredDesigns, updateLastEmailEntryByCid } from '@/lib/data-access';
+import { logSearchResults } from '@/lib/search-log';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import RegisterNewsletterLink from '@/app/components/RegisterNewsletterLink';
@@ -218,6 +219,7 @@ export default async function Home({ searchParams }: Props) {
   const semanticIds = semanticIdsStr
     ? semanticIdsStr.split(',').map(Number).filter(n => !isNaN(n) && n > 0)
     : undefined;
+  const searchId = resolvedSearchParams?.searchId?.toString() || '';
 
   const filters = {
     widthFrom: parseInt(resolvedSearchParams?.widthFrom?.toString() || '0', 10),
@@ -248,6 +250,14 @@ export default async function Home({ searchParams }: Props) {
         </p>
       </div>
     );
+  }
+
+  // Only reached from an AI/semantic search hand-off (HeroSearch sets
+  // searchId), never plain catalog browsing/pagination — attaches the
+  // actual displayed ranking, which can differ from either search API's
+  // own raw ranking once data-access.ts's filter/semantic merge runs.
+  if (searchId) {
+    logSearchResults(searchId, designs.map(d => d.DesignID));
   }
 
   return (
@@ -321,6 +331,7 @@ export default async function Home({ searchParams }: Props) {
           <div id="results">
             <DesignListWrapper
               designs={designs}
+              searchId={searchId || undefined}
               page={nPage}
               totalPages={totalPages}
               pageSize={pageSize}

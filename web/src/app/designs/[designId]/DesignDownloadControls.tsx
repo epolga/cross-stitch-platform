@@ -82,9 +82,10 @@ interface Props {
   design: Design;
   align?: 'left' | 'center';
   isMissingOverride?: boolean;
+  searchId?: string;
 }
 
-export function DesignDownloadControls({ design, align = 'center', isMissingOverride }: Props) {
+export function DesignDownloadControls({ design, align = 'center', isMissingOverride, searchId }: Props) {
   const [selectedFormat, setSelectedFormat] = useState<ChartFormat>('color-symbol');
   const { isMissing, loaded } = useMissing(design.DesignID, isMissingOverride);
   const showFormatSelector = loaded && !isMissing;
@@ -132,6 +133,7 @@ export function DesignDownloadControls({ design, align = 'center', isMissingOver
         formatLabel={showFormatSelector ? chartFormatLabels[selectedFormat] : undefined}
         formatNumber={showFormatSelector ? chartFormatNumbers[selectedFormat] : undefined}
         isMissing={isMissing}
+        searchId={searchId}
       />
     </div>
   );

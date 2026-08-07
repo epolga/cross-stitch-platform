@@ -57,8 +57,8 @@ export async function POST(request: NextRequest) {
     }
 
     const filters = JSON.parse(jsonMatch[0]);
-    logSearch({ query: String(query).slice(0, 500), source: 'text', hasResults: true, filters });
-    return NextResponse.json(filters);
+    const searchId = logSearch({ query: String(query).slice(0, 500), source: 'text', hasResults: true, filters });
+    return NextResponse.json({ ...filters, searchId });
   } catch (err) {
     console.error('AI search error:', err);
     return NextResponse.json({ error: 'Search failed' }, { status: 500 });

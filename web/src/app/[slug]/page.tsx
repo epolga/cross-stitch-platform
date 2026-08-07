@@ -46,7 +46,7 @@ async function getDesignIdFromSlug(slug: string): Promise<string | null> {
   return designId !== null ? designId.toString() : null;
 }
 
-async function GetDesignPageFromSlug(slug: string) {
+async function GetDesignPageFromSlug(slug: string, searchParams: Record<string, string | string[] | undefined>) {
   const designId = await getDesignIdFromSlug(slug);
 
     if (!designId) {
@@ -55,7 +55,7 @@ async function GetDesignPageFromSlug(slug: string) {
 
     // Render the imported DesignPage component, passing simulated params
 
-    return <DesignPage params={Promise.resolve({ designId: designId })} />;
+    return <DesignPage params={Promise.resolve({ designId: designId })} searchParams={Promise.resolve(searchParams)} />;
  }
 
  async function GetAlbumsPageFromSlug() {
@@ -184,7 +184,7 @@ export default async function SlugPage({ params, searchParams }: {
   }
 
   if(resolvedParams.slug.toLowerCase().endsWith('-free-design.aspx')) {
-    return GetDesignPageFromSlug(resolvedParams.slug);
+    return GetDesignPageFromSlug(resolvedParams.slug, resolvedSearchParams);
     } else if(resolvedParams.slug.toLowerCase() === 'xstitch-charts.aspx'){
     return GetAlbumsPageFromSlug();
 }     else if (resolvedParams.slug.toLowerCase().endsWith('-charts.aspx')) {
