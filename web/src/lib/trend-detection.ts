@@ -17,6 +17,18 @@ export interface ParsedTrend {
   imagePrompt: string;
   signalSource: string;
   reasoning: string;
+  // Added 2026-08-08 (Olga's ask): research isn't just "what theme" — also
+  // "what size and color combination are popular in cross-stitch-pattern
+  // searches right now." targetWidth/targetHeight are approximate finished
+  // size in stitches (not inches — fabric count varies), a starting point
+  // for the conversion step, not a hard requirement. colorPalette describes
+  // the SUBJECT's dominant colors only — the background stays solid flat
+  // white regardless (see imagePrompt instructions below), that constraint
+  // is about the conversion pipeline's background-erasure step, unrelated
+  // to which colors are currently popular.
+  targetWidth: number;
+  targetHeight: number;
+  colorPalette: string;
 }
 
 export interface TrendDetectionResult extends ParsedTrend {
@@ -52,12 +64,19 @@ Propose exactly ONE visual theme suitable for a cross-stitch pattern. It must be
 - A single clear subject (e.g. "a fox"), NOT an abstract concept and NOT a busy multi-subject scene — this needs to convert cleanly into a limited-color-palette image later, so simplicity matters more than novelty.
 - Something NOT already well covered in my existing catalog. Here is a sample of my current catalog's album/category names, so you can avoid overlapping with them: ${avoidList}
 
+Also research, from the same cross-stitch-specific sources, TWO more things about this theme:
+- **Size**: what finished/pattern size is currently popular for this kind of subject in cross-stitch listings/patterns — small quick-stitch motifs, medium wall-art pieces, or large detailed portraits. Translate that into an approximate stitch-count size (width x height in stitches — typical range is roughly 40-250 per side; small quick projects are 40-90, medium wall art 90-160, large detailed pieces 160-250).
+- **Color combination**: what color palette is currently popular for this kind of subject (e.g. muted autumn tones, bold primary colors, pastel kawaii palette) — describe the SUBJECT's own colors, not the background (the background must stay solid flat white regardless, see below — that is a fixed technical constraint of the conversion pipeline, unrelated to color trends).
+
 After researching, respond with ONLY a JSON object with exactly these fields (no other text before or after it):
 {
   "theme": "short name for the theme, e.g. 'autumn fox'",
-  "imagePrompt": "a one-paragraph image-generation prompt for a cross-stitch-ready SUBJECT PORTRAIT, not a scene: the subject alone, large, filling almost the entire frame, centered, on a SOLID FLAT WHITE background — explicitly say 'solid flat white background' in the prompt, and explicitly rule out anything that would break that flatness: no vignette, no gradient, no glow, no shadow, no circular badge or frame or border, no texture or grain, no ground/floor/grass/props of any kind. Describe only the subject itself — pose, colors, style (e.g. bold clean dark outlines, flat kawaii illustration, no shading gradients on the background) — the way a die-cut sticker or a single embroidery-hoop motif would be composed, not an illustrated scene. No meta-commentary.",
+  "imagePrompt": "a one-paragraph image-generation prompt for a cross-stitch-ready SUBJECT PORTRAIT, not a scene: the subject alone, large, filling almost the entire frame, centered, on a SOLID FLAT WHITE background — explicitly say 'solid flat white background' in the prompt, and explicitly rule out anything that would break that flatness: no vignette, no gradient, no glow, no shadow, no circular badge or frame or border, no texture or grain, no ground/floor/grass/props of any kind. Describe only the subject itself — pose, colors (use the researched color combination below), style (e.g. bold clean dark outlines, flat kawaii illustration, no shading gradients on the background) — the way a die-cut sticker or a single embroidery-hoop motif would be composed, not an illustrated scene. No meta-commentary.",
   "signalSource": "which specific source(s) you actually searched and found this on, e.g. 'r/CrossStitch weekly finished-object thread, Aug 2026'",
-  "reasoning": "one or two sentences on why you believe this is currently trending within cross-stitch specifically, citing what you found"
+  "reasoning": "one or two sentences on why you believe this is currently trending within cross-stitch specifically, citing what you found",
+  "targetWidth": "approximate popular width in stitches, as a number, e.g. 100",
+  "targetHeight": "approximate popular height in stitches, as a number, e.g. 100",
+  "colorPalette": "short description of the popular color combination for this subject, e.g. 'warm autumn palette: burnt orange, cream, deep brown, soft yellow'"
 }`;
 }
 
@@ -70,7 +89,10 @@ export function extractJson(text: string): ParsedTrend | null {
       typeof parsed.theme === 'string' &&
       typeof parsed.imagePrompt === 'string' &&
       typeof parsed.signalSource === 'string' &&
-      typeof parsed.reasoning === 'string'
+      typeof parsed.reasoning === 'string' &&
+      typeof parsed.targetWidth === 'number' &&
+      typeof parsed.targetHeight === 'number' &&
+      typeof parsed.colorPalette === 'string'
     ) {
       return parsed as ParsedTrend;
     }

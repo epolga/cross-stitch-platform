@@ -77,6 +77,14 @@ export interface AiDesignGeneration {
   designId?: number;
   initialGrid?: number[][];
   initialPalette?: PatternPalette[];
+  // Added 2026-08-08 — detectTrend()'s researched popular size (stitches)
+  // and color combination for this theme, kept for provenance/measurement
+  // even though targetHeight isn't fully honored by the conversion step
+  // yet (see save-ai-draft.ts). Optional: absent for generations created
+  // before this field existed, or for a manual/non-AI-trend save.
+  targetWidth?: number;
+  targetHeight?: number;
+  colorPalette?: string;
 }
 
 /**
@@ -91,26 +99,31 @@ export async function createGeneration(params: {
   reasoning: string;
   grounding: GroundingAssessment;
   imageProvider: string;
+  targetWidth?: number;
+  targetHeight?: number;
+  colorPalette?: string;
 }): Promise<string> {
   await ensureTable();
   const generationId = randomUUID();
   const now = new Date().toISOString();
 
-  await client.send(new PutItemCommand({
-    TableName: TABLE,
-    Item: {
-      generationId: { S: generationId },
-      theme: { S: params.theme },
-      imagePrompt: { S: params.imagePrompt },
-      signalSource: { S: params.signalSource },
-      reasoning: { S: params.reasoning },
-      groundingPassesGate: { BOOL: params.grounding.passesGate },
-      groundingCitedDomains: { S: JSON.stringify(params.grounding.citedDomains) },
-      imageProvider: { S: params.imageProvider },
-      status: { S: 'generated' satisfies GenerationStatus },
-      createdAt: { S: now },
-    },
-  }));
+  const item: Record<string, AttributeValue> = {
+    generationId: { S: generationId },
+    theme: { S: params.theme },
+    imagePrompt: { S: params.imagePrompt },
+    signalSource: { S: params.signalSource },
+    reasoning: { S: params.reasoning },
+    groundingPassesGate: { BOOL: params.grounding.passesGate },
+    groundingCitedDomains: { S: JSON.stringify(params.grounding.citedDomains) },
+    imageProvider: { S: params.imageProvider },
+    status: { S: 'generated' satisfies GenerationStatus },
+    createdAt: { S: now },
+  };
+  if (params.targetWidth !== undefined) item.targetWidth = { N: String(params.targetWidth) };
+  if (params.targetHeight !== undefined) item.targetHeight = { N: String(params.targetHeight) };
+  if (params.colorPalette !== undefined) item.colorPalette = { S: params.colorPalette };
+
+  await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
 
   return generationId;
 }
@@ -199,6 +212,9 @@ function itemToRecord(item: Record<string, AttributeValue>): AiDesignGeneration 
     designId: item.designId?.N ? parseInt(item.designId.N, 10) : undefined,
     initialGrid: item.initialGrid?.S && width && height ? rleDecode(item.initialGrid.S, width, height) : undefined,
     initialPalette: item.initialPalette?.S ? JSON.parse(item.initialPalette.S) : undefined,
+    targetWidth: item.targetWidth?.N ? parseInt(item.targetWidth.N, 10) : undefined,
+    targetHeight: item.targetHeight?.N ? parseInt(item.targetHeight.N, 10) : undefined,
+    colorPalette: item.colorPalette?.S,
   };
 }
 

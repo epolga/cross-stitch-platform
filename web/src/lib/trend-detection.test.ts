@@ -9,6 +9,9 @@ describe('extractJson', () => {
       imagePrompt: 'A fox sitting in a pile of autumn leaves.',
       signalSource: 'r/CrossStitch weekly thread',
       reasoning: 'Multiple recent finished-object posts feature foxes in fall settings.',
+      targetWidth: 100,
+      targetHeight: 100,
+      colorPalette: 'warm autumn palette: burnt orange, cream, deep brown',
     })}`;
     const result = extractJson(text);
     expect(result).toEqual({
@@ -16,7 +19,22 @@ describe('extractJson', () => {
       imagePrompt: 'A fox sitting in a pile of autumn leaves.',
       signalSource: 'r/CrossStitch weekly thread',
       reasoning: 'Multiple recent finished-object posts feature foxes in fall settings.',
+      targetWidth: 100,
+      targetHeight: 100,
+      colorPalette: 'warm autumn palette: burnt orange, cream, deep brown',
     });
+  });
+
+  it('returns null when a new size/color field is missing', () => {
+    const text = JSON.stringify({
+      theme: 'autumn fox',
+      imagePrompt: 'A fox.',
+      signalSource: 'r/CrossStitch',
+      reasoning: 'Popular.',
+      targetWidth: 100,
+      // targetHeight and colorPalette omitted
+    });
+    expect(extractJson(text)).toBeNull();
   });
 
   it('returns null when there is no JSON object in the text', () => {

@@ -234,6 +234,8 @@ field) and **corrections → downloads** (via the link from Table 2 below).
 | `status` | S | `generated` → `draft-saved` → `reviewed` → `published` (or `rejected`) |
 | `patternId` | S, optional | `ConverterPatterns` id once the draft is saved to Olga's account |
 | `designId` | N, optional | filled in once actually published to the catalog — the join key to that design's live `NDownloaded` |
+| `targetWidth`, `targetHeight` | N, optional | added 2026-08-08 — `detectTrend()`'s researched popular size in stitches for this theme. `targetWidth` sets the conversion scale in `save-ai-draft.ts`; the pair also picks a matching non-square aspect ratio at image-generation time (`pickStabilityAspectRatio`/`pickOpenAiSize` in `image-generation.ts`), so a tall/wide research result is no longer forced back to square. |
+| `colorPalette` | S, optional | added 2026-08-08 — `detectTrend()`'s researched popular color combination for the subject; recorded for provenance, already folded into `imagePrompt`'s text by `buildPrompt()`. |
 
 Downloads are never copied into this table — a report joins
 `generationId → designId → NDownloaded` at analysis time, reading the

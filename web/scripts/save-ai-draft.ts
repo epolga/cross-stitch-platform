@@ -1,10 +1,15 @@
-// Track 2 (Opportunity 9) — first real end-to-end run: takes the
-// AI-generated capybara image through the same conversion the editor's
-// "Save" button uses, and saves it to Olga's own account as a normal
+// Track 2 (Opportunity 9) — the reusable pipeline script: takes an
+// AI-generated source image through the same conversion the editor's
+// "Save" button uses, and saves it to an account as a normal
 // ConverterPattern — NOT the "Publish to Catalog" flow (no Pinterest
 // pin, no live catalog entry, no public indexing). This mirrors exactly
 // what an admin does by hand in the editor: import an image, convert it,
 // click Save.
+//
+// Renamed from save-capybara-draft.ts (2026-08-08) once it was reused for
+// a second design — it was never actually capybara-specific, only the
+// filename and default --name were. See git history on this file for the
+// capybara run's original commit.
 //
 // v3: smaller target size, plus removeConfetti and sizeToDesign ported
 // verbatim from ConvertClient.tsx (both client-only, not part of
@@ -22,18 +27,19 @@ import type { GroundingAssessment } from '../src/lib/trend-detection';
 
 const IMAGE_PATH = process.argv[2];
 const OWNER_ID = process.argv[3];
-const NAME = process.argv[4] || 'Capybara (AI trend draft)';
+const NAME = process.argv[4] || 'AI-generated draft';
 const EXISTING_PATTERN_ID = process.argv[5]; // if given, update in place instead of creating a new row
 // Optional: path to a JSON file {theme, imagePrompt, signalSource,
-// reasoning, imageProvider, grounding} — output of detectTrend() plus
-// which image provider generated IMAGE_PATH. When given, this run gets
-// tracked in AiDesignGenerations (see docs/genai-growth/DESIGN_FEEDBACK_LOOP.md
+// reasoning, imageProvider, grounding, targetWidth?, targetHeight?,
+// colorPalette?} — output of detectTrend() plus which image provider
+// generated IMAGE_PATH. When given, this run gets tracked in
+// AiDesignGenerations (see docs/genai-growth/DESIGN_FEEDBACK_LOOP.md
 // "Data store and provenance tracking"). Omit for a manual/non-AI-trend
 // save (e.g. the Fawn design test, which explicitly skips detectTrend()).
 const GENERATION_META_PATH = process.argv[6];
 
 if (!IMAGE_PATH || !OWNER_ID) {
-  console.error('Usage: save-capybara-draft.ts <image.png> <ownerID> [name] [existingPatternId] [generationMetaPath]');
+  console.error('Usage: save-ai-draft.ts <image.png> <ownerID> [name] [existingPatternId] [generationMetaPath]');
   process.exit(1);
 }
 
@@ -44,9 +50,17 @@ interface GenerationMeta {
   reasoning: string;
   imageProvider: string;
   grounding: GroundingAssessment;
+  // Added 2026-08-08 (Olga's ask): detectTrend()'s researched popular size
+  // and color combination, not just the theme. Optional — older
+  // generation-meta files or hand-run generations may not have them.
+  targetWidth?: number;
+  targetHeight?: number;
+  colorPalette?: string;
 }
 
-const TARGET_WIDTH = 80;
+// Fallback when no generation-meta (and thus no researched targetWidth) is
+// given — was previously a hardcoded constant used unconditionally.
+const DEFAULT_TARGET_WIDTH = 80;
 const MAX_COLORS = 25;
 
 // Ported verbatim from ConvertClient.tsx's removeConfetti().
@@ -171,27 +185,46 @@ function removeUnusedColors<P>(grid: number[][], palette: P[]): { grid: number[]
 
 async function main() {
   let generationId: string | undefined;
+  let generationMeta: GenerationMeta | undefined;
   if (GENERATION_META_PATH) {
-    const meta = JSON.parse(readFileSync(GENERATION_META_PATH, 'utf-8')) as GenerationMeta;
+    generationMeta = JSON.parse(readFileSync(GENERATION_META_PATH, 'utf-8')) as GenerationMeta;
     generationId = await createGeneration({
-      theme: meta.theme,
-      imagePrompt: meta.imagePrompt,
-      signalSource: meta.signalSource,
-      reasoning: meta.reasoning,
-      grounding: meta.grounding,
-      imageProvider: meta.imageProvider,
+      theme: generationMeta.theme,
+      imagePrompt: generationMeta.imagePrompt,
+      signalSource: generationMeta.signalSource,
+      reasoning: generationMeta.reasoning,
+      grounding: generationMeta.grounding,
+      imageProvider: generationMeta.imageProvider,
+      targetWidth: generationMeta.targetWidth,
+      targetHeight: generationMeta.targetHeight,
+      colorPalette: generationMeta.colorPalette,
     });
-    console.log(`Generation tracked: ${generationId} (theme: "${meta.theme}", grounding passesGate: ${meta.grounding.passesGate})`);
+    console.log(`Generation tracked: ${generationId} (theme: "${generationMeta.theme}", grounding passesGate: ${generationMeta.grounding.passesGate})`);
   }
 
+  // Researched targetWidth sets the conversion scale when available (small
+  // quick-stitch motif vs. large detailed piece). Height is still derived
+  // from the actual generated image's own aspect ratio rather than
+  // targetHeight directly — this script only ever sees the already-
+  // generated IMAGE_PATH, it doesn't call the image-generation API itself.
+  // As of 2026-08-08, image-generation.ts's generateImageStability()/
+  // generateImageOpenAI() CAN request a non-square aspect ratio matching
+  // targetWidth/targetHeight (pickStabilityAspectRatio/pickOpenAiSize) —
+  // whichever script actually generates IMAGE_PATH should pass that
+  // through, so by the time it reaches here the image's real aspect ratio
+  // already matches the research and this derivation just carries it
+  // through correctly, with no distortion from convertImage()'s
+  // fit:'fill' resize.
+  const targetWidth = generationMeta?.targetWidth ?? DEFAULT_TARGET_WIDTH;
+
   const rawBuffer = readFileSync(IMAGE_PATH);
-  const meta = await sharp(rawBuffer).metadata();
+  const imageMeta = await sharp(rawBuffer).metadata();
   const flattened = await sharp(rawBuffer).flatten({ background: '#ffffff' }).png().toBuffer();
-  const targetHeight = Math.round(TARGET_WIDTH * ((meta.height ?? 1) / (meta.width ?? 1)));
+  const targetHeight = Math.round(targetWidth * ((imageMeta.height ?? 1) / (imageMeta.width ?? 1)));
 
   const converted = await convertImage(
     flattened,
-    TARGET_WIDTH,
+    targetWidth,
     targetHeight,
     MAX_COLORS,
     'illustration',

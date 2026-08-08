@@ -346,6 +346,74 @@
      lint` clean. Not yet consumed by any caller beyond
      `run-trend-detection.ts` printing it as part of the JSON dump — no
      pipeline step acts on `passesGate` yet.
+   - **Built 2026-08-08 (same day, later): `detectTrend()` now also
+     researches size and color, not just theme.** Olga's ask: the
+     research should also determine what pattern *size* and *color
+     combination* are currently popular for the chosen subject, based on
+     the same cross-stitch-specific search sources — not just the theme
+     text/image-prompt. `ParsedTrend` gained `targetWidth`/`targetHeight`
+     (approximate popular size in stitches — a starting point for the
+     conversion step, not a hard requirement) and `colorPalette` (short
+     description of the subject's popular color combination — the
+     background stays solid flat white regardless, that's a fixed
+     technical constraint of the conversion pipeline's background-erasure
+     step, unrelated to color trends). `buildPrompt()` and `extractJson()`
+     updated to match; `imagePrompt`'s instructions now tell the model to
+     use the researched palette for the subject's own coloring. Web search
+     stays the only signal source for now (Olga explicitly chose to defer
+     wiring in the site's own `SearchQueries` log as a second source).
+     Verified: Vitest 14/14 in `trend-detection.test.ts` (was 12), `tsc
+     --noEmit` clean.
+   - **Built 2026-08-08 (same day, next increment): wired targetWidth/
+     targetHeight/colorPalette through the save pipeline and renamed
+     `save-capybara-draft.ts` → `save-ai-draft.ts` (git mv, history
+     preserved) — it was never actually capybara-specific, only the
+     filename and default `--name` were, and Olga pointed out it was time
+     to stop treating it as a one-off.** `AiDesignGeneration` /
+     `createGeneration()` in `ai-design-generations.ts` gained optional
+     `targetWidth`/`targetHeight`/`colorPalette` fields, written to
+     `AiDesignGenerations` when a generation-meta JSON provides them.
+     `save-ai-draft.ts` now uses `generationMeta.targetWidth` (falling
+     back to the old hardcoded 80 as `DEFAULT_TARGET_WIDTH` when absent)
+     as the conversion scale. **Deliberately NOT using `targetHeight`
+     directly for conversion** — flagged explicitly in a code comment: the
+     source image is still always generated square (`image-generation.ts`
+     has no aspect-ratio parameter wired up yet), so forcing a non-square
+     `targetWidth`×`targetHeight` through `convertImage()`'s `fit:'fill'`
+     resize would stretch/distort the image. Height is still derived from
+     the actual generated image's own (currently always ~square) aspect
+     ratio, same as before. **Known follow-up, not yet built (at the
+     time):** give `generateImageStability()`/`generateImageOpenAI()` an
+     aspect-ratio parameter and pick the closest supported ratio from the
+     researched `targetWidth`/`targetHeight` before generating, so a
+     non-square research result (e.g. a tall portrait) can actually be
+     honored end-to-end instead of only affecting scale. Verified: `tsc
+     --noEmit` clean, `next lint` no new warnings, Vitest 80/80 (unchanged
+     — neither file has pure logic worth unit-testing beyond what already
+     exists; both are I/O-heavy DDB/script code, consistent with this
+     file's established pattern for such files).
+   - **Built 2026-08-08 (same day, closes the follow-up above): non-square
+     image generation, picked from researched size.** `image-generation.ts`
+     gained two pure, unit-tested helpers — `pickStabilityAspectRatio(w, h)`
+     (nearest of Stability's 9 supported `aspect_ratio` values: 21:9, 16:9,
+     3:2, 5:4, 1:1, 4:5, 2:3, 9:16, 9:21) and `pickOpenAiSize(w, h)`
+     (nearest of gpt-image-1's 3 supported sizes: square/portrait/
+     landscape) — both use log-scale distance so e.g. 2:1 and 1:2 are
+     equally "far" from square rather than a plain diff favoring wide
+     ratios. `generateImageStability()`/`generateImageOpenAI()` now take an
+     optional aspect-ratio/size argument (default unchanged: square).
+     `run-image-generation-test.ts` (the manual provider-comparison script)
+     takes optional `targetWidth`/`targetHeight` CLI args and requests the
+     matching ratio from each provider when given. `save-ai-draft.ts`'s
+     comment updated — it only ever consumes an already-generated image
+     file, so once whichever script generates that file passes the
+     researched ratio through, `save-ai-draft.ts`'s existing "derive height
+     from the image's own aspect ratio" logic already carries it through
+     correctly with no further change needed there. New
+     `image-generation.test.ts`, 9 tests (both pickers: square, portrait,
+     landscape, mirror-symmetry, mild-ratio-falls-back-to-square).
+     Verified: `tsc --noEmit` clean, `next lint` no new warnings, Vitest
+     89/89 (was 80).
    - **Built the same day, foundation piece of the provenance/correction
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service

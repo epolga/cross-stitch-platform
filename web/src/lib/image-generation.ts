@@ -29,6 +29,64 @@ export interface GeneratedImage {
   pngBase64: string;
 }
 
+// Added 2026-08-08 (Olga's ask): detectTrend()'s researched targetWidth/
+// targetHeight can now actually reach the image itself, not just the
+// post-generation conversion scale — both providers only accept one of a
+// small discrete set of aspect ratios/sizes, so these pick the closest
+// supported option rather than an arbitrary ratio. Pure/no-I/O, unit-
+// tested in image-generation.test.ts.
+
+// Stability's v2beta stable-image-core `aspect_ratio` param accepts
+// exactly these nine values (platform.stability.ai/docs/api-reference).
+const STABILITY_ASPECT_RATIOS: { ratio: string; value: number }[] = [
+  { ratio: '21:9', value: 21 / 9 },
+  { ratio: '16:9', value: 16 / 9 },
+  { ratio: '3:2', value: 3 / 2 },
+  { ratio: '5:4', value: 5 / 4 },
+  { ratio: '1:1', value: 1 },
+  { ratio: '4:5', value: 4 / 5 },
+  { ratio: '2:3', value: 2 / 3 },
+  { ratio: '9:16', value: 9 / 16 },
+  { ratio: '9:21', value: 9 / 21 },
+];
+
+/** Nearest of Stability's 9 supported aspect ratios to width/height, by
+ * log-scale distance (so e.g. 2:1 and 1:2 are equally "far" from 1:1 —
+ * a plain linear diff would instead favor wide ratios). */
+export function pickStabilityAspectRatio(width: number, height: number): string {
+  const target = Math.log(width / height);
+  let best = STABILITY_ASPECT_RATIOS[4]; // 1:1 fallback
+  let bestDiff = Infinity;
+  for (const opt of STABILITY_ASPECT_RATIOS) {
+    const diff = Math.abs(Math.log(opt.value) - target);
+    if (diff < bestDiff) { bestDiff = diff; best = opt; }
+  }
+  return best.ratio;
+}
+
+export type OpenAiImageSize = '1024x1024' | '1024x1536' | '1536x1024';
+
+// gpt-image-1 only accepts these three concrete sizes (plus 'auto', not
+// useful here since we want a specific researched ratio).
+const OPENAI_SIZES: { size: OpenAiImageSize; ratio: number }[] = [
+  { size: '1536x1024', ratio: 1536 / 1024 },
+  { size: '1024x1024', ratio: 1 },
+  { size: '1024x1536', ratio: 1024 / 1536 },
+];
+
+/** Nearest of OpenAI's 3 supported sizes to width/height, same log-scale
+ * distance approach as pickStabilityAspectRatio. */
+export function pickOpenAiSize(width: number, height: number): OpenAiImageSize {
+  const target = Math.log(width / height);
+  let best = OPENAI_SIZES[1]; // 1024x1024 fallback
+  let bestDiff = Infinity;
+  for (const opt of OPENAI_SIZES) {
+    const diff = Math.abs(Math.log(opt.ratio) - target);
+    if (diff < bestDiff) { bestDiff = diff; best = opt; }
+  }
+  return best.size;
+}
+
 interface NovaCanvasResponse {
   images?: string[];
   error?: string | null;
@@ -67,7 +125,7 @@ export async function generateImageNovaCanvas(prompt: string): Promise<Generated
 // for why. v2beta "Stable Image Core" endpoint: multipart/form-data in,
 // raw image bytes out when Accept: image/* is set (simpler than asking
 // for their JSON+base64 wrapper). Docs: platform.stability.ai/docs/api-reference.
-export async function generateImageStability(prompt: string): Promise<GeneratedImage> {
+export async function generateImageStability(prompt: string, aspectRatio: string = '1:1'): Promise<GeneratedImage> {
   const apiKey = process.env.STABILITY_API_KEY;
   if (!apiKey) throw new Error('STABILITY_API_KEY not set');
 
@@ -75,7 +133,7 @@ export async function generateImageStability(prompt: string): Promise<GeneratedI
   const endpoint = 'core'; // the v2beta URL segment — distinct from the descriptive model label above
   const form = new FormData();
   form.set('prompt', prompt.slice(0, 10000));
-  form.set('aspect_ratio', '1:1');
+  form.set('aspect_ratio', aspectRatio);
   form.set('output_format', 'png');
 
   const resp = await fetch(`https://api.stability.ai/v2beta/stable-image/generate/${endpoint}`, {
@@ -137,7 +195,7 @@ export async function removeBackgroundStability(pngBase64: string): Promise<Gene
 // OpenAI's Images API — gpt-image-1 returns base64 PNG data directly
 // (b64_json), unlike the older DALL-E 3 API which needed an explicit
 // response_format param to avoid getting a URL back instead.
-export async function generateImageOpenAI(prompt: string): Promise<GeneratedImage> {
+export async function generateImageOpenAI(prompt: string, size: OpenAiImageSize = '1024x1024'): Promise<GeneratedImage> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
 
@@ -151,7 +209,7 @@ export async function generateImageOpenAI(prompt: string): Promise<GeneratedImag
     body: JSON.stringify({
       model,
       prompt: prompt.slice(0, 32000),
-      size: '1024x1024',
+      size,
       n: 1,
     }),
   });
