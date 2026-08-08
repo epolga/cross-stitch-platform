@@ -85,6 +85,16 @@ export interface AiDesignGeneration {
   targetWidth?: number;
   targetHeight?: number;
   colorPalette?: string;
+  // Added 2026-08-08 (Olga's ask, real multi-round review): the state as of
+  // the END of the most recently submitted review round — distinct from
+  // initialGrid/initialPalette, which stay frozen at the AI's original
+  // output forever. Each round's diff compares against THIS, not the
+  // original snapshot, so round 2's diff shows only what changed in round
+  // 2, not the cumulative diff since generation. Absent until the first
+  // review round completes, at which point computeDiffForGeneration()
+  // falls back to initialGrid/initialPalette.
+  lastReviewedGrid?: number[][];
+  lastReviewedPalette?: PatternPalette[];
 }
 
 /**
@@ -159,9 +169,13 @@ export async function attachDraft(
 }
 
 /**
- * Step 3 (not wired to any caller yet — the Approve/publish UI this feeds
- * doesn't exist): marks a generation reviewed so the (future) Approve step
- * doesn't re-ask on every subsequent normal save.
+ * Step 3, original one-shot design: marks a generation reviewed so the
+ * Approve step doesn't re-ask on every subsequent normal save. Kept but
+ * NOT called by the real review flow anymore (see recordReviewRound()
+ * below) — Olga's 2026-08-08 ask was the opposite of "ask once": every
+ * save on an AI-draft should offer review, tracked as its own round.
+ * Left in place as a still-valid building block for a possible future
+ * explicit "I'm done reviewing this one" action.
  */
 export async function markReviewed(generationId: string): Promise<void> {
   await ensureTable();
@@ -171,6 +185,36 @@ export async function markReviewed(generationId: string): Promise<void> {
     UpdateExpression: 'SET #s = :status',
     ExpressionAttributeNames: { '#s': 'status' },
     ExpressionAttributeValues: { ':status': { S: 'reviewed' satisfies GenerationStatus } },
+  }));
+}
+
+/**
+ * Called after EVERY review round completes (both "approve, no changes"
+ * and "approve with changes") — advances the baseline computeDiffForGeneration()
+ * diffs against for the NEXT round, so each round's diff reflects only
+ * what changed since the previous round, not the cumulative diff since
+ * the AI's original output. Deliberately does NOT touch `status` — status
+ * stays 'draft-saved' so needsAiReview keeps offering review on every
+ * future save, per Olga's explicit multi-round request.
+ */
+export async function recordReviewRound(
+  generationId: string,
+  params: { grid: number[][]; palette: PatternPalette[] },
+): Promise<void> {
+  await ensureTable();
+  const height = params.grid.length;
+  const width = params.grid[0]?.length ?? 0;
+
+  await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: { generationId: { S: generationId } },
+    UpdateExpression: 'SET lastReviewedGrid = :g, lastReviewedWidth = :w, lastReviewedHeight = :h, lastReviewedPalette = :pal',
+    ExpressionAttributeValues: {
+      ':g': { S: rleEncode(params.grid) },
+      ':w': { N: String(width) },
+      ':h': { N: String(height) },
+      ':pal': { S: JSON.stringify(params.palette) },
+    },
   }));
 }
 
@@ -197,6 +241,8 @@ export async function backfillDesignId(generationId: string, designId: number): 
 function itemToRecord(item: Record<string, AttributeValue>): AiDesignGeneration {
   const width = item.initialWidth?.N ? parseInt(item.initialWidth.N, 10) : undefined;
   const height = item.initialHeight?.N ? parseInt(item.initialHeight.N, 10) : undefined;
+  const lastReviewedWidth = item.lastReviewedWidth?.N ? parseInt(item.lastReviewedWidth.N, 10) : undefined;
+  const lastReviewedHeight = item.lastReviewedHeight?.N ? parseInt(item.lastReviewedHeight.N, 10) : undefined;
   return {
     generationId: item.generationId.S!,
     theme: item.theme?.S ?? '',
@@ -215,6 +261,9 @@ function itemToRecord(item: Record<string, AttributeValue>): AiDesignGeneration 
     targetWidth: item.targetWidth?.N ? parseInt(item.targetWidth.N, 10) : undefined,
     targetHeight: item.targetHeight?.N ? parseInt(item.targetHeight.N, 10) : undefined,
     colorPalette: item.colorPalette?.S,
+    lastReviewedGrid: item.lastReviewedGrid?.S && lastReviewedWidth && lastReviewedHeight
+      ? rleDecode(item.lastReviewedGrid.S, lastReviewedWidth, lastReviewedHeight) : undefined,
+    lastReviewedPalette: item.lastReviewedPalette?.S ? JSON.parse(item.lastReviewedPalette.S) : undefined,
   };
 }
 

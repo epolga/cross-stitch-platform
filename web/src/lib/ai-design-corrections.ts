@@ -19,7 +19,7 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { randomUUID } from 'crypto';
 import type { PatternPalette } from './pattern-converter';
-import { getGeneration, markReviewed } from './ai-design-generations';
+import { getGeneration, recordReviewRound } from './ai-design-generations';
 
 const TABLE = process.env.DDB_AI_DESIGN_CORRECTIONS_TABLE || 'AiDesignCorrections';
 const REGION = process.env.AWS_REGION || 'us-east-1';
@@ -133,6 +133,12 @@ export interface AiDesignCorrection {
   correctionId: string;
   generationId: string;
   designId?: number;
+  // Added 2026-08-08 — which review round this is for the generation (1,
+  // 2, 3, ...). Multiple corrections per generation are now expected
+  // (Olga's ask: every save on an AI-draft offers review, not just the
+  // first) — this makes the sequence explicit rather than relying on
+  // sorting by createdAt.
+  roundNumber: number;
   diff: GridDiffSummary;
   reasonTags: string[];
   freeTextComment?: string;
@@ -145,6 +151,7 @@ function itemToRecord(item: Record<string, AttributeValue>): AiDesignCorrection 
     correctionId: item.correctionId.S!,
     generationId: item.generationId?.S ?? '',
     designId: item.designId?.N ? parseInt(item.designId.N, 10) : undefined,
+    roundNumber: item.roundNumber?.N ? parseInt(item.roundNumber.N, 10) : 1,
     diff: item.diff?.S ? JSON.parse(item.diff.S) : { dimensionsChanged: false, beforeDimensions: { width: 0, height: 0 }, afterDimensions: { width: 0, height: 0 }, cellsChanged: 0, colorsAdded: [], colorsRemoved: [], colorsUnchanged: 0 },
     reasonTags: item.reasonTags?.SS ?? [],
     freeTextComment: item.freeTextComment?.S,
@@ -155,6 +162,7 @@ function itemToRecord(item: Record<string, AttributeValue>): AiDesignCorrection 
 
 async function saveCorrection(params: {
   generationId: string;
+  roundNumber: number;
   diff: GridDiffSummary;
   reasonTags: string[];
   freeTextComment?: string;
@@ -167,6 +175,7 @@ async function saveCorrection(params: {
   const item: Record<string, AttributeValue> = {
     correctionId: { S: correctionId },
     generationId: { S: params.generationId },
+    roundNumber: { N: String(params.roundNumber) },
     diff: { S: JSON.stringify(params.diff) },
     acceptedOrRejected: { S: params.acceptedOrRejected },
     createdAt: { S: now },
@@ -237,12 +246,17 @@ export interface ReviewGenerationResult {
 }
 
 /**
- * Phase A of the real UI flow: fetches the immutable AI-generated snapshot
- * from AiDesignGenerations and diffs it against the pattern's current
- * state — but doesn't persist anything. The editor calls this first so it
- * can show the diff summary and ask "what were you fixing" BEFORE writing
- * a correction record with a reason that doesn't exist yet. Returns null
- * if the generation has no snapshot (e.g. bad generationId).
+ * Phase A of the real UI flow: diffs the pattern's current state against
+ * the baseline for the round about to be reviewed — the end-state of the
+ * PREVIOUS round if one exists (generation.lastReviewedGrid/Palette),
+ * falling back to the immutable AI-generated snapshot for round 1. This
+ * is what makes multiple rounds meaningful: round 2's diff shows only
+ * what changed since round 1's correction, not the cumulative diff since
+ * the AI's original output. Doesn't persist anything — the editor calls
+ * this first so it can show the diff summary and ask "what were you
+ * fixing" BEFORE writing a correction record with a reason that doesn't
+ * exist yet. Returns null if the generation has no snapshot at all (e.g.
+ * bad generationId, or attachDraft() never ran).
  */
 export async function computeDiffForGeneration(
   generationId: string,
@@ -254,8 +268,10 @@ export async function computeDiffForGeneration(
     console.error('[ai-design-corrections] generation not found or has no initial snapshot:', generationId);
     return null;
   }
+  const baselineGrid = generation.lastReviewedGrid ?? generation.initialGrid;
+  const baselinePalette = generation.lastReviewedPalette ?? generation.initialPalette;
   return diffPatterns(
-    { grid: generation.initialGrid, palette: generation.initialPalette },
+    { grid: baselineGrid, palette: baselinePalette },
     { grid: currentGrid, palette: currentPalette },
   );
 }
@@ -263,19 +279,27 @@ export async function computeDiffForGeneration(
 /**
  * Phase B: persists the correction record for an already-computed diff
  * (recomputing isn't needed — the diff itself doesn't depend on the
- * reason given for it) and marks the generation reviewed, so a future
- * Approve UI doesn't re-ask on every subsequent normal save.
+ * reason given for it), tagged with the next round number for this
+ * generation, then advances the review baseline (recordReviewRound) so
+ * the NEXT save's diff starts from here, not from the original AI output.
+ * Deliberately does NOT mark the generation "reviewed" / stop offering
+ * review — Olga's 2026-08-08 ask: every save on an AI-draft should offer
+ * the review step, tracked as its own round, not just the first one.
  */
 export async function submitReview(
   generationId: string,
   diff: GridDiffSummary,
   reasonTags: string[],
-  freeTextComment?: string,
+  freeTextComment: string | undefined,
+  currentGrid: number[][],
+  currentPalette: PatternPalette[],
 ): Promise<ReviewGenerationResult> {
   const acceptedOrRejected: AcceptedOrRejected = isEmptyDiff(diff) ? 'approve' : 'approve-with-changes';
+  const roundNumber = (await listCorrectionsForGeneration(generationId)).length + 1;
 
   const correctionId = await saveCorrection({
     generationId,
+    roundNumber,
     diff,
     // No reason tags/comment recorded for a true no-op approve, even if
     // the caller passed some — matches "no reason question is asked" for
@@ -285,7 +309,7 @@ export async function submitReview(
     acceptedOrRejected,
   });
 
-  await markReviewed(generationId);
+  await recordReviewRound(generationId, { grid: currentGrid, palette: currentPalette });
 
   return { correctionId, diff, acceptedOrRejected };
 }
@@ -300,5 +324,5 @@ export async function submitReview(
 export async function reviewGeneration(params: ReviewGenerationParams): Promise<ReviewGenerationResult | null> {
   const diff = await computeDiffForGeneration(params.generationId, params.currentGrid, params.currentPalette);
   if (!diff) return null;
-  return submitReview(params.generationId, diff, params.reasonTags ?? [], params.freeTextComment);
+  return submitReview(params.generationId, diff, params.reasonTags ?? [], params.freeTextComment, params.currentGrid, params.currentPalette);
 }

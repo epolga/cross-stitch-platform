@@ -570,6 +570,7 @@
      Verified: `tsc --noEmit` clean, `next lint` no new warnings
      (5 pre-existing), Vitest 89/89. **Deployed** — see the deploy
      record below.
+   - **Built the same day, foundation piece of the provenance/correction
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service
      (`web/src/lib/ai-design-generations.ts`), `sourceGenerationId` added
@@ -605,6 +606,37 @@
      or approve designs. A regular user never has an `AiDesignGenerations`
      row to review. Verified: `tsc --noEmit` clean, `next lint` no new
      warnings, Vitest 79/79. Full detail in `DESIGN_FEEDBACK_LOOP.md`.
+   - **Real usage caught a real design gap, 2026-08-08 — the one-shot
+     review flow was wrong, changed to multi-round.** Olga made a real
+     second edit to the frog draft after her first Approve-with-changes
+     and got no dialog at all — by design at the time
+     (`AiDesignGenerations.status` flips `draft-saved` → `reviewed` after
+     round 1, and `needsAiReview` only fires on `draft-saved`), but wrong
+     for how she actually wants to use it: **every save on an AI-draft
+     should offer review, each one its own round.** Changed: `submitReview()`
+     no longer calls `markReviewed()` (kept as an unused-for-now building
+     block, not deleted) — `status` stays `draft-saved` permanently for
+     this purpose, so `needsAiReview` keeps firing on every future save.
+     New `AiDesignGenerations.lastReviewedGrid`/`lastReviewedPalette`
+     (`recordReviewRound()`, called after every submitted review, not
+     just the first) hold the end-state of the most recently completed
+     round; `computeDiffForGeneration()` now diffs against this (falling
+     back to the immutable `initialGrid`/`initialPalette` only for round
+     1) instead of always against the original AI output — otherwise
+     round 2's diff would show the cumulative change since generation,
+     not just what changed in round 2, misrepresenting what Olga actually
+     did in that round. New `AiDesignCorrection.roundNumber` (1, 2, 3, ...)
+     makes the sequence explicit. **Backfilled the frog's existing
+     generation** (`e643af72-4eaf-45e9-b3a5-086a7476421e`) — round 1 was
+     recorded under the old code before `lastReviewedGrid` existed, so
+     without a one-time backfill round 2 would have incorrectly diffed
+     against the original 84x84/8-color snapshot instead of round 1's
+     60x60/5-color outcome. Verified live: after backfilling,
+     `computeDiffForGeneration()` against the pattern's current
+     (unchanged since round 1) state correctly returns an empty diff —
+     confirms the new baseline is right, not just that the code runs.
+     `tsc --noEmit` clean, `next lint` clean, Vitest 89/89 unchanged (all
+     I/O, no new pure logic to unit-test). **Not yet deployed.**
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.

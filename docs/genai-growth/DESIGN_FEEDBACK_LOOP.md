@@ -231,9 +231,10 @@ field) and **corrections → downloads** (via the link from Table 2 below).
 | `imageProvider` | S | `"openai"` \| `"stability"` — doubles as Domain 2 (provider choice) data |
 | `initialGrid`, `initialPalette` | S (JSON) | immutable snapshot of the AI-generated grid/palette, written once, before Olga ever opens the editor — see "Provenance mechanism" below. Size-checked: even the catalog's largest existing design (241×241) is ~175KB as JSON, comfortably under DynamoDB's 400KB item limit, so no S3 needed. |
 | `createdAt` | S (ISO) | |
-| `status` | S | `generated` → `draft-saved` → `reviewed` → `published` (or `rejected`) |
+| `status` | S | `generated` → `draft-saved` → `published` (or `rejected`) — `reviewed` still exists as an enum value (see `markReviewed()`) but the real multi-round flow (2026-08-08) never sets it; `draft-saved` now means "still eligible for review," permanently, for as long as review keeps being offered every save. |
 | `patternId` | S, optional | `ConverterPatterns` id once the draft is saved to Olga's account |
 | `designId` | N, optional | filled in once actually published to the catalog — the join key to that design's live `NDownloaded` |
+| `lastReviewedGrid`, `lastReviewedPalette` | S (JSON), optional | added 2026-08-08 — the pattern's state as of the end of the most recently completed review round. Absent until round 1 completes. The diff baseline for the NEXT round (falls back to `initialGrid`/`initialPalette` if absent). Updated by `recordReviewRound()`. |
 | `targetWidth`, `targetHeight` | N, optional | added 2026-08-08 — `detectTrend()`'s researched popular size in stitches for this theme. `targetWidth` sets the conversion scale in `save-ai-draft.ts`; the pair also picks a matching non-square aspect ratio at image-generation time (`pickStabilityAspectRatio`/`pickOpenAiSize` in `image-generation.ts`), so a tall/wide research result is no longer forced back to square. |
 | `colorPalette` | S, optional | added 2026-08-08 — `detectTrend()`'s researched popular color combination for the subject; recorded for provenance, already folded into `imagePrompt`'s text by `buildPrompt()`. |
 
@@ -250,6 +251,7 @@ One row per reviewed pattern (approved as-is, or approved with changes).
 |---|---|---|
 | `correctionId` (PK) | S | UUID |
 | `generationId` | S | FK to Table 1 — pulls in the prompt/theme for free |
+| `roundNumber` | N | added 2026-08-08 — 1, 2, 3, ... which review round this is for the generation. Multiple rows per `generationId` are now the normal case (every save on an AI-draft offers review, see "Provenance mechanism" point 3), not just one. |
 | `designId` | N, optional | same join key, duplicated here for direct queries without hopping through Table 1 |
 | `gridDiffSummary` | S (JSON) | compact summary (cells changed, colors merged/added/removed) — not the full before/after grids, those already live via `generationId` → Table 1's `initialGrid` and the pattern's current state |
 | `reasonTags` | SS | from the preset list above |
@@ -269,11 +271,23 @@ One row per reviewed pattern (approved as-is, or approved with changes).
    ever opened the editor, so it can never be touched by her later edits.
    `ConverterPatterns` itself stays a single mutable record exactly as
    today; only Table 1 holds the frozen "as-generated" state.
-3. **Review is an explicit action, not every save.** The editor shows an
-   Approve / Approve-with-changes step only when the open pattern has a
-   `sourceGenerationId` whose `AiDesignGenerations.status` is still
-   `draft-saved` (not yet `reviewed`) — so the question is asked exactly
-   once per generation, not on every subsequent normal save.
+3. **Review is multi-round (revised 2026-08-08).** Originally one-shot:
+   the editor showed Approve / Approve-with-changes only while
+   `AiDesignGenerations.status` was `draft-saved`, flipping to `reviewed`
+   after the first round so the question was asked exactly once per
+   generation. Olga's real usage showed this was wrong — she made a
+   second real edit (fixing the same draft further) and got no dialog at
+   all, no record of the second correction. Changed to: **every save on
+   an AI-draft with `sourceGenerationId` offers review**, `status` never
+   leaves `draft-saved` for this purpose. Each round is a separate
+   `AiDesignCorrection` row (`roundNumber` 1, 2, 3, ...). To keep each
+   round's diff meaningful (round 2 should show only what changed in
+   round 2, not the cumulative diff since the AI's original output),
+   `AiDesignGenerations` gained `lastReviewedGrid`/`lastReviewedPalette`
+   — the end-state of the most recently completed round, updated by
+   `recordReviewRound()` after every submitted review. `initialGrid`/
+   `initialPalette` stay untouched forever, still the true "as the AI
+   generated it" record for round-1-vs-original analysis.
 4. **The diff is computed server-side**, not in the browser: on
    Approve/Approve-with-changes, the client just sends
    `generationId` (+ `patternId`, reasonTags/comment if any) to a new API
