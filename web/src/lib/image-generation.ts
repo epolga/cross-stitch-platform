@@ -154,17 +154,35 @@ export async function generateImageStability(prompt: string, aspectRatio: string
   return { model, pngBase64: buffer.toString('base64') };
 }
 
-// Fights a different battle than prompting: both generateImageStability
-// and generateImageOpenAI kept ignoring explicit "no vignette/no badge/
-// no background" instructions in the prompt (2026-08-07, confirmed
-// across two rounds of increasingly strict wording) — a common failure
+// Fights a different battle than prompting: Stability kept ignoring
+// explicit "no vignette/no badge/no background" instructions in the
+// prompt (2026-08-07 Round 1: an unwanted circular badge frame;
+// 2026-08-08 Round 2: a full photorealistic scene, confirmed genuinely
+// opaque via `sharp` metadata — `hasAlpha: false`) — a common failure
 // mode where negation instructions are weakly followed by diffusion-style
 // image models, and repeating the excluded concept's name can even
 // reinforce it. Stripping the background as a dedicated post-processing
-// step is more reliable than continuing to fight the prompt. Returns a
-// transparent PNG (RGBA) — pattern-converter.ts's own pipeline still has
-// to decide what to do with transparent pixels; this function only
-// removes the background, it doesn't flatten it back to a solid color.
+// step is more reliable than continuing to fight the prompt.
+//
+// Correction (2026-08-08, caught by Olga): this comment used to also
+// claim generateImageOpenAI() ignored the same instructions and produced
+// a "dark vignette/glow." That was a misdiagnosis — Round 2's OpenAI
+// image was checked directly (`sharp` metadata + raw pixel sampling) and
+// has genuine RGBA alpha transparency (corner pixel `[0,0,0,0]`, subject
+// pixel alpha 255, clean transition, no gradient); what looked like a
+// vignette was only how a transparent PNG rendered over a dark viewer
+// backdrop, not real pixel content. Round 1's identical claim about
+// OpenAI is now suspect too but can't be re-verified (files gone). See
+// `docs/genai-growth/IMAGE_GENERATION_PREFERENCES.md` Round 2. Practical
+// effect: none on the actual saved pattern — `save-ai-draft.ts`'s
+// `sharp().flatten({background:'#ffffff'})` step already composites real
+// alpha transparency onto solid white correctly, regardless of what this
+// comment called it.
+//
+// Returns a transparent PNG (RGBA) — pattern-converter.ts's own pipeline
+// still has to decide what to do with transparent pixels; this function
+// only removes the background, it doesn't flatten it back to a solid
+// color.
 export async function removeBackgroundStability(pngBase64: string): Promise<GeneratedImage> {
   const apiKey = process.env.STABILITY_API_KEY;
   if (!apiKey) throw new Error('STABILITY_API_KEY not set');

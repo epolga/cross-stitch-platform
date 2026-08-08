@@ -430,10 +430,18 @@
      produced a full photorealistic outdoor scene, worse than Round 1's
      "added an unwanted badge but kept the right style" failure. OpenAI held
      the line from Round 1: correct flat-kawaii style, colors matching the
-     researched `colorPalette`, but the same dark-vignette background
-     problem persists. **Olga's verdict: OpenAI, same reason as Round 1**
-     (sharper, reads as background-free without a removal step) — scored,
-     running score now OpenAI 2 - Stability 0. Full writeup:
+     researched `colorPalette`. **Correction (caught by Olga):** initially
+     misread as having the same dark-vignette background problem as
+     Round 1 — wrong. `sharp` metadata + raw pixel sampling confirm the
+     OpenAI image has real `RGBA` alpha transparency (corner pixel
+     `[0,0,0,0]`, frog-center pixel `[156,177,87,255]`, clean transition,
+     no gradient) — the "vignette" was a rendering artifact of viewing a
+     transparent PNG over a dark backdrop, not real pixel content.
+     Round 1's identical "dark vignette/glow" claim about OpenAI is now
+     suspect too, but unverifiable (original files gone). **Olga's
+     verdict: OpenAI, same reason as Round 1** (sharper, reads as
+     background-free without a removal step) — scored, running score now
+     OpenAI 2 - Stability 0. Full writeup:
      `docs/genai-growth/IMAGE_GENERATION_PREFERENCES.md` Round 2.
    - **Built 2026-08-08 (same day): attempted fix for the grounding-gate
      failure above.** `buildPrompt()` used to end with "respond with ONLY a

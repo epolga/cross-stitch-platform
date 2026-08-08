@@ -101,9 +101,23 @@ theme was still returned and used.
   sky, mountains, dirt ground).
 - **OpenAI**: style followed well — flat kawaii illustration, bold clean
   outlines, and the subject's colors visibly match the researched
-  `colorPalette` (grass green body, cream belly, pink cheek blush). Same
-  Round-1 background problem persists: a dark vignette/glow, not a solid
-  flat white background.
+  `colorPalette` (grass green body, cream belly, pink cheek blush).
+  **Correction (caught by Olga, verified by pixel inspection):** initially
+  misread as a "dark vignette/glow" background problem, same as Round 1.
+  That was wrong — `sharp` metadata confirms real `RGBA` alpha
+  transparency (`hasAlpha: true`), and raw pixel sampling confirms a clean
+  transparent→opaque transition (corner `[0,0,0,0]`, frog center
+  `[156,177,87,255]`, no gradient band between). The apparent "vignette"
+  was an artifact of how the image was rendered for viewing (transparent
+  pixels shown over a dark backdrop), not real pixel content. There is no
+  background problem with this image — `save-ai-draft.ts`'s
+  `sharp().flatten({background:'#ffffff'})` step will turn this real
+  transparency into a clean solid white background before conversion, no
+  gradient-handling concern. **Round 1's "OpenAI: dark vignette/glow"
+  characterization is now suspect for the same reason** but wasn't
+  re-verified — the original Round 1 image files no longer exist to check
+  (non-persistent scratchpad). Lesson: verify alpha/pixel data directly for
+  this kind of claim instead of judging a rendered preview by eye.
 
 **Olga's verdict:** OpenAI. Scored this round **OpenAI +1** (running score
 now 2-0). **Reason (asked directly): same as Round 1** — sharper/crisper
