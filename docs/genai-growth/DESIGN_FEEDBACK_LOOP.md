@@ -137,7 +137,26 @@ Correction: merged into 3
 Reason: excessive palette complexity
 ```
 
-## Data store and provenance tracking (resolved 2026-08-08)
+## Data store and provenance tracking (resolved 2026-08-08, steps 1-2 built same day)
+
+**Built 2026-08-08:** `AiDesignGenerations` table + service
+(`web/src/lib/ai-design-generations.ts` — `createGeneration()`,
+`attachDraft()`, `getGeneration()`; `markReviewed()`/`backfillDesignId()`
+exist but aren't wired to any caller yet, steps 3-4 below). `sourceGenerationId`
+added to `ConverterPatterns` (`pattern-storage.ts`'s `savePattern()`/
+`loadPattern()`; deliberately **not** added to `updatePattern()` — a
+write-once provenance marker must survive every later edit unchanged).
+Wired into `save-capybara-draft.ts` via a new optional
+`[generationMetaPath]` CLI arg (a JSON file with `{theme, imagePrompt,
+signalSource, reasoning, imageProvider, grounding}` — the shape
+`detectTrend()`'s `TrendDetectionResult` now produces) — omitted entirely
+for a non-AI-trend manual save (e.g. the planned Fawn design test).
+Verified with a real round-trip against live AWS (create → attachDraft →
+getGeneration): grid/palette RLE-encode/decode correctly, status
+transitions `generated` → `draft-saved`. `AiDesignCorrections` (the other
+table) and the Approve/Approve-with-changes editor UI that would call
+`markReviewed()`/write correction records — **not built yet**, that's the
+next increment.
 
 Closes open questions #3 and #4 below with a concrete, buildable mechanism
 — worked out in a session dedicated to the trend-detection prompt's actual

@@ -17,15 +17,33 @@ import sharp from 'sharp';
 import { convertImage } from '../src/lib/pattern-converter';
 import { savePattern, updatePattern } from '../src/lib/pattern-storage';
 import { renderCoverThumbnailPng } from '../src/lib/server-cover-thumbnail';
+import { createGeneration, attachDraft } from '../src/lib/ai-design-generations';
+import type { GroundingAssessment } from '../src/lib/trend-detection';
 
 const IMAGE_PATH = process.argv[2];
 const OWNER_ID = process.argv[3];
 const NAME = process.argv[4] || 'Capybara (AI trend draft)';
 const EXISTING_PATTERN_ID = process.argv[5]; // if given, update in place instead of creating a new row
+// Optional: path to a JSON file {theme, imagePrompt, signalSource,
+// reasoning, imageProvider, grounding} — output of detectTrend() plus
+// which image provider generated IMAGE_PATH. When given, this run gets
+// tracked in AiDesignGenerations (see docs/genai-growth/DESIGN_FEEDBACK_LOOP.md
+// "Data store and provenance tracking"). Omit for a manual/non-AI-trend
+// save (e.g. the Fawn design test, which explicitly skips detectTrend()).
+const GENERATION_META_PATH = process.argv[6];
 
 if (!IMAGE_PATH || !OWNER_ID) {
-  console.error('Usage: save-capybara-draft.ts <image.png> <ownerID> [name] [existingPatternId]');
+  console.error('Usage: save-capybara-draft.ts <image.png> <ownerID> [name] [existingPatternId] [generationMetaPath]');
   process.exit(1);
+}
+
+interface GenerationMeta {
+  theme: string;
+  imagePrompt: string;
+  signalSource: string;
+  reasoning: string;
+  imageProvider: string;
+  grounding: GroundingAssessment;
 }
 
 const TARGET_WIDTH = 80;
@@ -152,6 +170,20 @@ function removeUnusedColors<P>(grid: number[][], palette: P[]): { grid: number[]
 }
 
 async function main() {
+  let generationId: string | undefined;
+  if (GENERATION_META_PATH) {
+    const meta = JSON.parse(readFileSync(GENERATION_META_PATH, 'utf-8')) as GenerationMeta;
+    generationId = await createGeneration({
+      theme: meta.theme,
+      imagePrompt: meta.imagePrompt,
+      signalSource: meta.signalSource,
+      reasoning: meta.reasoning,
+      grounding: meta.grounding,
+      imageProvider: meta.imageProvider,
+    });
+    console.log(`Generation tracked: ${generationId} (theme: "${meta.theme}", grounding passesGate: ${meta.grounding.passesGate})`);
+  }
+
   const rawBuffer = readFileSync(IMAGE_PATH);
   const meta = await sharp(rawBuffer).metadata();
   const flattened = await sharp(rawBuffer).flatten({ background: '#ffffff' }).png().toBuffer();
@@ -191,12 +223,23 @@ async function main() {
   const thumbnailBuffer = await renderCoverThumbnailPng(prunedGrid, prunedPalette);
   const thumbnail = `data:image/png;base64,${thumbnailBuffer.toString('base64')}`;
 
+  let patternId: string;
   if (EXISTING_PATTERN_ID) {
     await updatePattern(EXISTING_PATTERN_ID, NAME, finalWidth, finalHeight, prunedPalette, prunedGrid, OWNER_ID, thumbnail);
+    patternId = EXISTING_PATTERN_ID;
     console.log(`Updated pattern id: ${EXISTING_PATTERN_ID} (owner ${OWNER_ID})`);
   } else {
-    const id = await savePattern(NAME, finalWidth, finalHeight, prunedPalette, prunedGrid, OWNER_ID, thumbnail);
-    console.log(`Saved pattern id: ${id} (owner ${OWNER_ID})`);
+    patternId = await savePattern(NAME, finalWidth, finalHeight, prunedPalette, prunedGrid, OWNER_ID, thumbnail, undefined, generationId);
+    console.log(`Saved pattern id: ${patternId} (owner ${OWNER_ID})`);
+  }
+
+  // Immutable "as-generated" snapshot, written once, here — before Olga
+  // has ever opened this pattern in the editor. Only on the first save:
+  // re-running this script against EXISTING_PATTERN_ID would otherwise
+  // overwrite the snapshot with an already-edited state.
+  if (generationId && !EXISTING_PATTERN_ID) {
+    await attachDraft(generationId, { patternId, initialGrid: prunedGrid, initialPalette: prunedPalette });
+    console.log(`Snapshot attached to generation ${generationId}`);
   }
 }
 

@@ -12,11 +12,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getAllAlbumCaptions } from './data-access';
 
-export interface TrendDetectionResult {
+export interface ParsedTrend {
   theme: string;
   imagePrompt: string;
   signalSource: string;
   reasoning: string;
+}
+
+export interface TrendDetectionResult extends ParsedTrend {
+  grounding: GroundingAssessment;
 }
 
 // Same cap and reasoning as aiToolsScan.ts: max_uses bounds the search
@@ -57,7 +61,7 @@ After researching, respond with ONLY a JSON object with exactly these fields (no
 }`;
 }
 
-export function extractJson(text: string): TrendDetectionResult | null {
+export function extractJson(text: string): ParsedTrend | null {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
@@ -68,7 +72,7 @@ export function extractJson(text: string): TrendDetectionResult | null {
       typeof parsed.signalSource === 'string' &&
       typeof parsed.reasoning === 'string'
     ) {
-      return parsed as TrendDetectionResult;
+      return parsed as ParsedTrend;
     }
     console.error('[trend-detection] parsed JSON missing expected fields:', parsed);
     return null;
@@ -87,6 +91,90 @@ export function extractJson(text: string): TrendDetectionResult | null {
 // correct, but its ABSENCE is a clear signal not to trust the result.
 export function hasRealWebSearchEvidence(content: Anthropic.ContentBlock[]): boolean {
   return content.some((block) => block.type === 'server_tool_use');
+}
+
+export interface GroundingCitation {
+  url: string;
+  title: string | null;
+  citedText: string;
+}
+
+export interface GroundingAssessment {
+  distinctQueries: number;
+  distinctCitedUrls: number;
+  citedDomains: string[];
+  citations: GroundingCitation[];
+  passesGate: boolean;
+}
+
+// Cross-stitch-relevant domains per OPPORTUNITIES.md's Opportunity 9
+// "Trend detection" source restriction — a citation from outside this list
+// is a signal the niche-source instruction in buildPrompt() didn't actually
+// bite, even if the model did search for real.
+const ALLOWED_CITATION_DOMAINS = ['pinterest.com', 'etsy.com', 'reddit.com', 'trends.google.com'];
+
+function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedDomain(hostname: string): boolean {
+  return ALLOWED_CITATION_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`));
+}
+
+/**
+ * Deterministic, zero-marginal-cost grounding check — no extra AI call.
+ * hasRealWebSearchEvidence() above only proves *a* search happened; this
+ * reads the real search queries (ServerToolUseBlock.input) and the real
+ * citations Claude's final answer actually leaned on
+ * (CitationsWebSearchResultLocation on TextBlock.citations) that the SDK
+ * already returns today but nothing previously read. See OPPORTUNITIES.md
+ * Opportunity 9 "Grounding" section for the full design rationale.
+ *
+ * passesGate is a provisional threshold (>=2 distinct cited URLs, at least
+ * one from an allowed domain) — callers should treat a failing gate as
+ * "flag for manual review," not an automatic hard reject; no real-world
+ * calibration data exists yet.
+ */
+export function assessGrounding(content: Anthropic.ContentBlock[]): GroundingAssessment {
+  const queries = new Set<string>();
+  for (const block of content) {
+    if (block.type === 'server_tool_use' && block.name === 'web_search') {
+      const input = block.input as { query?: string } | undefined;
+      if (input?.query) queries.add(input.query);
+    }
+  }
+
+  const citationsByUrl = new Map<string, GroundingCitation>();
+  for (const block of content) {
+    if (block.type !== 'text') continue;
+    for (const citation of block.citations ?? []) {
+      if (citation.type !== 'web_search_result_location') continue;
+      if (!citationsByUrl.has(citation.url)) {
+        citationsByUrl.set(citation.url, {
+          url: citation.url,
+          title: citation.title,
+          citedText: citation.cited_text,
+        });
+      }
+    }
+  }
+
+  const citations = [...citationsByUrl.values()];
+  const citedDomains = [...new Set(
+    citations.map((c) => hostnameOf(c.url)).filter((h): h is string => !!h),
+  )];
+
+  return {
+    distinctQueries: queries.size,
+    distinctCitedUrls: citations.length,
+    citedDomains,
+    citations,
+    passesGate: citations.length >= 2 && citedDomains.some(isAllowedDomain),
+  };
 }
 
 /** Runs the trend-detection research call. Returns null if the API key is
@@ -111,18 +199,25 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
   ];
   let messages: Anthropic.MessageParam[] = [{ role: 'user', content: buildPrompt(existingThemes) }];
 
+  // Accumulated across every response in the pause_turn loop, not just the
+  // final one — search calls and their citations can land in an earlier
+  // continuation than the one that finally emits the JSON answer, so both
+  // the search-evidence check and the grounding assessment need the full
+  // conversation's content, not just response.content from the last turn.
+  const allContent: Anthropic.ContentBlock[] = [];
+
   let response = await client.messages.create({ model: MODEL, max_tokens: 2000, tools, messages });
-  let sawRealSearch = hasRealWebSearchEvidence(response.content);
+  allContent.push(...response.content);
 
   let continuations = 0;
   while (response.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
     messages = [...messages, { role: 'assistant', content: response.content }];
     response = await client.messages.create({ model: MODEL, max_tokens: 2000, tools, messages });
-    sawRealSearch = sawRealSearch || hasRealWebSearchEvidence(response.content);
+    allContent.push(...response.content);
     continuations++;
   }
 
-  if (!sawRealSearch) {
+  if (!hasRealWebSearchEvidence(allContent)) {
     console.error('[trend-detection] no server_tool_use (real web_search) blocks in the response — refusing to trust an ungrounded result');
     return null;
   }
@@ -137,5 +232,16 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  return extractJson(text);
+  const parsed = extractJson(text);
+  if (!parsed) return null;
+
+  const grounding = assessGrounding(allContent);
+  if (!grounding.passesGate) {
+    console.warn(
+      '[trend-detection] grounding gate failed (flag for manual review, not an automatic reject):',
+      { distinctCitedUrls: grounding.distinctCitedUrls, citedDomains: grounding.citedDomains },
+    );
+  }
+
+  return { ...parsed, grounding };
 }

@@ -87,6 +87,7 @@ export interface SavedPattern {
   ownerID?: string;
   progress?: string;
   cellSize?: number;
+  sourceGenerationId?: string;
 }
 
 export async function savePattern(
@@ -98,6 +99,7 @@ export async function savePattern(
   ownerID: string,
   thumbnail?: string,
   hiddenColors?: number[],
+  sourceGenerationId?: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -119,6 +121,11 @@ export async function savePattern(
   };
   if (thumbnail) item.thumbnail = { S: thumbnail };
   if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
+  // Track 2 (Opportunity 9) provenance marker — set once, at first save,
+  // for AI-generated drafts only. See docs/genai-growth/DESIGN_FEEDBACK_LOOP.md
+  // "Data store and provenance tracking". A manually-created/imported
+  // pattern never sets this.
+  if (sourceGenerationId) item.sourceGenerationId = { S: sourceGenerationId };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
@@ -267,5 +274,6 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     ownerID:      Item.ownerID?.S,
     progress:     Item.progress?.S,
     cellSize:     Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
+    sourceGenerationId: Item.sourceGenerationId?.S,
   };
 }

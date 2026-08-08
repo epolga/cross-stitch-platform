@@ -297,6 +297,68 @@
    for a second design). See `docs/Focus.md`'s "Next session" entry for
    the same note.
 
+   **2026-08-08 session — questioned the pipeline's actual usefulness,
+   not just its mechanics; resolved into concrete design + real code:**
+   - `DESIGN_FEEDBACK_LOOP.md` open questions #3 (where the diff gets
+     computed) and #4 (where the correction database lives) resolved
+     with a concrete mechanism: two new self-provisioning DynamoDB
+     tables, `AiDesignGenerations` (one row per trend+image-gen attempt,
+     `imagePrompt` + an immutable `initialGrid`/`initialPalette` snapshot
+     written before any editing is possible) and `AiDesignCorrections`
+     (one row per Approve/Approve-with-changes review, diff computed
+     server-side); a new `sourceGenerationId` field on `ConverterPatterns`
+     marks AI provenance; `designId` backfilled at publish time. Ties
+     both prompt-composition choices and manual corrections back to real
+     per-design `NDownloaded` counts — Olga's explicit ask (two separate
+     measurable dimensions: prompt→downloads, corrections→downloads).
+     Not yet implemented (schema/mechanism only). Full detail in
+     `DESIGN_FEEDBACK_LOOP.md`.
+   - Re-examined the "solid flat white background" rule in
+     `trend-detection.ts`'s `imagePrompt` output — it conflates a fixable
+     `pattern-converter.ts` limitation (border flood-fill has no alpha
+     awareness) with the original, still-valid color-quantization
+     constraint (clean/limited color regions), and was generalized from a
+     single example (the capybara run), below this doc's own 3-5-record
+     threshold for formalizing a Level-1 rule. Not yet changed — flagged
+     as worth reconsidering, not decided unilaterally. Full detail in
+     `OPPORTUNITIES.md` Opportunity 9.
+   - Identified "was this trend finding actually good" (grounding) as a
+     measurement gap distinct from reach/conversion, and — unlike those
+     two — checkable immediately, before spending money on image
+     generation. **Built the same day:** `assessGrounding()` in
+     `trend-detection.ts` — a zero-marginal-cost, deterministic check
+     using citation data the Anthropic SDK's `web_search` responses
+     already carry (`ServerToolUseBlock.input.query`,
+     `CitationsWebSearchResultLocation`'s `url`/`title`/`cited_text` on
+     `TextBlock.citations`) but that nothing previously read. Gate:
+     `>=2` distinct cited URLs, at least one from an allowed
+     cross-stitch-relevant domain (pinterest.com, etsy.com, reddit.com,
+     trends.google.com) — a failing gate is a flag for manual review, not
+     an automatic reject (no real-world calibration data exists yet).
+     **Wired into `detectTrend()`**: `TrendDetectionResult` now carries a
+     `grounding` field; content is accumulated across the full
+     `pause_turn` continuation loop (not just the final response) so
+     citations from an earlier turn aren't missed; a failing gate logs a
+     `console.warn` rather than blocking the result. 5 new unit tests
+     (gate passes/fails on citation count/domain, URL dedup, empty
+     response), all pure/no-I/O per the file's existing pattern. Verified:
+     `tsc --noEmit` clean, Vitest 74/74 (was 61 as of 2026-08-07), `next
+     lint` clean. Not yet consumed by any caller beyond
+     `run-trend-detection.ts` printing it as part of the JSON dump — no
+     pipeline step acts on `passesGate` yet.
+   - **Built the same day, foundation piece of the provenance/correction
+     schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
+     tracking"):** `AiDesignGenerations` table + service
+     (`web/src/lib/ai-design-generations.ts`), `sourceGenerationId` added
+     to `ConverterPatterns`, both wired into `save-capybara-draft.ts` via
+     a new optional `[generationMetaPath]` arg. Verified with a real
+     create → attachDraft → getGeneration round-trip against live AWS —
+     grid/palette RLE round-trips correctly, status transitions
+     `generated` → `draft-saved`. `AiDesignCorrections` (the correction-
+     record table) and the Approve/Approve-with-changes editor UI that
+     would use it are **not built yet** — next increment. Full detail in
+     `DESIGN_FEEDBACK_LOOP.md`.
+
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
 - Production AI code stays in normal application folders/services.
