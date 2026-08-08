@@ -964,8 +964,9 @@ export async function getAdjacentDesigns(designId: number): Promise<{
 
 export async function getAlbumIdByCaption(caption: string): Promise<number | null> {
   return withCache(async () => {
+    const target = caption.toLowerCase();
     for (const album of albumCache.values()) {
-      if (album.Caption === caption) {
+      if (album.Caption.toLowerCase() === target) {
         return album.AlbumID;
       }
     }
