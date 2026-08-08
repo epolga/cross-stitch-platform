@@ -454,9 +454,9 @@ didn't log the user in).
     distinctCitedUrls`/`passesGate` actually improves. Full detail:
     `docs/genai-growth/PROGRESS.md`, `docs/genai-growth/
     IMAGE_GENERATION_PREFERENCES.md` Round 2.
-18. **Real product bug fixed 2026-08-08, not yet deployed:
-    `pattern-converter.ts`'s `convertImage()` gave transparent-PNG uploads
-    a BLACK background instead of white.** Found while investigating the
+18. ~~Real product bug: `pattern-converter.ts`'s `convertImage()` gave
+    transparent-PNG uploads a BLACK background instead of white~~ —
+    **fixed and deployed 2026-08-08.** Found while investigating the
     Track 2 image pipeline (Open item #17's context): `.removeAlpha()`
     doesn't composite onto any background, it just drops the alpha channel
     and keeps whatever RGB was stored under transparent pixels (often
@@ -466,10 +466,13 @@ didn't log the user in).
     sticker, screenshot) got this. Fixed: alpha now composited onto white
     properly, transparent cells become empty stitches instead of a
     background color. Verified against a real transparent image and a
-    real opaque image (zero regression). **Worth deploying on its own**,
-    separate from any future Track 2 release — it's a live-site fix.
-    Full detail: `docs/genai-growth/PROGRESS.md`, `docs/genai-growth/
-    OPPORTUNITIES.md` Opportunity 9 "Cause A".
+    real opaque image (zero regression), then a real end-to-end save (the
+    "Kawaii Cottagecore Frog" draft, pattern
+    `039afa9b-4bef-4b15-9db7-c884b232733a`) with a visually-confirmed clean
+    thumbnail. **Deployed to `cross-stitch-com-env-clone`, Health: Green,
+    live site verified (`/`, `/photo-to-cross-stitch`, `/albums`,
+    `/designs/4217` all 200).** Full detail: `docs/genai-growth/PROGRESS.md`,
+    `docs/genai-growth/OPPORTUNITIES.md` Opportunity 9 "Cause A".
 
 ## Done when
 
@@ -489,4 +492,4 @@ didn't log the user in).
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
 - [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
 - [ ] Track 2 grounding-gate `buildPrompt()` fix confirmed against a real `detectTrend()` run (see Open item #17)
-- [ ] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
+- [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18) — deployed 2026-08-08, Health Green, verified
