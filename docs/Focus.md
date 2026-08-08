@@ -62,6 +62,20 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
+**2026-08-09: discuss embeddings/vectors with Olga, for Track 2's
+avoid-list dedup problem.** Found live 2026-08-08: `detectTrend()`
+proposed "frog" three times in one session (once already published,
+"Kawaii Cottagecore Frog", DesignID 5463) because the avoid-list it's
+given is 114 ALBUM captions, not individual design names — album 54
+(which actually holds ~16 frog-themed designs) is captioned "Children,"
+so nothing in the avoid-list said "frog" at all. Stopgap fix applied
+same day: sample individual design captions instead of album captions
+(see PROGRESS.md/OPPORTUNITIES.md for the exact mechanism). Olga's ask:
+tomorrow, discuss the "real" fix — embeddings/vector similarity for
+this dedup check (and likely other Track 2 matching problems) instead
+of exact-keyword sampling. GenAI learning-track topic — explain in
+detail, not tersely (`feedback_genai_track_explain_in_detail` memory).
+
 **2026-08-08 (tomorrow): walk through `search-service/app/evaluation.py`
 line by line with Olga.** Requested 2026-08-07 explicitly for tomorrow —
 the goal is the real Phase 1 milestone per `ROADMAP.md` ("Olga can

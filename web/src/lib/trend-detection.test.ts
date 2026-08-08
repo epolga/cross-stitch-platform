@@ -137,16 +137,23 @@ describe('assessGrounding', () => {
 });
 
 describe('buildPrompt', () => {
-  it('includes every theme when under the avoid-list cap', () => {
+  it('includes every theme', () => {
     const prompt = buildPrompt(['Cats', 'Dogs', 'Christmas']);
     expect(prompt).toContain('Cats, Dogs, Christmas');
   });
 
-  it('caps a very large catalog rather than listing every theme', () => {
-    const themes = Array.from({ length: 300 }, (_, i) => `Theme${i}`);
+  // 2026-08-08: was capped (and this test asserted the cap) — removed
+  // after a real live failure where an album-caption cap of 80 silently
+  // excluded ~30% of the catalog from the avoid-list, then again when
+  // the switch to design-level captions could have repeated the same
+  // mistake. No cap now — see the comment above getExistingDesignCaptions()
+  // in trend-detection.ts for why this is safe against the model's
+  // context window.
+  it('does not truncate a very large catalog', () => {
+    const themes = Array.from({ length: 3000 }, (_, i) => `Theme${i}`);
     const prompt = buildPrompt(themes);
     expect(prompt).toContain('Theme0');
-    expect(prompt).toContain('Theme199');
-    expect(prompt).not.toContain('Theme200');
+    expect(prompt).toContain('Theme1999');
+    expect(prompt).toContain('Theme2999');
   });
 });

@@ -636,7 +636,82 @@
      (unchanged since round 1) state correctly returns an empty diff —
      confirms the new baseline is right, not just that the code runs.
      `tsc --noEmit` clean, `next lint` clean, Vitest 89/89 unchanged (all
-     I/O, no new pure logic to unit-test). **Not yet deployed.**
+     I/O, no new pure logic to unit-test). **Deployed 2026-08-08**, Health
+     Green, verified live (review endpoint round-tripped a real empty-diff
+     approve against the frog pattern post-deploy).
+   - **`sourceGenerationId` wired through "Publish to Catalog," 2026-08-08
+     — found missing when Olga published the frog for real.** The publish
+     route never received the pattern's `sourceGenerationId` at all (not
+     in the request body), so `AiDesignGenerations.designId`/
+     `AiDesignCorrections.designId` never got backfilled — breaking the
+     prompt->downloads and corrections->downloads measurement this schema
+     exists for. Fixed: `PublishToCatalogDialog` now threads
+     `sourceGenerationId` (new `ConvertClient.tsx` state, previously only
+     a boolean `isAiDraft` existed) through to
+     `/api/admin/publish-to-catalog`, which best-effort backfills
+     `designId` onto the generation and every correction round after the
+     catalog insert succeeds. Manually backfilled the frog's own
+     generation/corrections with its real `designId` (5463) since it was
+     published before this fix existed. Deployed same day, Health Green,
+     verified live (`/designs/5463` 200).
+   - **Real production bug found and fixed the same day, unrelated to any
+     of the above: `detectTrend()` was silently dropping valid answers
+     and hanging with no real timeout.** Found while trying to run a real
+     Round 3 (new theme) — three real failures in a row after the
+     grounding-gate prompt change:
+     1. `text` was extracted from `response.content` (the LAST API turn
+        only) instead of the accumulated `allContent` — inconsistent with
+        the principle this file already applies to
+        `hasRealWebSearchEvidence()`/`assessGrounding()` right above it.
+        If the model wrote its JSON on an earlier continuation and the
+        last turn ended with no text of its own, the real answer existed
+        but got discarded. Fixed: extract from `allContent`.
+     2. `extractJson()`'s "no `{...}` found in text at all" branch
+        returned `null` with zero logging — indistinguishable from every
+        other failure path. Added a snippet log; this is what revealed
+        finding 3 below instead of continued guessing.
+     3. `max_tokens: 2000` wasn't enough once `buildPrompt()` started
+        asking for a cited paragraph before the JSON (the grounding-gate
+        fix) — confirmed via the new logging, response cut off mid-word
+        still inside the paragraph, never reaching the JSON. Bumped to
+        `MAX_TOKENS = 4096`.
+     4. The `Anthropic` client had no explicit timeout — the SDK default
+        is 10 minutes (confirmed in `client.d.ts`), retried on timeout by
+        default so worst case is longer. A run got killed by hand at ~9
+        minutes with near-zero CPU growth rather than wait out the
+        default; added an explicit `timeout: 120_000` (2 min) — this is a
+        manually-triggered interactive call, not a background batch job,
+        so a single API call taking anywhere near 10 minutes means
+        something is actually wrong. Confirmed working: the very next run
+        failed fast with a clean `APIConnectionTimeoutError` instead of
+        hanging silently.
+   - **Real, separate dedup gap found the same day, mid-Round-3-retries
+     (Olga's live catch): the avoid-list couldn't have caught "frog" even
+     in principle.** `detectTrend()` proposed frog-themed subjects THREE
+     times in one session — once already published as "Kawaii Cottagecore
+     Frog" (DesignID 5463) — because the avoid-list was built from 114
+     ALBUM captions, and the album actually holding ~16 existing frog
+     designs is captioned "Children," not "Frog." Nothing in the
+     avoid-list said "frog" at all; this was never a case of the model
+     failing to reconcile "most popular" against "already covered" (Olga's
+     first hypothesis) — it genuinely had no signal. Confirmed live via
+     `getAllAlbumCaptions()` → `{ albumId: 54, Caption: 'Children' }`.
+     **Stopgap fix (Olga's call — real fix deferred to next session, see
+     Focus.md "2026-08-09... embeddings/vectors"):** switched the
+     avoid-list source from `getAllAlbumCaptions()` (114 items) to unique
+     individual DESIGN captions via a new `getExistingDesignCaptions()`
+     (`fetchAllDesigns()` deduplicated) — 5275 designs → 2398 unique
+     captions, ~31KB / ~7800 tokens, checked live — comfortably inside the
+     model's context window, so the size cap was removed entirely rather
+     than picking a new arbitrary number (the exact bug class that bit
+     this file's avoid-list once already, at the album-caption cap of 80).
+     `buildPrompt()`'s test updated to assert no truncation instead of
+     asserting a cap. Verified: `tsc --noEmit` clean, `next lint` clean,
+     Vitest 89/89 (14/14 in `trend-detection.test.ts`). **Not part of the
+     deployed web app** — `trend-detection.ts` is only imported as a type
+     by `ai-design-generations.ts`, so no redeploy needed, just a commit.
+     **Not yet re-run for real** after this fix — next live `detectTrend()`
+     call will show whether "frog" stops recurring.
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.

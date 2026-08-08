@@ -10,7 +10,7 @@
 // human reads the raw text) instead of that file's free-text email body.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { getAllAlbumCaptions } from './data-access';
+import { fetchAllDesigns } from './data-access';
 
 export interface ParsedTrend {
   theme: string;
@@ -44,14 +44,39 @@ export interface TrendDetectionResult extends ParsedTrend {
 const MAX_SEARCH_USES = 15;
 const MAX_CONTINUATIONS = 2;
 const MODEL = 'claude-sonnet-5';
+// 2026-08-08: was 2000 — confirmed via a real failure (extractJson's new
+// "no JSON found" logging showed the response cut off mid-sentence, still
+// inside the cited paragraph, never reaching the JSON at all) that this
+// wasn't enough headroom once buildPrompt() started asking for a cited
+// paragraph before the JSON (added the same day, for the grounding-gate
+// fix) — a single turn's tool_use blocks (each real search call) plus
+// that prose plus the JSON can outrun 2000 tokens. Bumped with margin;
+// not scientifically tuned, revisit if truncation recurs.
+const MAX_TOKENS = 4096;
 
-// Caps how many existing catalog captions go into the prompt. The catalog
-// has 114 albums as of 2026-08-07 (checked live) — comfortably under this
-// cap, so every album is currently included; raise this if the catalog
-// grows well past it (a truncated list has a real gap: an earlier live
-// run capped at 80 would have silently excluded the alphabetically-last
-// ~30% of albums from the "don't repeat these" list).
-const MAX_AVOID_LIST_SIZE = 200;
+// 2026-08-08: was ALBUM captions (114 of them, e.g. "Children"), not
+// individual design names — a real dedup gap, found live: detectTrend()
+// proposed "frog" three times in one session (one already published as
+// "Kawaii Cottagecore Frog") because nothing in the album-caption list
+// said "frog" at all — the ~16 existing frog designs all live inside an
+// album captioned "Children", not a "Frog" album. Switched to unique
+// individual DESIGN captions instead (still deduplicated — no point
+// repeating "Frog" 16 times). No size cap: 5275 designs -> 2398 unique
+// captions -> ~31KB / ~7800 tokens, checked live 2026-08-08 — trivial
+// against the model's context window, and a cap here is exactly the bug
+// class that already bit this file once (an earlier album-caption cap of
+// 80 silently excluded ~30% of albums alphabetically). Revisit if the
+// catalog grows enough to make this a real cost/context concern.
+//
+// Stopgap, not the real fix — Olga's ask (2026-08-08): discuss embeddings/
+// vector similarity for this matching problem next session (see Focus.md
+// "Next session"). Exact-string dedup still can't catch e.g. "kawaii
+// green frog" as a near-duplicate of "Kawaii Cottagecore Frog" the way a
+// semantic match could.
+async function getExistingDesignCaptions(): Promise<string[]> {
+  const designs = await fetchAllDesigns();
+  return Array.from(new Set(designs.map((d) => d.Caption).filter((c): c is string => !!c)));
+}
 
 // 2026-08-08: the "respond with ONLY a JSON object, no other text" instruction
 // this used to end with is the suspected cause of a real grounding-gate
@@ -66,7 +91,7 @@ const MAX_AVOID_LIST_SIZE = 200;
 // attachment is the model's call, not something forced by instruction) —
 // next live detectTrend() run will show whether distinctCitedUrls improves.
 export function buildPrompt(existingThemes: string[]): string {
-  const avoidList = existingThemes.slice(0, MAX_AVOID_LIST_SIZE).join(', ');
+  const avoidList = existingThemes.join(', ');
 
   return `I run cross-stitch.com, a cross-stitch pattern catalog site. I want to grow the catalog by generating a new design around a theme that is genuinely trending RIGHT NOW specifically within the cross-stitch hobby community — not general home-decor or craft trends.
 
@@ -74,7 +99,7 @@ Search specifically within cross-stitch sources: cross-stitch-tagged Pinterest b
 
 Propose exactly ONE visual theme suitable for a cross-stitch pattern. It must be:
 - A single clear subject (e.g. "a fox"), NOT an abstract concept and NOT a busy multi-subject scene — this needs to convert cleanly into a limited-color-palette image later, so simplicity matters more than novelty.
-- Something NOT already well covered in my existing catalog. Here is a sample of my current catalog's album/category names, so you can avoid overlapping with them: ${avoidList}
+- Something NOT already well covered in my existing catalog. Here is the full list of my current catalog's individual design names, so you can avoid overlapping with them (an album may hold many differently-named designs on the same subject — a subject appearing repeatedly by name here, even under an unrelated album, counts as already covered): ${avoidList}
 
 Also research, from the same cross-stitch-specific sources, TWO more things about this theme:
 - **Size**: what finished/pattern size is currently popular for this kind of subject in cross-stitch listings/patterns — small quick-stitch motifs, medium wall-art pieces, or large detailed portraits. Translate that into an approximate stitch-count size (width x height in stitches — typical range is roughly 40-250 per side; small quick projects are 40-90, medium wall art 90-160, large detailed pieces 160-250).
@@ -96,7 +121,16 @@ Then, on its own line after that paragraph, respond with a JSON object with exac
 
 export function extractJson(text: string): ParsedTrend | null {
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
+  if (!match) {
+    // 2026-08-08: this branch used to return null silently — a real
+    // "no JSON object anywhere in the text" failure was previously
+    // indistinguishable from every other null-return path, since nothing
+    // here logged what actually happened. Log a snippet so a real
+    // failure (e.g. the model ran out of turns/tokens mid cited-paragraph,
+    // before ever reaching the JSON) is diagnosable instead of silent.
+    console.error('[trend-detection] no JSON object found in response text. Length:', text.length, 'snippet:', text.slice(-500));
+    return null;
+  }
   try {
     const parsed = JSON.parse(match[0]);
     if (
@@ -226,10 +260,17 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  const albums = await getAllAlbumCaptions();
-  const existingThemes = (albums ?? []).map((a) => a.Caption);
+  const existingThemes = await getExistingDesignCaptions();
 
-  const client = new Anthropic({ apiKey });
+  // 2026-08-08: explicit timeout, shorter than the SDK's own 10-minute
+  // default (confirmed in client.d.ts — and retried on timeout by
+  // default, so worst case is even longer). This is a manually-triggered,
+  // interactive research call, not a background batch job — a single
+  // API call taking anywhere near 10 minutes means something is actually
+  // wrong, not just a slow-but-fine response. Found for real: killed a
+  // run stuck at ~9 minutes with near-zero CPU growth rather than wait
+  // out the SDK default.
+  const client = new Anthropic({ apiKey, timeout: 120_000 });
   const tools: Anthropic.Tool[] = [
     { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCH_USES } as unknown as Anthropic.Tool,
   ];
@@ -242,15 +283,24 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
   // conversation's content, not just response.content from the last turn.
   const allContent: Anthropic.ContentBlock[] = [];
 
-  let response = await client.messages.create({ model: MODEL, max_tokens: 2000, tools, messages });
+  let response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
   allContent.push(...response.content);
 
   let continuations = 0;
   while (response.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
     messages = [...messages, { role: 'assistant', content: response.content }];
-    response = await client.messages.create({ model: MODEL, max_tokens: 2000, tools, messages });
+    response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
     allContent.push(...response.content);
     continuations++;
+  }
+  if (response.stop_reason === 'pause_turn') {
+    // Loop exited only because MAX_CONTINUATIONS was hit, not because the
+    // model naturally finished — the conversation was still mid-flow
+    // (more searches queued, or mid-sentence). Temporary diagnostic added
+    // 2026-08-08 after two real truncated-response failures survived a
+    // max_tokens bump — confirms whether the real bottleneck is turn count
+    // (MAX_CONTINUATIONS) rather than per-turn token budget.
+    console.warn('[trend-detection] exited the continuation loop while still pause_turn — MAX_CONTINUATIONS reached before the model naturally finished');
   }
 
   if (!hasRealWebSearchEvidence(allContent)) {
