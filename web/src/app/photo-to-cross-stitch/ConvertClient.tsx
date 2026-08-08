@@ -527,7 +527,7 @@ export default function ConvertPage() {
   async function doDownloadPdf(title: string, chartMode: 'symbol' | 'color-symbol' | 'color' = 'symbol') {
     setDownloading(true);
     try {
-      const previewImage = canvasHandle.current?.capturePreview() ?? null;
+      const previewImage = (await canvasHandle.current?.capturePreview()) ?? null;
       const resp = await fetch('/api/convert/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1967,8 +1967,8 @@ export default function ConvertPage() {
               {isAdmin && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setPublishPreviewImage(canvasHandle.current?.capturePreview() ?? null);
+                  onClick={async () => {
+                    setPublishPreviewImage((await canvasHandle.current?.capturePreview()) ?? null);
                     setShowPublishDialog(true);
                   }}
                   disabled={!hasDesign}

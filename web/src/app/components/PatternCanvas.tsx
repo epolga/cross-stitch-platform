@@ -300,7 +300,7 @@ function stampSimpleCross(
 // ── Component ────────────────────────────────────────────────────
 
 export type PatternCanvasHandle = {
-  capturePreview: () => string | null;
+  capturePreview: () => Promise<string | null>;
 };
 
 const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCanvas({
@@ -320,6 +320,7 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
 
   // Simulation mode assets
   const aidaImgRef      = useRef<HTMLImageElement | null>(null); // loaded /simulation/Canvas.png
+  const aidaImgLoadRef  = useRef<Promise<HTMLImageElement | null> | null>(null); // resolves once load settles (success or failure), for capturePreview() to await
   const [aidaImgVersion, setAidaImgVersion] = useState(0); // bumped once the image loads, to trigger a redraw
   const aidaLayerRef    = useRef<HTMLCanvasElement | null>(null); // persistent Aida background
   const crossLayerRef   = useRef<HTMLCanvasElement | null>(null); // persistent cross layer (incremental)
@@ -688,7 +689,12 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
 
   useEffect(() => {
     const img = new Image();
-    img.onload = () => { aidaImgRef.current = img; setAidaImgVersion(v => v + 1); };
+    aidaImgLoadRef.current = new Promise((resolve) => {
+      img.onload = () => { aidaImgRef.current = img; setAidaImgVersion(v => v + 1); resolve(img); };
+      // On failure, resolve (not reject) with null so an awaiting capturePreview()
+      // falls through to the flat-fill placeholder instead of hanging forever.
+      img.onerror = () => resolve(null);
+    });
     img.src = '/simulation/Canvas.png';
   }, []);
 
@@ -1012,10 +1018,21 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   }
 
   useImperativeHandle(ref, () => ({
-    capturePreview(): string | null {
+    async capturePreview(): Promise<string | null> {
       const g   = gridRef.current;
       const pal = paletteRef.current;
       if (!g.length || !pal.length) return null;
+
+      // Wait out the (usually sub-frame) window before Canvas.png's onload
+      // fires — without this, a capture requested immediately on mount would
+      // silently fall back to the flat placeholder fill below instead of the
+      // real texture, even though this is the "live capture" path that's
+      // supposed to always be correct (see 2026-08-08 incident: this flat
+      // fill leaking into a stored preview was indistinguishable from the
+      // separate server-side-fallback bug it was originally written to guard).
+      if (!aidaImgRef.current && aidaImgLoadRef.current) {
+        await aidaImgLoadRef.current;
+      }
 
       const rows = g.length, cols = g[0].length;
       const cs = Math.max(6, Math.min(20, Math.floor(1200 / Math.max(rows, cols))));
@@ -1026,10 +1043,9 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
       const ctx = offscreen.getContext('2d');
       if (!ctx) return null;
 
-      // Aida background — falls back to a plain linen fill on the rare chance
-      // Canvas.png hasn't finished loading yet when a capture is requested.
-      // Drawn cell-by-cell straight from the source image, same as the live
-      // canvas — see the comment on the live "Aida layer" build for why.
+      // Aida background — flat linen-color fill only survives as a last
+      // resort now, for a genuine load failure (see onerror above), not the
+      // ordinary timing race.
       if (aidaImgRef.current) {
         const img = aidaImgRef.current;
         for (let r = 0; r < rows; r++) {
