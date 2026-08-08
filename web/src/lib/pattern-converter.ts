@@ -25,6 +25,54 @@ export interface ConvertedPattern {
 
 const DMC: DmcColor[] = dmcColors;
 
+// ── Alpha-transparency handling ──────────────────────────────────────────────
+//
+// Added 2026-08-08 after a real bug was found: sharp's removeAlpha() does
+// NOT composite onto any background — it just drops the alpha channel,
+// leaving whatever RGB the encoder happened to store under transparent
+// pixels (often [0,0,0] — pure black — confirmed on a real OpenAI-generated
+// PNG). convertImage() is called directly (no pre-flatten) from the public
+// /api/convert route, so any real user uploading a PNG with genuine alpha
+// transparency (clipart, a sticker, a screenshot) got a BLACK background in
+// their pattern instead of white. Fixed by always decoding with an explicit
+// alpha channel (ensureAlpha() — a safe no-op that adds fully-opaque alpha
+// to images that don't have one) and compositing onto white ourselves, plus
+// tracking which cells were transparent so they become empty (-1) stitches
+// instead of a spurious "white background" color competing for a maxColors
+// slot. For an opaque source image (the overwhelming majority of uploads)
+// this is provably a no-op: ensureAlpha() adds alpha=255 everywhere, so
+// compositeOntoWhite's blend formula reduces to the identity and the
+// transparent mask is all-false.
+const ALPHA_THRESHOLD = 128; // 0-255; below this, a cell is treated as empty
+
+// Composites RGBA (straight, not premultiplied — sharp's raw output is
+// straight alpha) onto a solid white background: out = src*a + 255*(1-a).
+// Also returns which pixels are "transparent enough" to become empty
+// stitches rather than a real (white) color.
+function compositeOntoWhite(rgba: Buffer, channels: number, n: number): { rgb: Buffer; transparent: Uint8Array } {
+  const rgb = Buffer.alloc(n * 3);
+  const transparent = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = rgba[i * channels + 3];
+    if (a < ALPHA_THRESHOLD) transparent[i] = 1;
+    for (let c = 0; c < 3; c++) {
+      const src = rgba[i * channels + c];
+      rgb[i * 3 + c] = Math.round((src * a + 255 * (255 - a)) / 255);
+    }
+  }
+  return { rgb, transparent };
+}
+
+// Decodes a sharp pipeline's raw pixels with alpha explicitly handled (see
+// above), rather than the naive `.removeAlpha()` this replaces everywhere
+// in this file.
+async function decodeComposited(pipeline: ReturnType<typeof sharp>): Promise<{ data: Buffer; transparent: Uint8Array; width: number; height: number }> {
+  const { data, info } = await pipeline.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const n = info.width * info.height;
+  const { rgb, transparent } = compositeOntoWhite(data, info.channels, n);
+  return { data: rgb, transparent, width: info.width, height: info.height };
+}
+
 // ── Color space conversion ───────────────────────────────────────────────────
 
 type Lab = [number, number, number];
@@ -552,14 +600,11 @@ export async function convertImage(
 ): Promise<ConvertedPattern> {
   const { clusterDist, finalDist } = makeDistanceFns(colorDistanceMode);
   const isFlatArtMode = mode === 'line-art' || mode === 'illustration';
-  const { data, info } = await (
+  const { data, transparent, width: w, height: h } = await decodeComposited(
     isFlatArtMode
-      ? sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill', kernel: 'nearest' }).removeAlpha()
-      : sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill' }).removeAlpha()
-  ).raw().toBuffer({ resolveWithObject: true });
-
-  const w = info.width;
-  const h = info.height;
+      ? sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill', kernel: 'nearest' })
+      : sharp(imageBuffer).resize(targetWidth, targetHeight, { fit: 'fill' })
+  );
   const n = w * h;
 
   // Seed the PRNG from the raw file bytes so the same image always produces
@@ -575,8 +620,8 @@ export async function convertImage(
   // resolveOutlineComponents.
   let outlineCandidates: (Lab | null)[] | null = null;
   if (isFlatArtMode) {
-    const full = await sharp(imageBuffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-    const fullN = full.info.width * full.info.height;
+    const full = await decodeComposited(sharp(imageBuffer));
+    const fullN = full.width * full.height;
     const fullLab: Lab[] = new Array(fullN);
     for (let i = 0; i < fullN; i++)
       fullLab[i] = rgbToLab(full.data[i * 3], full.data[i * 3 + 1], full.data[i * 3 + 2]);
@@ -595,8 +640,8 @@ export async function convertImage(
       quantized[i * 3] = r; quantized[i * 3 + 1] = g; quantized[i * 3 + 2] = b;
     }
 
-    const fullMask = detectOutlineMask(quantized, full.info.width, full.info.height);
-    outlineCandidates = downsampleOutlineMask(fullMask, full.data, full.info.width, full.info.height, w, h);
+    const fullMask = detectOutlineMask(quantized, full.width, full.height);
+    outlineCandidates = downsampleOutlineMask(fullMask, full.data, full.width, full.height, w, h);
   }
 
   // Convert all pixels to LAB
@@ -606,7 +651,12 @@ export async function convertImage(
 
   // Photo mode: overshoot k so rare-colour regions get dedicated cluster slots, then trim.
   // Line-art mode: use exact k — overshoot creates spurious intermediate colours on flat art.
-  const sample = buildSample(pixelsLab, rand);
+  // Transparent (background) pixels are excluded from the sample so they
+  // don't spend cluster budget on a color that will end up discarded anyway
+  // (see the transparent-exclusion in the tally below) — falls back to the
+  // full pixel set only in the degenerate case of a fully-transparent image.
+  const opaquePixelsLab = pixelsLab.filter((_, i) => !transparent[i]);
+  const sample = buildSample(opaquePixelsLab.length > 0 ? opaquePixelsLab : pixelsLab, rand);
   const kOver = (mode === 'line-art' || mode === 'illustration')
     ? Math.min(maxColors, sample.length)
     : Math.min(Math.round(maxColors * KMEANS_OVERSHOOT), sample.length);
@@ -615,13 +665,17 @@ export async function convertImage(
   // Snap each centroid to nearest DMC color
   const centroidDmc: number[] = centroids.map(c => nearestDmcLab(c, finalDist));
 
-  // Tally pixel count per centroid, then per DMC color
+  // Tally pixel count per centroid, then per DMC color — excluding
+  // transparent pixels, so a real alpha-transparent background never
+  // competes for a maxColors slot (it becomes an empty stitch, not a
+  // "white" thread color — see the grid-building step below).
   const centroidPx = new Int32Array(centroids.length);
-  for (const ci of assignments) centroidPx[ci]++;
+  for (let i = 0; i < n; i++) if (!transparent[i]) centroidPx[assignments[i]]++;
 
   const dmcPx = new Map<number, number>();
   for (let ci = 0; ci < centroids.length; ci++)
-    dmcPx.set(centroidDmc[ci], (dmcPx.get(centroidDmc[ci]) ?? 0) + centroidPx[ci]);
+    if (centroidPx[ci] > 0)
+      dmcPx.set(centroidDmc[ci], (dmcPx.get(centroidDmc[ci]) ?? 0) + centroidPx[ci]);
 
   // Keep top maxColors DMC entries by pixel count
   const keepDmc = new Set(
@@ -662,14 +716,18 @@ export async function convertImage(
     }
   }
 
-  // Build compact palette
-  const uniqueDmc = Array.from(new Set(pixelDmc));
+  // Build compact palette — excluding transparent (background) pixels, so a
+  // real alpha-transparent background never becomes a spurious "white"
+  // color entry with cells that will all be blanked below anyway.
+  const uniqueDmc = Array.from(new Set(pixelDmc.filter((_, i) => !transparent[i])));
   const dmcToIdx = new Map(uniqueDmc.map((dmc, i) => [dmc, i]));
-  const flatGrid  = pixelDmc.map(dmc => dmcToIdx.get(dmc)!);
 
-  // Count stitches per color
+  // Count stitches per color (transparent positions never enter this tally)
   const stitchCounts = new Array(uniqueDmc.length).fill(0);
-  for (const v of flatGrid) stitchCounts[v]++;
+  for (let i = 0; i < n; i++) {
+    if (transparent[i]) continue;
+    stitchCounts[dmcToIdx.get(pixelDmc[i])!]++;
+  }
 
   // Sort palette by stitch count desc, assign symbols
   const palette: PatternPalette[] = uniqueDmc
@@ -677,12 +735,15 @@ export async function convertImage(
     .sort((a, b) => b.stitchCount - a.stitchCount);
   palette.forEach((p, i) => { p.symbol = symbolForIndex(i); });
 
-  // Remap grid indices to sorted palette order
+  // Remap grid indices to sorted palette order; a transparent source pixel
+  // becomes an empty stitch (-1) — the same sentinel the editor already
+  // uses for erased/empty cells everywhere else — instead of a color.
   const numberToNew = new Map(palette.map((p, ni) => [p.number, ni]));
   const grid: number[][] = Array.from({ length: h }, (_, y) =>
     Array.from({ length: w }, (_, x) => {
-      const dmcIdx = uniqueDmc[flatGrid[y * w + x]];
-      return numberToNew.get(DMC[dmcIdx].number) ?? 0;
+      const i = y * w + x;
+      if (transparent[i]) return -1;
+      return numberToNew.get(DMC[pixelDmc[i]].number) ?? 0;
     })
   );
 

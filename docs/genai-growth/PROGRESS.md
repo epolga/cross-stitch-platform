@@ -458,6 +458,44 @@
      live `detectTrend()` run will show whether `distinctCitedUrls`
      actually improves. Verified: `tsc --noEmit` clean, Vitest 14/14 in
      `trend-detection.test.ts` (prompt-text change only, no schema change).
+   - **Built 2026-08-08 (same day): `pattern-converter.ts` made alpha-aware
+     — found and fixed a real bug on the live public site along the way,
+     not just a Track 2 gap.** Started from Olga catching a real
+     misdiagnosis: what I'd called a "vignette" on Round 2's OpenAI frog
+     image was actually genuine `RGBA` alpha transparency (confirmed via
+     `sharp` metadata + raw pixel sampling). Checking how `convertImage()`
+     handles alpha surfaced something worse: `.removeAlpha()` doesn't
+     composite onto any background — it just drops the alpha channel and
+     keeps whatever RGB the encoder stored under transparent pixels (in
+     this file's case, `[0,0,0]` — black). `convertImage()` is called
+     directly from the public `/api/convert` route with no pre-flatten
+     step, so **any real user who ever uploaded a PNG with genuine
+     transparency (clipart, a sticker, a screenshot) got a black
+     background in their pattern instead of white** — a live product bug,
+     unrelated to Track 2, found as a side effect of this investigation.
+     Fixed: new `compositeOntoWhite()`/`decodeComposited()` helpers
+     (`ensureAlpha()` — a safe no-op for already-opaque images — then
+     composite straight alpha onto white in JS), replacing both
+     `.removeAlpha()` call sites (main resize + the flat-art-mode
+     full-resolution outline-detection pass). Transparent cells are
+     tracked and excluded from k-means sampling, the per-DMC pixel tally,
+     and the final palette/grid build, becoming empty stitches (`-1`,
+     the same sentinel already used for erased cells everywhere else)
+     instead of a spurious "white" color competing for a `maxColors`
+     slot — no border flood-fill guessing needed for images with real
+     alpha. **Verified against real images, not synthetic tests** (this
+     file has no unit tests — verified via real converted images,
+     matching its established practice): the real transparent OpenAI frog
+     (3340/6400 cells correctly empty, palette has no phantom background
+     color, all 16 colors are genuine frog tones) and a real opaque image,
+     the Stability frog (0 empty cells, same full-grid behavior as
+     before — confirms zero regression for the overwhelming majority of
+     uploads, which have no alpha channel). `tsc --noEmit` clean,
+     `next lint` clean, Vitest 89/89 unchanged. Resolves `OPPORTUNITIES.md`
+     Opportunity 9's "Cause A" open question. **Not yet deployed** — this
+     fixes `/api/convert` on the live site too, not just Track 2, so it's
+     worth deploying on its own rather than only as part of a future
+     Track 2 release.
    - **Built the same day, foundation piece of the provenance/correction
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service
