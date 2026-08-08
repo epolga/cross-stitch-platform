@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { DesignList } from '@/app/components/DesignList'; // Adjust path
 import type { DesignsResponse } from '@/app/types/design';
 import { buildCanonicalUrl, CreateAlbumUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
-import { getAdjacentAlbums, getDesignsByAlbumId } from '@/lib/data-access';
+import { getAdjacentAlbums, getAlbumCaption, getDesignsByAlbumId } from '@/lib/data-access';
 import Link from 'next/link';
 import AdSlot from '@/app/components/AdSlot';
 import EditorCTAButton from '@/app/components/EditorCTAButton';
@@ -20,6 +21,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const searchParamsRes = await searchParams;
   const pageSize = parseInt(searchParamsRes.pageSize as string || '10');
   const page = parseInt(searchParamsRes.nPage as string || '1');
+
+  if (!(await getAlbumCaption(parseInt(albumId)))) {
+    notFound();
+  }
 
   let designsResponse: DesignsResponse;
   try {
@@ -103,6 +108,10 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
     process.env.NEXT_PUBLIC_AD_SLOT_ALBUMS_BOTTOM ??
     process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ??
     '';
+
+  if (!(await getAlbumCaption(parseInt(albumId)))) {
+    notFound();
+  }
 
   let designsResponse: DesignsResponse;
   try {

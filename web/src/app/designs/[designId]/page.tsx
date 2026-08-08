@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import type { Design } from '@/app/types/design';
 import type { Metadata } from 'next';
 import { buildCanonicalUrl, CreateAlbumUrl, CreateDesignUrl, getSiteBaseUrl } from '@/lib/url-helper';
@@ -79,12 +80,10 @@ async function getMissingDesigns(): Promise<Set<number>> {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { designId } = await params;
 devLog("Generating metadata for designId:", designId);
-  let design: Design;
+  let result: Design | undefined;
   try {
     const id = parseInt(designId, 10);
-    const result = await getDesignById(id);
-    if (!result) throw new Error(`Design ${designId} not found`);
-    design = result;
+    result = await getDesignById(id);
   } catch (error) {
     console.error('Error fetching design for metadata:', error);
     return {
@@ -92,6 +91,10 @@ devLog("Generating metadata for designId:", designId);
       description: 'Error loading design',
     };
   }
+  if (!result) {
+    notFound();
+  }
+  const design: Design = result;
 
   let canonicalUrl = buildCanonicalUrl(await CreateDesignUrl(design));
   if (design.CanonicalDesignId) {
@@ -162,12 +165,10 @@ export default async function DesignPage({ params, searchParams }: Props) {
   const adSlotTop = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_TOP ?? '';
   const adSlotBottom = process.env.NEXT_PUBLIC_AD_SLOT_DESIGN_BOTTOM ?? '';
 
-  let design: Design;
+  let result: Design | undefined;
   try {
     const id = parseInt(designId, 10);
-    const result = await getDesignById(id);
-    if (!result) throw new Error(`Design ${designId} not found`);
-    design = result;
+    result = await getDesignById(id);
   } catch (error) {
     console.error('Error fetching design:', error);
     return (
@@ -179,6 +180,10 @@ export default async function DesignPage({ params, searchParams }: Props) {
       </div>
     );
   }
+  if (!result) {
+    notFound();
+  }
+  const design: Design = result;
 
   const missingDesigns = await getMissingDesigns();
   const isMissing = missingDesigns.has(design.DesignID);
