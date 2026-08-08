@@ -496,6 +496,29 @@
      fixes `/api/convert` on the live site too, not just Track 2, so it's
      worth deploying on its own rather than only as part of a future
      Track 2 release.
+   - **Second real end-to-end draft save, 2026-08-08 — the frog, through
+     the now-alpha-aware pipeline.** `save-ai-draft.ts` stopped
+     pre-flattening to white before calling `convertImage()` (that step
+     would have destroyed the real alpha data the new alpha-aware code
+     needs — caught before it became a real bug); `detectBackgroundByFloodFill`/
+     `eraseBackground` kept as a fallback for non-alpha sources, confirmed
+     harmless no-op-if-already-blanked for alpha sources (flood-fill starts
+     from the border, which is already `-1`, so it can't expand). Real run
+     on the OpenAI frog PNG: alpha-aware `convertImage()` → 105x105/15
+     colors, flood-fill fallback still caught 416 residual near-white
+     antialiased edge cells (real, expected — semi-transparent border
+     pixels above the alpha threshold composite close to white, this is
+     exactly the "mop up the leftover halo" case the fallback exists for),
+     Size to Design → 84x84, Remove Unused → 8 final colors. Saved to
+     Olga's account as pattern `039afa9b-4bef-4b15-9db7-c884b232733a`
+     ("Kawaii Cottagecore Frog"), `AiDesignGenerations` row
+     `e643af72-4eaf-45e9-b3a5-086a7476421e` tracks the full provenance
+     (theme, imagePrompt, targetWidth/targetHeight/colorPalette,
+     grounding). Rendered thumbnail confirmed visually clean: correct
+     colors (green/cream/pink matching the researched `colorPalette`),
+     genuinely empty background (real Aida texture, not a white blob) —
+     first real visual confirmation the alpha fix works end-to-end, not
+     just in isolated pixel-count checks.
    - **Built the same day, foundation piece of the provenance/correction
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service

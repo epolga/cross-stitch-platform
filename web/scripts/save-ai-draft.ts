@@ -14,9 +14,16 @@
 // v3: smaller target size, plus removeConfetti and sizeToDesign ported
 // verbatim from ConvertClient.tsx (both client-only, not part of
 // pattern-converter.ts, so this script duplicates them rather than
-// importing a 'use client' React component). Per Olga's explicit
-// instruction: no background-detection/erasure logic — sizeToDesign runs
-// as-is on the converted grid.
+// importing a 'use client' React component).
+//
+// 2026-08-08: stopped pre-flattening the source image to white before
+// calling convertImage() — pattern-converter.ts is now alpha-aware itself
+// (see its file header) and does a better job of it directly from real
+// alpha data than this script's own flood-fill guess ever could.
+// detectBackgroundByFloodFill()/eraseBackground() below are kept as a
+// fallback for sources with NO alpha channel (e.g. Stability's output) —
+// harmless no-op for a real-alpha source, since convertImage() already
+// blanked the border cells this flood-fill starts from.
 import { readFileSync } from 'fs';
 import sharp from 'sharp';
 import { convertImage } from '../src/lib/pattern-converter';
@@ -219,11 +226,10 @@ async function main() {
 
   const rawBuffer = readFileSync(IMAGE_PATH);
   const imageMeta = await sharp(rawBuffer).metadata();
-  const flattened = await sharp(rawBuffer).flatten({ background: '#ffffff' }).png().toBuffer();
   const targetHeight = Math.round(targetWidth * ((imageMeta.height ?? 1) / (imageMeta.width ?? 1)));
 
   const converted = await convertImage(
-    flattened,
+    rawBuffer,
     targetWidth,
     targetHeight,
     MAX_COLORS,
