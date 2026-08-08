@@ -414,6 +414,42 @@
      landscape, mirror-symmetry, mild-ratio-falls-back-to-square).
      Verified: `tsc --noEmit` clean, `next lint` no new warnings, Vitest
      89/89 (was 80).
+   - **First live end-to-end run of the whole updated pipeline, 2026-08-08:**
+     real `detectTrend()` → real `generateImageStability()`/
+     `generateImageOpenAI()` with the researched aspect ratio, on a genuinely
+     new theme (not capybara — Olga explicitly pushed back on re-testing an
+     already-known theme, correctly: the whole point is finding new ones).
+     Found **"kawaii cottagecore frog"** (real Etsy/Pinterest signal cited in
+     `reasoning`/`signalSource`), `targetWidth: 105, targetHeight: 100`
+     (near-square — pickers correctly chose 1:1/1024x1024, but didn't
+     exercise a real non-square case). **Two real findings, not just a
+     smoke test:** (1) grounding gate failed for real for the first time
+     outside a synthetic test (`distinctCitedUrls: 0` despite 15 real search
+     queries) — see the `buildPrompt()` fix below. (2) Stability regressed
+     versus Round 1 — ignored the style/background instructions entirely,
+     produced a full photorealistic outdoor scene, worse than Round 1's
+     "added an unwanted badge but kept the right style" failure. OpenAI held
+     the line from Round 1: correct flat-kawaii style, colors matching the
+     researched `colorPalette`, but the same dark-vignette background
+     problem persists. **Olga's verdict: OpenAI, same reason as Round 1**
+     (sharper, reads as background-free without a removal step) — scored,
+     running score now OpenAI 2 - Stability 0. Full writeup:
+     `docs/genai-growth/IMAGE_GENERATION_PREFERENCES.md` Round 2.
+   - **Built 2026-08-08 (same day): attempted fix for the grounding-gate
+     failure above.** `buildPrompt()` used to end with "respond with ONLY a
+     JSON object... no other text before or after it." Suspected cause:
+     citation markup (what `assessGrounding()` actually reads) typically
+     attaches to prose that directly references a search result, not to
+     findings paraphrased into JSON field values — a structural side effect
+     of the strict-JSON-only instruction, not evidence the model didn't
+     really search. Changed to ask for a short cited paragraph (real URLs
+     inline) BEFORE the JSON object. `extractJson()` needed no change — its
+     regex already scans for a JSON object anywhere in the text, not just at
+     the start. **Not yet confirmed to work** — citation attachment is the
+     model's own behavior, not something an instruction can force; the next
+     live `detectTrend()` run will show whether `distinctCitedUrls`
+     actually improves. Verified: `tsc --noEmit` clean, Vitest 14/14 in
+     `trend-detection.test.ts` (prompt-text change only, no schema change).
    - **Built the same day, foundation piece of the provenance/correction
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service

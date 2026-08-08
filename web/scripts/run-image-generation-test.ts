@@ -1,29 +1,30 @@
 // Manual test: generate an image through both candidate providers, save
 // each PNG to the scratchpad so it can actually be viewed. Real per-image
 // billing, run deliberately.
-import { writeFileSync } from 'fs';
+//
+// Generalized 2026-08-08 — previously hardcoded to a single frozen capybara
+// test prompt (kept testing the same theme run after run). Now reads
+// theme/imagePrompt/targetWidth/targetHeight straight from a real
+// trend-detection result JSON — the exact shape run-trend-detection.ts
+// prints to stdout — so this can be run against whatever theme was
+// actually just found, end-to-end, not a fixture.
+import { readFileSync, writeFileSync } from 'fs';
 import { generateImageStability, generateImageOpenAI, pickStabilityAspectRatio, pickOpenAiSize } from '../src/lib/image-generation';
 
-// Rewritten by hand 2026-08-07 per Olga's feedback on the first version
-// (busy pond scene, capybara too small) — a subject portrait instead of
-// a scene, matching the corrected buildPrompt() guidance in
-// trend-detection.ts. Not re-run through detectTrend() itself (that
-// would cost another real web_search call for the same already-found
-// theme) — just testing the corrected composition on the same theme.
-const PROMPT =
-  'A single plump, round capybara, shown large and centered, filling almost the entire frame, in a cute flat kawaii illustration style with bold clean dark outlines and soft rounded shapes, sitting with a content closed-eye smile, on a SOLID FLAT WHITE background — no vignette, no gradient, no glow, no shadow, no circular badge or frame or border, no texture or grain, no ground, no grass, no props of any kind. Just the capybara itself on plain solid white, like a die-cut sticker.';
-
 const OUT_DIR = process.argv[2];
-// Optional: detectTrend()'s researched targetWidth/targetHeight (2026-08-08
-// addition) — when given, each provider generates at its closest supported
-// aspect ratio/size instead of always defaulting to square. Omit both to
-// keep the original square-only behavior.
-const TARGET_WIDTH = process.argv[3] ? Number(process.argv[3]) : undefined;
-const TARGET_HEIGHT = process.argv[4] ? Number(process.argv[4]) : undefined;
+const TREND_JSON_PATH = process.argv[3];
 
-if (!OUT_DIR) {
-  console.error('Usage: run-image-generation-test.ts <output-dir> [targetWidth] [targetHeight]');
+if (!OUT_DIR || !TREND_JSON_PATH) {
+  console.error('Usage: run-image-generation-test.ts <output-dir> <trend-result.json>');
+  console.error('  <trend-result.json> is the JSON object run-trend-detection.ts prints to stdout.');
   process.exit(1);
+}
+
+interface TrendResultShape {
+  theme: string;
+  imagePrompt: string;
+  targetWidth?: number;
+  targetHeight?: number;
 }
 
 function save(name: string, pngBase64: string, model: string) {
@@ -33,21 +34,25 @@ function save(name: string, pngBase64: string, model: string) {
 }
 
 async function main() {
-  const stabilityRatio = TARGET_WIDTH && TARGET_HEIGHT ? pickStabilityAspectRatio(TARGET_WIDTH, TARGET_HEIGHT) : '1:1';
-  const openAiSize = TARGET_WIDTH && TARGET_HEIGHT ? pickOpenAiSize(TARGET_WIDTH, TARGET_HEIGHT) : '1024x1024';
-  if (TARGET_WIDTH && TARGET_HEIGHT) {
-    console.log(`Requesting non-square: stability=${stabilityRatio}, openai=${openAiSize} (from target ${TARGET_WIDTH}x${TARGET_HEIGHT})`);
+  const trend = JSON.parse(readFileSync(TREND_JSON_PATH, 'utf-8')) as TrendResultShape;
+  const { theme, imagePrompt, targetWidth, targetHeight } = trend;
+  console.log(`Theme: "${theme}"`);
+
+  const stabilityRatio = targetWidth && targetHeight ? pickStabilityAspectRatio(targetWidth, targetHeight) : '1:1';
+  const openAiSize = targetWidth && targetHeight ? pickOpenAiSize(targetWidth, targetHeight) : '1024x1024';
+  if (targetWidth && targetHeight) {
+    console.log(`Requesting: stability=${stabilityRatio}, openai=${openAiSize} (from researched target ${targetWidth}x${targetHeight})`);
   }
 
   try {
-    const r = await generateImageStability(PROMPT, stabilityRatio);
+    const r = await generateImageStability(imagePrompt, stabilityRatio);
     save('stability', r.pngBase64, r.model);
   } catch (e) {
     console.error('stability: FAILED -', e instanceof Error ? e.message : e);
   }
 
   try {
-    const r = await generateImageOpenAI(PROMPT, openAiSize);
+    const r = await generateImageOpenAI(imagePrompt, openAiSize);
     save('openai', r.pngBase64, r.model);
   } catch (e) {
     console.error('openai: FAILED -', e instanceof Error ? e.message : e);

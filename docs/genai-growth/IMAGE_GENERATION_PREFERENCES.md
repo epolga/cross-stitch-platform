@@ -10,7 +10,7 @@ back into future generation prompts, not model fine-tuning. Started
 
 ## Running score
 
-- **OpenAI (gpt-image-1): 1**
+- **OpenAI (gpt-image-1): 2**
 - **Stability AI (stable-image-core): 0**
 
 ## Providers in play
@@ -72,6 +72,48 @@ color regions" conversion goal — worth revisiting once real
 `pattern-converter.ts` runs exist to check), or anything about
 Stability's badge style specifically being worse. More rounds needed
 before drawing a real conclusion.
+
+## Round 2 — 2026-08-08, theme: "kawaii cottagecore frog"
+
+First real end-to-end run of the whole updated pipeline: `detectTrend()`
+(with the new targetWidth/targetHeight/colorPalette research, added
+2026-08-08) → `pickStabilityAspectRatio()`/`pickOpenAiSize()` → both
+providers. Real `detectTrend()` output: `targetWidth: 105, targetHeight:
+100` (colorPalette: "kawaii cottagecore palette: fresh grass green (body),
+soft cream/off-white (belly), gentle pastel pink (cheek blush)..."). Near-
+square, so both pickers correctly chose 1:1/1024x1024 — confirms the
+picker logic runs against real research output, but this particular theme
+didn't exercise a genuinely non-square ratio.
+
+**Separate finding, same run:** the grounding gate failed
+(`distinctCitedUrls: 0` despite 15 real search queries) — the model
+searched for real (Etsy/Pinterest sources named in `signalSource`) but its
+final answer's citations weren't extracted by `assessGrounding()`. First
+real (not synthetic-test) case of this gate firing. Per its designed
+behavior this is a flag for manual review, not an automatic reject — the
+theme was still returned and used.
+
+**Same prompt (via the researched `imagePrompt`) sent to both providers:**
+
+- **Stability**: complete style failure, worse than Round 1's badge issue
+  — ignored the flat-kawaii/solid-white-background instructions entirely
+  and produced a photorealistic frog in a full outdoor scene (flowers,
+  sky, mountains, dirt ground).
+- **OpenAI**: style followed well — flat kawaii illustration, bold clean
+  outlines, and the subject's colors visibly match the researched
+  `colorPalette` (grass green body, cream belly, pink cheek blush). Same
+  Round-1 background problem persists: a dark vignette/glow, not a solid
+  flat white background.
+
+**Olga's verdict:** OpenAI. Scored this round **OpenAI +1** (running score
+now 2-0). **Reason (asked directly): same as Round 1** — sharper/crisper
+image, reads as clean without needing a separate background-removal step.
+Two rounds now on the same stated criterion (sharpness + no-background-
+removal-needed), not two independent reasons — still short of this doc's
+own 5-8 round threshold before treating it as a settled preference, but
+the criterion itself is holding up consistently rather than drifting.
+Images: `D:\ann\tmp_scratch_genai\stability.png`,
+`D:\ann\tmp_scratch_genai\openai.png`.
 
 ## Next rounds
 

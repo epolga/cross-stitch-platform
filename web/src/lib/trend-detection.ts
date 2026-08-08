@@ -53,6 +53,18 @@ const MODEL = 'claude-sonnet-5';
 // ~30% of albums from the "don't repeat these" list).
 const MAX_AVOID_LIST_SIZE = 200;
 
+// 2026-08-08: the "respond with ONLY a JSON object, no other text" instruction
+// this used to end with is the suspected cause of a real grounding-gate
+// failure (Round 2, theme "kawaii cottagecore frog": 15 real search queries
+// but 0 cited URLs — see docs/genai-growth/IMAGE_GENERATION_PREFERENCES.md).
+// Citation markup (assessGrounding() reads TextBlock.citations) typically
+// attaches to prose that directly references a search result, not to a
+// paraphrased summary crammed into JSON field values. Now asks for a short
+// cited paragraph BEFORE the JSON instead — extractJson()'s regex already
+// scans for a JSON object anywhere in the text, so this needs no parsing
+// change. Not yet confirmed this actually fixes the gate (citation
+// attachment is the model's call, not something forced by instruction) —
+// next live detectTrend() run will show whether distinctCitedUrls improves.
 export function buildPrompt(existingThemes: string[]): string {
   const avoidList = existingThemes.slice(0, MAX_AVOID_LIST_SIZE).join(', ');
 
@@ -68,7 +80,9 @@ Also research, from the same cross-stitch-specific sources, TWO more things abou
 - **Size**: what finished/pattern size is currently popular for this kind of subject in cross-stitch listings/patterns — small quick-stitch motifs, medium wall-art pieces, or large detailed portraits. Translate that into an approximate stitch-count size (width x height in stitches — typical range is roughly 40-250 per side; small quick projects are 40-90, medium wall art 90-160, large detailed pieces 160-250).
 - **Color combination**: what color palette is currently popular for this kind of subject (e.g. muted autumn tones, bold primary colors, pastel kawaii palette) — describe the SUBJECT's own colors, not the background (the background must stay solid flat white regardless, see below — that is a fixed technical constraint of the conversion pipeline, unrelated to color trends).
 
-After researching, respond with ONLY a JSON object with exactly these fields (no other text before or after it):
+After researching, first write a short paragraph (2-4 sentences) citing your actual sources with real URLs inline — e.g. "According to https://www.pinterest.com/... and https://www.etsy.com/listing/...". Do not skip this even though the JSON below restates the same findings — the citation step matters.
+
+Then, on its own line after that paragraph, respond with a JSON object with exactly these fields (nothing after the JSON object):
 {
   "theme": "short name for the theme, e.g. 'autumn fox'",
   "imagePrompt": "a one-paragraph image-generation prompt for a cross-stitch-ready SUBJECT PORTRAIT, not a scene: the subject alone, large, filling almost the entire frame, centered, on a SOLID FLAT WHITE background — explicitly say 'solid flat white background' in the prompt, and explicitly rule out anything that would break that flatness: no vignette, no gradient, no glow, no shadow, no circular badge or frame or border, no texture or grain, no ground/floor/grass/props of any kind. Describe only the subject itself — pose, colors (use the researched color combination below), style (e.g. bold clean dark outlines, flat kawaii illustration, no shading gradients on the background) — the way a die-cut sticker or a single embroidery-hoop motif would be composed, not an illustrated scene. No meta-commentary.",
