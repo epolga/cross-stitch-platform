@@ -28,7 +28,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     keywords:
       'small cross stitch patterns, mini cross stitch patterns, quick cross stitch projects, small cross stitch charts, tiny cross stitch pattern, free small cross stitch PDF, small counted cross stitch',
     alternates: { canonical: canonicalUrl },
-    robots: 'index, follow',
+    robots: nPage > 1 ? 'noindex, follow' : 'index, follow',
     openGraph: { title, description: DESCRIPTION, url: canonicalUrl, type: 'website' },
     twitter: { card: 'summary_large_image', title, description: DESCRIPTION },
   };

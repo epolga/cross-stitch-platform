@@ -119,6 +119,13 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const isIsolatedSmallFacet = filters.sizeCategory === 'small' && !hasOtherFilters && !searchText;
   const isIsolatedBeginnerFacet = filters.isBeginnerFriendly === true && !hasOtherFilters && !searchText;
   const hasAnyFacetFilter = hasOtherFilters || Boolean(filters.sizeCategory) || filters.isBeginnerFriendly === true || Boolean(searchText);
+  // Page 2+ of any listing is just another slice of the same grid — no
+  // unique value as a standalone search result, and indexing every
+  // pagination page would dilute crawl/index budget away from the
+  // actual design pages. follow (not nofollow) so Googlebot still
+  // discovers designs linked from later pages via PaginationControl's
+  // real <a href> links.
+  const isPaginated = nPage > 1;
 
   const canonicalUrl = isIsolatedSmallFacet
     ? buildCanonicalUrl('/small-cross-stitch-patterns')
@@ -164,7 +171,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     alternates: {
       canonical: canonicalUrl,
     },
-    robots: hasAnyFacetFilter ? 'noindex, follow' : 'index, follow',
+    robots: (hasAnyFacetFilter || isPaginated) ? 'noindex, follow' : 'index, follow',
     openGraph: {
       title,
       description,

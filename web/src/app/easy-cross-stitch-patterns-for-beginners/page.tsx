@@ -28,7 +28,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     keywords:
       'easy cross stitch patterns, cross stitch for beginners, simple cross stitch patterns, beginner cross stitch charts, easy counted cross stitch, first cross stitch project, free easy cross stitch PDF',
     alternates: { canonical: canonicalUrl },
-    robots: 'index, follow',
+    robots: nPage > 1 ? 'noindex, follow' : 'index, follow',
     openGraph: { title, description: DESCRIPTION, url: canonicalUrl, type: 'website' },
     twitter: { card: 'summary_large_image', title, description: DESCRIPTION },
   };

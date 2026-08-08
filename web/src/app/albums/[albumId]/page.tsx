@@ -60,7 +60,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     alternates: {
       canonical: canonicalUrl,
     },
-    robots: 'index, follow',
+    robots: page > 1 ? 'noindex, follow' : 'index, follow',
     openGraph: {
       title,
       description,
