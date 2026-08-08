@@ -519,7 +519,57 @@
      genuinely empty background (real Aida texture, not a white blob) —
      first real visual confirmation the alpha fix works end-to-end, not
      just in isolated pixel-count checks.
-   - **Built the same day, foundation piece of the provenance/correction
+   - **Real production incident, 2026-08-08 — every AI-draft pattern
+     became unloadable right after the admin review UI deployed; found
+     and fixed live, within the hour.** Olga resized the frog draft in
+     the editor; Save showed no feedback at all; a page reload then
+     showed "Failed to load Pattern." Root-caused via a real
+     authenticated request against the live API (not guessed):
+     `GET /api/converter/patterns/[id]` returned `500
+     {"error":"Failed to load pattern"}`, while the exact same
+     `loadPattern`/`getGeneration` calls succeeded when run locally
+     against the same production DynamoDB tables — pointing at an
+     environment difference, not a data or logic problem. Checked
+     `aws-elasticbeanstalk-ec2-role`'s inline `CrossStitchDynamoDBAccessPolicy`
+     (`aws iam get-role-policy`): it's a manual per-table allowlist, and
+     `AiDesignGenerations`/`AiDesignCorrections` were never added when
+     those tables were built earlier today — `ensureTable()`
+     self-provisions the table but grants the EB role no IAM access to
+     it. **Same failure category as the 2026-08-04/05
+     `CrossStitchBusinessHistory` incident** — worth remembering as a
+     standing rule: a new self-provisioning DynamoDB table needs an
+     explicit grant added to this policy before its first production
+     deploy. Fixed with Olga's explicit go-ahead (IAM edits always need
+     confirmation first, per standing rule): `aws iam put-role-policy`
+     adding both tables (+ their `/index/*`) to the existing
+     `DescribeTable`/`CreateTable`-capable statement (mirroring the other
+     self-provisioning tables already there — `SearchEngagement`,
+     `ConverterCatalogProgress`, etc.). Verified live immediately after:
+     the same authenticated request now returns `200` with real pattern
+     data.
+
+     **Two real code bugs found and fixed alongside the IAM root cause,
+     both worth keeping regardless of the specific incident:**
+     1. `GET .../patterns/[id]`'s `getGeneration()` call (added today for
+        `needsAiReview`) wasn't isolated — any failure in that ancillary
+        status check took down the entire pattern load with a generic
+        500, even though the actual pattern data was completely fine.
+        Now wrapped in its own try/catch, defaulting `needsAiReview` to
+        `false` and logging on failure, so a future problem with
+        `AiDesignGenerations` degrades gracefully instead of blocking
+        every AI-draft pattern from loading at all.
+     2. `ConvertClient.tsx`'s `handleSave()` had `.catch(() => {})` on
+        the re-save path — any non-401 failure (validation error, server
+        error, this IAM error) vanished with zero feedback: no toast, no
+        modal, nothing. This is exactly why "no dialog appeared" even
+        though Save was genuinely failing. Now shows a `Save failed: …`
+        toast for any error that doesn't already have its own visible
+        feedback (401 still silently defers to the register-modal path,
+        via an explicit `{ silent: true }` flag already set there).
+
+     Verified: `tsc --noEmit` clean, `next lint` no new warnings
+     (5 pre-existing), Vitest 89/89. **Deployed** — see the deploy
+     record below.
      schema (`DESIGN_FEEDBACK_LOOP.md`'s "Data store and provenance
      tracking"):** `AiDesignGenerations` table + service
      (`web/src/lib/ai-design-generations.ts`), `sourceGenerationId` added

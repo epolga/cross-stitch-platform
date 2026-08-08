@@ -473,6 +473,34 @@ didn't log the user in).
     live site verified (`/`, `/photo-to-cross-stitch`, `/albums`,
     `/designs/4217` all 200).** Full detail: `docs/genai-growth/PROGRESS.md`,
     `docs/genai-growth/OPPORTUNITIES.md` Opportunity 9 "Cause A".
+19. ~~Real production incident, same day: every AI-draft pattern became
+    unloadable (500 "Failed to load pattern") right after the admin
+    review UI deployed~~ — **found and fixed 2026-08-08, live within the
+    hour.** Root cause: `aws-elasticbeanstalk-ec2-role`'s inline
+    `CrossStitchDynamoDBAccessPolicy` is a manual per-table allowlist (not
+    a wildcard) — `AiDesignGenerations`/`AiDesignCorrections` were never
+    added to it when those tables were built earlier today. Same failure
+    category as the 2026-08-04/05 `CrossStitchBusinessHistory` incident —
+    **worth remembering as a standing pattern: any new self-provisioning
+    DynamoDB table needs an explicit IAM grant added to this policy
+    before its first production deploy, `ensureTable()` alone does not
+    grant the EB role access.** Olga hit this directly: resized the frog
+    pattern, Save produced no visible feedback at all (a second real bug
+    — `ConvertClient.tsx`'s save-error handler silently swallowed
+    non-401 failures), then a page reload showed "Failed to load
+    Pattern." Confirmed via a real authenticated request against the live
+    API (500, `{"error":"Failed to load pattern"}`), root-caused to the
+    IAM policy (confirmed via `aws iam get-role-policy`, `AiDesignGenerations`/
+    `AiDesignCorrections` absent), fixed with Olga's explicit go-ahead
+    (`aws iam put-role-policy`) since IAM edits always need confirmation
+    first. Also hardened the code so this failure mode can't recur the
+    same way: `GET .../patterns/[id]` now isolates the `getGeneration()`
+    call in its own try/catch (a failure there defaults `needsAiReview`
+    to `false` and logs, instead of 500ing the whole pattern load), and
+    `ConvertClient.tsx`'s save-error handler now shows a "Save failed: …"
+    toast for any non-silent error instead of showing nothing. Verified
+    live against the real pattern after both the IAM fix and the code
+    fix. Full detail: `docs/genai-growth/PROGRESS.md`.
 
 ## Done when
 

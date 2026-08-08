@@ -27,10 +27,20 @@ export async function GET(
     // Track 2 (Opportunity 9): tell the editor whether this AI-draft still
     // needs the Approve/Approve-with-changes review step, so it only shows
     // that UI once per generation, not on every subsequent normal save.
+    // Deliberately isolated in its own try/catch: this is an ancillary
+    // status check, and a failure in it (e.g. the 2026-08-08 incident
+    // where the EB role's DynamoDB policy hadn't been granted access to
+    // AiDesignGenerations yet) must never block loading the pattern
+    // itself — every AI-draft pattern became unloadable with a generic
+    // 500 until this was isolated.
     let needsAiReview = false;
     if (pattern.sourceGenerationId) {
-      const generation = await getGeneration(pattern.sourceGenerationId);
-      needsAiReview = generation?.status === 'draft-saved';
+      try {
+        const generation = await getGeneration(pattern.sourceGenerationId);
+        needsAiReview = generation?.status === 'draft-saved';
+      } catch (e) {
+        console.error('[converter/patterns] getGeneration failed, defaulting needsAiReview to false:', e);
+      }
     }
 
     return NextResponse.json({ ...pattern, needsAiReview });

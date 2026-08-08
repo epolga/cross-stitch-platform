@@ -989,7 +989,16 @@ export default function ConvertPage() {
           if (isAdmin && isAiDraft && needsAiReview) startAiReview();
           else showToast('Saved ✓');
         })
-        .catch(() => {});
+        .catch((e: unknown) => {
+          // Silent only for errors that already showed their own feedback
+          // (e.g. handleSavePattern's 401 path opens the register modal).
+          // Everything else used to vanish here with zero indication to
+          // the user that Save had actually failed — found for real
+          // 2026-08-08 when a genuinely failed save (IAM-blocked AI-review
+          // check) left Olga with no toast, no modal, nothing to go on.
+          if (e && typeof e === 'object' && 'silent' in e && (e as { silent?: boolean }).silent) return;
+          showToast(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
+        });
     } else if (catalogDesignId && isCatalogUnmodified()) {
       // Nothing of the user's own to save yet — the design matches the
       // catalog original, and stitch progress already tracks separately
