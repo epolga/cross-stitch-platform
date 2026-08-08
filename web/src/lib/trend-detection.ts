@@ -258,7 +258,18 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  const text = response.content
+  // 2026-08-08: was `response.content` (the LAST turn only) — a real bug,
+  // inconsistent with the accumulated-allContent principle this file
+  // already applies to hasRealWebSearchEvidence()/assessGrounding() just
+  // above. If the model wrote its final JSON answer on an earlier
+  // continuation and the LAST turn ended with no text of its own (e.g.
+  // pure tool_use, or hit MAX_CONTINUATIONS mid-flow), the real answer
+  // existed in allContent but this discarded it — confirmed as the cause
+  // of two consecutive real "empty text response" failures the same day,
+  // right after buildPrompt() started asking for more output (a cited
+  // paragraph before the JSON), which likely made hitting this edge case
+  // more common by needing an extra turn more often.
+  const text = allContent
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
     .map((block) => block.text)
     .join('\n\n');
