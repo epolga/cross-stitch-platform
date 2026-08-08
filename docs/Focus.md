@@ -71,6 +71,17 @@ just that the code exists. Cover `evaluation.py` and its dependency
 Explain in detail, not tersely — this is the GenAI learning track (see
 `feedback_genai_track_explain_in_detail` memory).
 
+**Real catalog gap found 2026-08-08, via a live customer email (Linda):**
+no Fawn design lands close to the common 5x7"/8x10" print sizes (all
+existing Fawn designs are square ~10"x10" or too tall/narrow, e.g.
+108x187, 97x171 stitches — see reply draft
+`web/plan/_draft_email_linda_2026-08-08.md` for the full sizing
+analysis). This is a real, customer-driven candidate theme for Track 2's
+design-generation pipeline (`detectTrend()` currently auto-picks a
+trending theme via web_search — a Fawn sized to ~70x98 or ~112x140
+stitches would be a good manual-override test case, bypassing trend
+detection for once since the demand signal is already real and specific).
+
 ~~Send the "milenas-tin" Announcement mass-send.~~ — **done 2026-08-06**,
 733 recipients, `eid=260806`, sent 13:09 UTC (16:09 Israel time, on
 schedule). Logged in `web/plan/Email_Content_Plan.md`'s Sent table. Not

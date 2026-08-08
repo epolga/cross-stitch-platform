@@ -285,6 +285,18 @@
    real corrections as they happen; revisit each domain's threshold once
    its record count gets close.
 
+   **Real candidate theme surfaced 2026-08-08, from a live customer
+   email (Linda, via `web/plan/_draft_email_linda_2026-08-08.md`):** the
+   catalog has no Fawn design sized close to 5x7"/8x10" print sizes
+   (existing ones are square ~10"x10" or badly-proportioned, e.g.
+   108x187 stitches). Good next manual test of the pipeline — skip
+   `detectTrend()` for this one run (theme is already known and demand
+   is real, not inferred), go straight to image generation with target
+   ~70x98 or ~112x140 stitches, run through `save-capybara-draft.ts`'s
+   pipeline (rename away from the capybara-specific filename once reused
+   for a second design). See `docs/Focus.md`'s "Next session" entry for
+   the same note.
+
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
 - Production AI code stays in normal application folders/services.
