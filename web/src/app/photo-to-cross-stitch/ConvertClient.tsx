@@ -19,6 +19,7 @@ import MirrorDialog, { type MirrorDirection, type MirrorAxis, type MirrorResize 
 import { isUserLoggedIn } from '@/app/components/AuthControl';
 import { generatePatternThumbnail } from '@/lib/pattern-thumbnail';
 import type { ConvertedPattern, PatternPalette, DmcColor } from '@/lib/pattern-converter';
+import type { GridDiffSummary } from '@/lib/ai-design-corrections';
 import { SYMBOLS } from '@/lib/symbols';
 import dmcColors from '@/data/dmc-colors.json';
 import { rleEncode, rleDecode } from '@/lib/rle';
@@ -26,6 +27,20 @@ import { rleEncode, rleDecode } from '@/lib/rle';
 import { trackEvent, postEditorEvent, checkReturnPatternGeneration } from '@/lib/track-event';
 
 const DRAFT_KEY = 'converterDraft';
+
+// Track 2 (Opportunity 9) — preset reason list from
+// docs/genai-growth/DESIGN_FEEDBACK_LOOP.md's "Reason tags" section.
+const AI_REVIEW_REASON_TAGS = [
+  'Remove visual noise',
+  'Too much detail',
+  'Preserve important detail',
+  'Wrong color',
+  'Merge similar colors',
+  'Improve silhouette',
+  'Simplify background',
+  'Fix anatomy',
+  'Improve composition',
+];
 
 interface ConverterDraft {
   name: string;
@@ -420,6 +435,23 @@ export default function ConvertPage() {
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [afterSaveAction, setAfterSaveAction] = useState<'copyLink' | null>(null);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
+  // Track 2 (Opportunity 9) — set from the pattern-load response when this
+  // pattern has AI-draft provenance. needsAiReview specifically means the
+  // Approve/Approve-with-changes step (docs/genai-growth/DESIGN_FEEDBACK_LOOP.md)
+  // hasn't happened yet for this generation — false once reviewed, and
+  // permanently false for a manually-created pattern.
+  // All UI driven by this state is gated behind `isAdmin` below (badge,
+  // Approve button, auto-trigger, review modal) — it's not a user-facing
+  // feature, it exists so Olga can train the AI generation pipeline by
+  // recording her real corrections, not for users to generate/approve
+  // designs themselves.
+  const [isAiDraft, setIsAiDraft] = useState(false);
+  const [needsAiReview, setNeedsAiReview] = useState(false);
+  const [aiReviewDiff, setAiReviewDiff] = useState<GridDiffSummary | null>(null);
+  const [aiReviewSubmitting, setAiReviewSubmitting] = useState(false);
+  const [aiReviewModalOpen, setAiReviewModalOpen] = useState(false);
+  const [aiReviewSelectedTags, setAiReviewSelectedTags] = useState<string[]>([]);
+  const [aiReviewComment, setAiReviewComment] = useState('');
   // Set when the pattern came from ?catalogPatternId= — a read-only catalog
   // design, not yet the user's own saved copy. Lets Stitch Mode work
   // immediately (progress tracked separately, see catalog-progress-storage)
@@ -727,6 +759,9 @@ export default function ConvertPage() {
           : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
+        setIsAiDraft(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0);
+        setNeedsAiReview(data.needsAiReview === true);
+        setAiReviewDiff(null);
         setCellSize(typeof data.cellSize === 'number' ? data.cellSize : fitCellSizeToWholeChart());
         if (typeof data.progress === 'string' && data.progress.length > 0) {
           const boolGrid = rleDecode(data.progress, data.width, data.height);
@@ -945,7 +980,16 @@ export default function ConvertPage() {
         window.dispatchEvent(new CustomEvent('openRegisterModal', { detail: { source: 'converter-save', label: 'Save pattern' } }));
         return;
       }
-      handleSavePattern(patternName || 'Untitled').then(() => showToast('Saved ✓')).catch(() => {});
+      handleSavePattern(patternName || 'Untitled')
+        .then(() => {
+          // Track 2 (Opportunity 9): a save on a still-unreviewed AI draft is
+          // the natural moment to run the Approve/Approve-with-changes diff —
+          // the diff compares this just-saved grid/palette against the AI
+          // snapshot, so it only makes sense once the save has landed.
+          if (isAdmin && isAiDraft && needsAiReview) startAiReview();
+          else showToast('Saved ✓');
+        })
+        .catch(() => {});
     } else if (catalogDesignId && isCatalogUnmodified()) {
       // Nothing of the user's own to save yet — the design matches the
       // catalog original, and stitch progress already tracks separately
@@ -1031,6 +1075,65 @@ export default function ConvertPage() {
     try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
     trackEvent('project_saved', { patternId: id });
     return url;
+  }
+
+  // Track 2 (Opportunity 9) — step 1 of the review endpoint's two-call
+  // protocol (see api/converter/patterns/[id]/review/route.ts): the server
+  // diffs this pattern's current saved state against its AI snapshot.
+  // An empty diff finalizes immediately (nothing to explain); a non-empty
+  // diff comes back unpersisted so the modal can ask what was fixed.
+  async function startAiReview() {
+    if (!savedPatternId || aiReviewSubmitting) return;
+    setAiReviewSubmitting(true);
+    try {
+      const resp = await fetch(`/api/converter/patterns/${savedPatternId}/review`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Review failed');
+      if (data.finalized) {
+        setNeedsAiReview(false);
+        setAiReviewDiff(null);
+        showToast('Approved ✓');
+      } else {
+        setAiReviewDiff(data.diff);
+        setAiReviewSelectedTags([]);
+        setAiReviewComment('');
+        setAiReviewModalOpen(true);
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Review failed');
+    } finally {
+      setAiReviewSubmitting(false);
+    }
+  }
+
+  // Step 2 — only reached after startAiReview() returned finalized: false.
+  // The server recomputes the diff fresh rather than trusting anything from
+  // the client, and persists it this time.
+  async function submitAiReview() {
+    if (!savedPatternId || aiReviewSubmitting) return;
+    setAiReviewSubmitting(true);
+    try {
+      const resp = await fetch(`/api/converter/patterns/${savedPatternId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reasonTags: aiReviewSelectedTags,
+          freeTextComment: aiReviewComment.trim() || undefined,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Review failed');
+      setNeedsAiReview(false);
+      setAiReviewDiff(null);
+      setAiReviewModalOpen(false);
+      showToast('Feedback recorded ✓');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Review failed');
+    } finally {
+      setAiReviewSubmitting(false);
+    }
   }
 
   useEffect(() => { savedPatternIdRef.current = savedPatternId; }, [savedPatternId]);
@@ -1804,6 +1907,9 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     setSavedPatternId(null);
+    setIsAiDraft(false);
+    setNeedsAiReview(false);
+    setAiReviewDiff(null);
     setStitchMode(false);
     updateStitched(new Set());
     setFocusColorIndex(null);
@@ -1905,6 +2011,14 @@ export default function ConvertPage() {
                   </button>
                 )}
                 <span>· {grid[0]?.length ?? 0} × {grid.length} stitches{hasDesign ? ` · ${palette.length} DMC colors` : ' · import a photo to begin'}</span>
+                {isAdmin && isAiDraft && (
+                  <span
+                    className="rounded-full bg-violet-100 text-violet-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                    title={needsAiReview ? 'AI-generated draft — Save or Approve to review it' : 'AI-generated draft, already reviewed'}
+                  >
+                    AI-draft
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1957,6 +2071,15 @@ export default function ConvertPage() {
               >
                 {savedPatternId ? '💾 Save' : '💾 Save pattern'}
               </button>
+              {isAdmin && isAiDraft && needsAiReview && (
+                <button
+                  type="button" onClick={startAiReview} disabled={!savedPatternId || aiReviewSubmitting}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                  title="Confirm this AI-generated draft is ready — tells us whether it needed fixing"
+                >
+                  {aiReviewSubmitting ? 'Checking…' : '✓ Approve'}
+                </button>
+              )}
               <button
                 type="button" onClick={downloadPdf} disabled={downloading || !hasDesign}
                 className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-medium text-white hover:bg-rose-600 disabled:opacity-50 transition-colors"
@@ -2765,6 +2888,75 @@ export default function ConvertPage() {
                 className="flex-1 py-2 rounded-lg bg-rose-500 text-sm font-medium text-white hover:bg-rose-600"
               >
                 Resume
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAdmin && aiReviewModalOpen && aiReviewDiff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setAiReviewModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-1">What did you fix?</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              You changed this AI-generated draft before saving. Telling us what needed fixing helps improve future drafts.
+            </p>
+            <ul className="text-xs text-gray-600 bg-gray-50 rounded-lg p-3 mb-4 space-y-0.5">
+              {aiReviewDiff.dimensionsChanged ? (
+                <li>
+                  Size changed: {aiReviewDiff.beforeDimensions.width}×{aiReviewDiff.beforeDimensions.height}
+                  {' → '}
+                  {aiReviewDiff.afterDimensions.width}×{aiReviewDiff.afterDimensions.height}
+                </li>
+              ) : (
+                <li>{aiReviewDiff.cellsChanged} stitch{aiReviewDiff.cellsChanged === 1 ? '' : 'es'} changed</li>
+              )}
+              {aiReviewDiff.colorsAdded.length > 0 && <li>Colors added: {aiReviewDiff.colorsAdded.join(', ')}</li>}
+              {aiReviewDiff.colorsRemoved.length > 0 && <li>Colors removed: {aiReviewDiff.colorsRemoved.join(', ')}</li>}
+            </ul>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {AI_REVIEW_REASON_TAGS.map(tag => {
+                const selected = aiReviewSelectedTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setAiReviewSelectedTags(selected
+                      ? aiReviewSelectedTags.filter(t => t !== tag)
+                      : [...aiReviewSelectedTags, tag])}
+                    className={`rounded-full px-2.5 py-1 text-xs border transition-colors ${
+                      selected
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-600 hover:border-violet-400'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea
+              value={aiReviewComment}
+              onChange={e => setAiReviewComment(e.target.value)}
+              placeholder="Anything else? (optional)"
+              rows={2}
+              className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-700 outline-none focus:border-violet-400 mb-4 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAiReviewModalOpen(false)}
+                className="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitAiReview}
+                disabled={aiReviewSubmitting}
+                className="flex-1 py-2 rounded-lg bg-violet-600 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              >
+                {aiReviewSubmitting ? 'Submitting…' : 'Submit'}
               </button>
             </div>
           </div>

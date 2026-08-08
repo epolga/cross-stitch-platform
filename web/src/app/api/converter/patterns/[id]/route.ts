@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loadPattern, updatePattern } from '@/lib/pattern-storage';
 import { getSession } from '@/lib/session';
+import { getGeneration } from '@/lib/ai-design-generations';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,16 @@ export async function GET(
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json(pattern);
+    // Track 2 (Opportunity 9): tell the editor whether this AI-draft still
+    // needs the Approve/Approve-with-changes review step, so it only shows
+    // that UI once per generation, not on every subsequent normal save.
+    let needsAiReview = false;
+    if (pattern.sourceGenerationId) {
+      const generation = await getGeneration(pattern.sourceGenerationId);
+      needsAiReview = generation?.status === 'draft-saved';
+    }
+
+    return NextResponse.json({ ...pattern, needsAiReview });
   } catch (e) {
     console.error('[converter/patterns] GET error:', e);
     return NextResponse.json({ error: 'Failed to load pattern' }, { status: 500 });

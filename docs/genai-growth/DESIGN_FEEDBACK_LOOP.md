@@ -137,12 +137,12 @@ Correction: merged into 3
 Reason: excessive palette complexity
 ```
 
-## Data store and provenance tracking (resolved 2026-08-08, steps 1-2 built same day)
+## Data store and provenance tracking (resolved 2026-08-08, steps 1-3 built same day)
 
-**Built 2026-08-08:** `AiDesignGenerations` table + service
+**Built 2026-08-08 (step 1-2):** `AiDesignGenerations` table + service
 (`web/src/lib/ai-design-generations.ts` — `createGeneration()`,
-`attachDraft()`, `getGeneration()`; `markReviewed()`/`backfillDesignId()`
-exist but aren't wired to any caller yet, steps 3-4 below). `sourceGenerationId`
+`attachDraft()`, `getGeneration()`; `backfillDesignId()` exists but isn't
+wired to any caller yet, step 4 below). `sourceGenerationId`
 added to `ConverterPatterns` (`pattern-storage.ts`'s `savePattern()`/
 `loadPattern()`; deliberately **not** added to `updatePattern()` — a
 write-once provenance marker must survive every later edit unchanged).
@@ -153,10 +153,58 @@ signalSource, reasoning, imageProvider, grounding}` — the shape
 for a non-AI-trend manual save (e.g. the planned Fawn design test).
 Verified with a real round-trip against live AWS (create → attachDraft →
 getGeneration): grid/palette RLE-encode/decode correctly, status
-transitions `generated` → `draft-saved`. `AiDesignCorrections` (the other
-table) and the Approve/Approve-with-changes editor UI that would call
-`markReviewed()`/write correction records — **not built yet**, that's the
-next increment.
+transitions `generated` → `draft-saved`.
+
+**Built 2026-08-08 (step 3 — the actual server-side diff mechanism):**
+`AiDesignCorrections` table + service (`web/src/lib/ai-design-corrections.ts`).
+Pure, unit-tested diff logic (`diffPatterns()`, 5 tests) compares by
+*resolved DMC number per cell*, not raw palette index, so a palette
+reorder alone (e.g. after `removeUnusedColors()` renumbers indices)
+doesn't show up as a spurious diff; handles a dimension change (e.g. Size
+to Design) by reporting `dimensionsChanged: true` and `cellsChanged: null`
+rather than attempting a meaningless positional compare, while
+`colorsAdded`/`colorsRemoved` still work. `isEmptyDiff()` identifies the
+"Approve, no changes" case. `reviewGeneration()` is the actual server-side
+orchestration point 4 of the mechanism below describes: fetches the
+immutable snapshot from `AiDesignGenerations`, diffs it against whatever
+grid/palette the caller passes as "current," writes the correction row
+(auto-classified `approve` vs `approve-with-changes` from whether the diff
+is empty — no reason tags stored for a true no-op approve even if passed),
+and calls `markReviewed()` to flip the generation's status — **this is
+also the first caller that wires `markReviewed()`**. Verified with a real
+`createGeneration → attachDraft → reviewGeneration → getGeneration`
+round-trip against live AWS: diff correctly counted 1 changed cell,
+classified `approve-with-changes`, generation status flipped to
+`reviewed`.
+
+**Built 2026-08-08 — the API route + editor UI**, admin-only (see rationale
+below): `GET /api/converter/patterns/[id]` now returns `needsAiReview`
+(true while the pattern's `AiDesignGenerations` row is still
+`draft-saved`); new `POST /api/converter/patterns/[id]/review` calls
+`reviewGeneration()` via the two-call protocol described in step 4 above
+— first call with no reasons returns the diff (auto-finalizing an empty
+one), second call (only reached for a non-empty diff) submits
+`reasonTags`/`freeTextComment` and persists. `ConvertClient.tsx` shows an
+"AI-draft" badge, a "✓ Approve" button, auto-triggers the review right
+after Save on an unreviewed draft, and a modal with the diff summary +
+the Reason Tags list above for the "approve with changes" case.
+
+**Admin-only, not a user-facing feature.** Every one of those UI elements
+(`isAiDraft`/`needsAiReview` badge, "✓ Approve" button, the auto-trigger
+in `handleSave`, and the review modal) is gated behind `isAdmin` in
+`ConvertClient.tsx` — none of it renders or fires for a regular logged-in
+user, even one who happens to own an AI-draft pattern. **Why:** this
+mechanism has nothing to do with a product feature for end users — it
+exists purely to let Olga *train the AI pipeline itself* (per this doc's
+opening framing, "in-context learning from a growing, structured record
+of Olga's real corrections," working toward the pipeline eventually
+generating designs with minimal human intervention). A regular user has
+no `AiDesignGenerations` row to review, no stake in the correction-log
+Level 1/2/3 mechanism, and showing them an "Approve this AI draft" prompt
+would be confusing UI for a workflow that isn't theirs. `isAdmin` is
+already the existing gate for the adjacent "Publish to Catalog" button in
+the same file — this reuses that same boundary rather than inventing a
+new one.
 
 Closes open questions #3 and #4 below with a concrete, buildable mechanism
 — worked out in a session dedicated to the trend-detection prompt's actual

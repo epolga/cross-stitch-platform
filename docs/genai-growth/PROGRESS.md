@@ -354,10 +354,34 @@
      a new optional `[generationMetaPath]` arg. Verified with a real
      create → attachDraft → getGeneration round-trip against live AWS —
      grid/palette RLE round-trips correctly, status transitions
-     `generated` → `draft-saved`. `AiDesignCorrections` (the correction-
-     record table) and the Approve/Approve-with-changes editor UI that
-     would use it are **not built yet** — next increment. Full detail in
-     `DESIGN_FEEDBACK_LOOP.md`.
+     `generated` → `draft-saved`.
+   - **Built the same day, second increment:** `AiDesignCorrections` table
+     + service (`web/src/lib/ai-design-corrections.ts`) — pure, unit-tested
+     `diffPatterns()`/`isEmptyDiff()` (5 tests; compares by resolved DMC
+     number per cell so a palette reorder alone isn't a spurious diff;
+     handles a resize by reporting `dimensionsChanged`/`cellsChanged: null`
+     instead of a meaningless positional compare) plus `reviewGeneration()`
+     — the actual server-side diff orchestration: fetches the snapshot,
+     diffs it, writes the correction row, calls `markReviewed()` (first
+     real caller of that function). Verified with a real
+     `createGeneration → attachDraft → reviewGeneration → getGeneration`
+     round-trip against live AWS.
+   - **Built 2026-08-08 (later same day): the API route + editor UI.**
+     `GET .../patterns/[id]` now returns `needsAiReview`; new
+     `POST .../patterns/[id]/review` calls `reviewGeneration()` via the
+     two-call protocol (empty diff auto-finalizes; non-empty diff returns
+     unpersisted for the UI, second call submits `reasonTags`/
+     `freeTextComment`). `ConvertClient.tsx` shows an "AI-draft" badge, a
+     "✓ Approve" button, auto-triggers review right after Save on an
+     unreviewed draft, and a reason-tag modal. **Admin-only by design** —
+     every one of those UI elements is gated behind `isAdmin` (same
+     boundary the existing "Publish to Catalog" button uses), because this
+     isn't a user-facing feature at all: it exists to let Olga train the
+     AI generation pipeline itself (accumulate her real corrections toward
+     Level 1/2/3 of the feedback loop), not to let ordinary users generate
+     or approve designs. A regular user never has an `AiDesignGenerations`
+     row to review. Verified: `tsc --noEmit` clean, `next lint` no new
+     warnings, Vitest 79/79. Full detail in `DESIGN_FEEDBACK_LOOP.md`.
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
