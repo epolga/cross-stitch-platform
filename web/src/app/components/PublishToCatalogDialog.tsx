@@ -11,6 +11,12 @@ interface Props {
   grid: number[][];
   palette: PatternPalette[];
   previewImage: string | null;
+  // Track 2 (Opportunity 9) provenance — when publishing an AI-draft
+  // pattern, threading this through lets the server backfill designId
+  // onto AiDesignGenerations/AiDesignCorrections (see route.ts), the join
+  // key the prompt/corrections -> NDownloaded measurement needs. Absent
+  // for a normal (non-AI) publish.
+  sourceGenerationId?: string;
 }
 
 interface AlbumPreview {
@@ -27,7 +33,7 @@ interface PublishResult {
   warnings: string[];
 }
 
-export default function PublishToCatalogDialog({ open, onClose, title, width, height, grid, palette, previewImage }: Props) {
+export default function PublishToCatalogDialog({ open, onClose, title, width, height, grid, palette, previewImage, sourceGenerationId }: Props) {
   const [albumId, setAlbumId] = useState('');
   const [preview, setPreview] = useState<AlbumPreview | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
@@ -83,7 +89,7 @@ export default function PublishToCatalogDialog({ open, onClose, title, width, he
       const resp = await fetch('/api/admin/publish-to-catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ albumId: n, title, width, height, grid, palette, previewImage }),
+        body: JSON.stringify({ albumId: n, title, width, height, grid, palette, previewImage, sourceGenerationId }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Publish failed');

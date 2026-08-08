@@ -446,6 +446,11 @@ export default function ConvertPage() {
   // recording her real corrections, not for users to generate/approve
   // designs themselves.
   const [isAiDraft, setIsAiDraft] = useState(false);
+  // The actual generationId, not just the isAiDraft boolean — needed so
+  // "Publish to Catalog" can thread it through for the designId backfill
+  // (found missing 2026-08-08 when Olga published the frog for real and
+  // the provenance join never happened).
+  const [sourceGenerationId, setSourceGenerationId] = useState<string | null>(null);
   const [needsAiReview, setNeedsAiReview] = useState(false);
   const [aiReviewDiff, setAiReviewDiff] = useState<GridDiffSummary | null>(null);
   const [aiReviewSubmitting, setAiReviewSubmitting] = useState(false);
@@ -760,6 +765,7 @@ export default function ConvertPage() {
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
         setIsAiDraft(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0);
+        setSourceGenerationId(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0 ? data.sourceGenerationId : null);
         setNeedsAiReview(data.needsAiReview === true);
         setAiReviewDiff(null);
         setCellSize(typeof data.cellSize === 'number' ? data.cellSize : fitCellSizeToWholeChart());
@@ -1917,6 +1923,7 @@ export default function ConvertPage() {
     setEditingName(true);
     setSavedPatternId(null);
     setIsAiDraft(false);
+    setSourceGenerationId(null);
     setNeedsAiReview(false);
     setAiReviewDiff(null);
     setStitchMode(false);
@@ -2811,6 +2818,7 @@ export default function ConvertPage() {
           grid={grid}
           palette={palette}
           previewImage={publishPreviewImage}
+          sourceGenerationId={sourceGenerationId ?? undefined}
         />
       )}
 

@@ -21,6 +21,8 @@ import { renderCoverThumbnailPng } from '@/lib/server-cover-thumbnail';
 import { createPinterestPin, PinterestApiError } from '@/lib/pinterest-pin';
 import { generateSeoDescription } from '@/lib/design-seo-description';
 import type { PatternPalette } from '@/lib/pattern-converter';
+import { backfillDesignId } from '@/lib/ai-design-generations';
+import { listCorrectionsForGeneration, backfillDesignIdForCorrection } from '@/lib/ai-design-corrections';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +45,12 @@ interface PublishRequestBody {
   grid: number[][];
   palette: PatternPalette[];
   previewImage?: string; // data URL from PatternCanvas.capturePreview(), jpeg or png
+  // Track 2 (Opportunity 9) provenance — present only when publishing an
+  // AI-draft pattern. Lets step 7b backfill designId onto
+  // AiDesignGenerations/AiDesignCorrections, the join key the
+  // prompt/corrections -> NDownloaded measurement needs (see
+  // DESIGN_FEEDBACK_LOOP.md "Provenance mechanism" point 5).
+  sourceGenerationId?: string;
 }
 
 function albumPk(albumId: number): string {
@@ -68,7 +76,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json() as PublishRequestBody;
-    const { albumId, grid, palette, previewImage } = body;
+    const { albumId, grid, palette, previewImage, sourceGenerationId } = body;
     const title = body.title?.trim();
 
     if (!albumId || albumId <= 0) {
@@ -193,6 +201,24 @@ export async function POST(request: NextRequest) {
         ...(seoDescription ? { SeoDescription: seoDescription } : {}),
       },
     }));
+
+    // 7b. AI-provenance designId backfill — best-effort, non-fatal. Only
+    // runs when publishing an AI-draft (sourceGenerationId present). Joins
+    // this design's real NDownloaded back to the AiDesignGenerations row
+    // (prompt -> downloads) and every AiDesignCorrections row for that
+    // generation (corrections -> downloads) — the two measurements Olga
+    // asked for when this schema was designed. Not wired until 2026-08-08:
+    // found missing when she published a real AI-draft (the frog) and the
+    // designId join never happened.
+    if (sourceGenerationId) {
+      try {
+        await backfillDesignId(sourceGenerationId, designId);
+        const corrections = await listCorrectionsForGeneration(sourceGenerationId);
+        await Promise.all(corrections.map(c => backfillDesignIdForCorrection(c.correctionId, designId)));
+      } catch (e) {
+        warnings.push(`AI-provenance designId backfill failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
 
     // 8. Editor-pattern stamp — best-effort, non-fatal (mirrors
     // scripts/stamp-editor-pattern.ts, but inlined since grid/palette are
