@@ -75,6 +75,19 @@ tomorrow, discuss the "real" fix — embeddings/vector similarity for
 this dedup check (and likely other Track 2 matching problems) instead
 of exact-keyword sampling. GenAI learning-track topic — explain in
 detail, not tersely (`feedback_genai_track_explain_in_detail` memory).
+**Second idea from the same conversation, worth combining:** instead of
+(or alongside) precomputing/dumping the avoid-list into every prompt,
+give the `detectTrend()` model itself a custom `search_catalog` tool —
+plain Anthropic API custom tool-use (function calling), the same
+`tools:[...]` mechanism `web_search` already uses in this file, NOT
+MCP (that's a different protocol for exposing tools to AI *clients*
+like Claude Code across sessions, not for one function's own internal
+model call) — so the model queries the catalog on demand mid-reasoning
+instead of receiving a static dump. Could combine with the embeddings
+idea above: the tool's own implementation could do semantic (vector)
+search instead of exact-string matching, catching near-duplicates
+("kawaii green frog" vs. "Kawaii Cottagecore Frog") that plain
+substring matching still misses either way.
 
 **2026-08-08 (tomorrow): walk through `search-service/app/evaluation.py`
 line by line with Olga.** Requested 2026-08-07 explicitly for tomorrow —

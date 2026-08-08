@@ -10,7 +10,7 @@ back into future generation prompts, not model fine-tuning. Started
 
 ## Running score
 
-- **OpenAI (gpt-image-1): 2**
+- **OpenAI (gpt-image-1): 3**
 - **Stability AI (stable-image-core): 0**
 
 ## Providers in play
@@ -128,6 +128,35 @@ own 5-8 round threshold before treating it as a settled preference, but
 the criterion itself is holding up consistently rather than drifting.
 Images: `D:\ann\tmp_scratch_genai\stability.png`,
 `D:\ann\tmp_scratch_genai\openai.png`.
+
+## Round 3 — 2026-08-08, theme: "kawaii pink axolotl"
+
+Third real end-to-end run, first one to find a genuinely new (not
+already-covered) theme — see `PROGRESS.md`/`OPPORTUNITIES.md` for the
+avoid-list dedup fix this round validated. `detectTrend()`: `targetWidth:
+80, targetHeight: 80` (square — again didn't exercise a non-square
+`pickStabilityAspectRatio`/`pickOpenAiSize` case). Grounding gate failed
+again (0 cited URLs from 15 real queries), same open question as Round 2.
+
+- **Stability**: complete style failure again, same pattern as Round 2 —
+  ignored the flat-kawaii/solid-white-background instructions entirely,
+  produced a photorealistic 3D-rendered axolotl in a full scene (leaves,
+  plants, wet gravel, reflections).
+- **OpenAI**: style and color followed well — flat kawaii illustration,
+  bold outlines, pastel salmon-pink matching the researched
+  `colorPalette`. Real `RGBA` alpha transparency confirmed directly this
+  time (`hasAlpha: true`, corner pixel `[0,0,0,0]`, no misdiagnosis) —
+  no vignette/background issue at all.
+
+**Olga's verdict:** OpenAI, same reason as Rounds 1-2 — sharper, reads as
+background-free without a removal step. Scored **OpenAI +1**, running
+score now **3-0**. Three rounds running on the exact same stated
+criterion now (sharpness + no-background-removal-needed) — still short
+of the 5-8 round threshold, but the signal is holding up consistently,
+not drifting or theme-dependent. Images: `D:\ann\tmp_scratch_genai\
+stability.png`, `D:\ann\tmp_scratch_genai\openai.png` (overwritten from
+Round 2 — same filenames each run, save a copy first if a past round's
+image needs to survive the next run).
 
 ## Next rounds
 
