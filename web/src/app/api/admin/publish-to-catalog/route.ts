@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
       imageContentType = decoded.contentType;
       photoFileName = `4.${decoded.ext}`;
     } else {
-      imageBuffer = renderCoverThumbnailPng(grid, palette);
+      imageBuffer = await renderCoverThumbnailPng(grid, palette);
       imageContentType = 'image/png';
       photoFileName = '4.png';
     }

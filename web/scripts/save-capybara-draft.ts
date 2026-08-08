@@ -188,7 +188,7 @@ async function main() {
   const finalWidth = prunedGrid[0]?.length ?? converted.width;
   const finalHeight = prunedGrid.length;
 
-  const thumbnailBuffer = renderCoverThumbnailPng(prunedGrid, prunedPalette);
+  const thumbnailBuffer = await renderCoverThumbnailPng(prunedGrid, prunedPalette);
   const thumbnail = `data:image/png;base64,${thumbnailBuffer.toString('base64')}`;
 
   if (EXISTING_PATTERN_ID) {

@@ -241,7 +241,7 @@ export async function buildPatternPdf(input: BuildPatternPdfInput): Promise<Buff
       // fixed 6-20px/cell resolution independent of the print box, same as
       // the client; large designs' texture just shrinks past the point of
       // being visible once scaled to fit, rather than needing a cutoff.
-      const thumbPng = renderCoverThumbnailPng(grid, palette);
+      const thumbPng = await renderCoverThumbnailPng(grid, palette);
       const thumbImg = await pdf.embedPng(thumbPng);
       const { width: iw, height: ih } = thumbImg.scale(1);
       const scale = Math.min(coverImgBoxW / iw, coverImgBoxH / ih);
