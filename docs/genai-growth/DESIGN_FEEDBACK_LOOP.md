@@ -137,6 +137,91 @@ Correction: merged into 3
 Reason: excessive palette complexity
 ```
 
+## Data store and provenance tracking (resolved 2026-08-08)
+
+Closes open questions #3 and #4 below with a concrete, buildable mechanism
+— worked out in a session dedicated to the trend-detection prompt's actual
+usefulness (see `OPPORTUNITIES.md` Opportunity 9 for that side of the
+discussion: separating the "solid white background" requirement into two
+different underlying causes, and the three-way split of "quality" into
+grounding/reach/conversion). Two new self-provisioning DynamoDB tables,
+following the `SearchEngagement` pattern (`web/src/lib/search-engagement.ts`
+— `ensureTable()`, `PAY_PER_REQUEST`, plain string keys).
+
+### Table 1 — `AiDesignGenerations`
+
+One row per trend-detection + image-generation attempt. This is the anchor
+both dimensions Olga asked to measure hang off: **prompt → downloads** (via
+`imagePrompt` + eventual `designId` → that design's existing `NDownloaded`
+field) and **corrections → downloads** (via the link from Table 2 below).
+
+| Field | Type | Notes |
+|---|---|---|
+| `generationId` (PK) | S | UUID, created right after `detectTrend()` returns |
+| `theme` | S | from `detectTrend()` |
+| `imagePrompt` | S | exact prompt text sent to the image-generation API — the core of the prompt→downloads measurement |
+| `signalSource`, `reasoning` | S | from `detectTrend()` |
+| `imageProvider` | S | `"openai"` \| `"stability"` — doubles as Domain 2 (provider choice) data |
+| `initialGrid`, `initialPalette` | S (JSON) | immutable snapshot of the AI-generated grid/palette, written once, before Olga ever opens the editor — see "Provenance mechanism" below. Size-checked: even the catalog's largest existing design (241×241) is ~175KB as JSON, comfortably under DynamoDB's 400KB item limit, so no S3 needed. |
+| `createdAt` | S (ISO) | |
+| `status` | S | `generated` → `draft-saved` → `reviewed` → `published` (or `rejected`) |
+| `patternId` | S, optional | `ConverterPatterns` id once the draft is saved to Olga's account |
+| `designId` | N, optional | filled in once actually published to the catalog — the join key to that design's live `NDownloaded` |
+
+Downloads are never copied into this table — a report joins
+`generationId → designId → NDownloaded` at analysis time, reading the
+live counter, same principle as the outcome-evaluation plan already in
+`OPPORTUNITIES.md`.
+
+### Table 2 — `AiDesignCorrections`
+
+One row per reviewed pattern (approved as-is, or approved with changes).
+
+| Field | Type | Notes |
+|---|---|---|
+| `correctionId` (PK) | S | UUID |
+| `generationId` | S | FK to Table 1 — pulls in the prompt/theme for free |
+| `designId` | N, optional | same join key, duplicated here for direct queries without hopping through Table 1 |
+| `gridDiffSummary` | S (JSON) | compact summary (cells changed, colors merged/added/removed) — not the full before/after grids, those already live via `generationId` → Table 1's `initialGrid` and the pattern's current state |
+| `reasonTags` | SS | from the preset list above |
+| `freeTextComment` | S, optional | |
+| `acceptedOrRejected` | S | `approve` \| `approve-with-changes` — **`approve` is a real, explicitly stored positive record**, not a skipped case (Olga, 2026-08-08: the fact that nothing needed fixing is itself important signal) |
+| `createdAt` | S (ISO) | |
+
+### Provenance mechanism — how a diff actually gets computed
+
+1. **Marking a pattern as AI-sourced.** New optional field `sourceGenerationId`
+   (S) on `ConverterPatterns` itself, set once, at the moment the
+   generation script first calls `savePattern()`. This is both the "AI
+   draft" provenance flag the editor can check (to show an "AI-draft"
+   label, per the original UX vision) and the link back to Table 1.
+2. **The immutable snapshot** (`initialGrid`/`initialPalette` in Table 1)
+   is written in that same first `savePattern()` call — before Olga has
+   ever opened the editor, so it can never be touched by her later edits.
+   `ConverterPatterns` itself stays a single mutable record exactly as
+   today; only Table 1 holds the frozen "as-generated" state.
+3. **Review is an explicit action, not every save.** The editor shows an
+   Approve / Approve-with-changes step only when the open pattern has a
+   `sourceGenerationId` whose `AiDesignGenerations.status` is still
+   `draft-saved` (not yet `reviewed`) — so the question is asked exactly
+   once per generation, not on every subsequent normal save.
+4. **The diff is computed server-side**, not in the browser: on
+   Approve/Approve-with-changes, the client just sends
+   `generationId` (+ `patternId`, reasonTags/comment if any) to a new API
+   route; the server reads `initialGrid`/`initialPalette` from Table 1 and
+   the pattern's current grid/palette from `ConverterPatterns`, diffs them
+   there, writes the `AiDesignCorrections` row, and flips
+   `AiDesignGenerations.status` to `reviewed`. The original snapshot never
+   needs to round-trip to the browser. An empty diff is exactly the
+   "approve, no changes" case — no reason-tag question is asked when
+   there's nothing to explain.
+5. **`designId` backfill happens at publish time**, which is a separate,
+   later step (existing "Publish to Catalog" flow) — `sourceGenerationId`
+   needs to be threaded into that call so it can `UPDATE` the resulting
+   `designId` onto both the `AiDesignGenerations` row and every
+   `AiDesignCorrections` row sharing that `generationId`, once the catalog
+   design is actually created.
+
 ## Three levels of what to do with the accumulated corrections
 
 **Level 1 — continuously updated rules (buildable now, no training).**
@@ -367,16 +452,17 @@ flagging them rather than deciding unilaterally:
    `feedback_script_pattern_full_pipeline` memory) and should **not**
    pollute the correction-learning dataset as if they were recurring
    design preferences.
-3. **Where does the diff actually get computed?** The spec assumes the
-   system already has both `aiResult` and `correctedResult` to diff at
-   save time. The real editor currently has no concept of "this pattern
-   started as an AI draft" — that provenance (and the original AI-draft
-   grid/palette to diff against) needs to be tracked from the moment a
-   Track 2 draft is created through to when Olga saves her edited
-   version.
-4. **Where does the correction database live?** Needs a real store (new
-   DynamoDB table, most likely, matching every other structured log in
-   this codebase) — not decided yet.
+3. ~~**Where does the diff actually get computed?**~~ **RESOLVED
+   2026-08-08** — see "Data store and provenance tracking" above:
+   `sourceGenerationId` on `ConverterPatterns` marks provenance; the
+   immutable pre-edit snapshot is written to `AiDesignGenerations` at
+   first `savePattern()`, before any editing is possible; the diff is
+   computed server-side on an explicit Approve/Approve-with-changes
+   action, not on every save.
+4. ~~**Where does the correction database live?**~~ **RESOLVED
+   2026-08-08** — two new self-provisioning DynamoDB tables,
+   `AiDesignGenerations` and `AiDesignCorrections`, see "Data store and
+   provenance tracking" above.
 5. **Scope for the first build:** Olga has confirmed starting with a
    single domain before generalizing to all three — which domain to
    start with is still open (image-prompt composition is the natural
