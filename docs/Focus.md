@@ -472,6 +472,44 @@ didn't log the user in).
     - Final verified result: 80x102, 4 real colors (black + 3 accents),
       full outline intact, no spurious background color. Full detail:
       `docs/genai-growth/PROGRESS.md`.
+23. **Converter improvements from a real kitten test image (Olga's own
+    source, `TestImages/Kitten.png`), same session.** Three real, separate
+    findings:
+    - `save-ai-draft.ts` had a `mode === 'photo' ? 'illustration' : mode`
+      override (added earlier the same day, reasonable when this script
+      only ever saw AI-generated illustration content) that unconditionally
+      forced every real 'photo' classification into illustration-mode
+      processing — risky now that this script also handles Olga's own
+      arbitrary image imports, where a genuine photo could get force-run
+      through outline-detection tuned for flat-color keylines. **Removed**
+      (Olga's call) — the classifier's real verdict is now trusted
+      everywhere, including real 'photo'.
+    - `analyzeImage()` misclassified the kitten (a genuine flat cel-shaded
+      illustration) as `typography` — root cause: colored regions (pink
+      ears, green eyes) are a small fraction of total area next to a huge
+      white background + grey fur stripes, pulling mean saturation below
+      the illustration threshold, while the dense white-keyline edge
+      structure reads as text-like to the heuristic. Not yet fixed (a
+      classifier retune is separate, deferred) — new `MODE_OVERRIDE` CLI
+      arg (8th positional) added to `save-ai-draft.ts` so a mode can be
+      forced manually when the classifier gets it wrong.
+    - **Real bug in the outline-detection system itself** (`pattern-converter.ts`,
+      built 2026-08-04): a single continuous keyline can have wildly
+      different top-hat contrast along its own length depending on what it
+      borders (huge contrast against dark grey fur, almost none against
+      pale cream fur) — a single global `OUTLINE_TOPHAT_THRESHOLD` (50)
+      necessarily fragments the stroke wherever it crosses a low-contrast
+      section. Confirmed directly by rendering the raw top-hat magnitude as
+      a heatmap — the whole outline is visible as one continuous signal,
+      just with large brightness swings. Fixed with hysteresis thresholding
+      (same two-threshold edge-linking technique as Canny edge detection):
+      the existing threshold (50) still gates which pixels can SEED a
+      stroke (no new false positives on flat regions), but a new lower
+      threshold (`OUTLINE_TOPHAT_LOW_THRESHOLD = 15`) can now extend an
+      already-seeded stroke through low-contrast stretches via 8-connected
+      flood — isolated low-contrast noise with no strong seed nearby still
+      never qualifies. Re-verified against puppy and "Lady of Perpetual
+      Love" (both still intact, no regression) before/after.
 
 ## Done when
 

@@ -408,6 +408,27 @@ function kmeansQuantize(allPixels: Lab[], sample: Lab[], k: number, rand: () => 
 // keyline and a black ink line are found the same way.
 const OUTLINE_STROKE_RADIUS = 2; // px — flags features up to ~2*radius+1 px wide
 const OUTLINE_TOPHAT_THRESHOLD = 50; // luminance units (0-255 scale)
+// 2026-08-09: found live (Olga's ask, a real kitten illustration) — a
+// single continuous keyline can have wildly different contrast along its
+// own length, depending on what it happens to border: a white keyline
+// against a dark grey fur stripe has a huge top-hat value (well above
+// 50), the SAME line seconds later against pale cream fur has almost none
+// (well below 50) — a single global threshold necessarily breaks the
+// stroke into disconnected fragments wherever it crosses a low-contrast
+// section, confirmed directly by rendering the raw top-hat magnitude as a
+// heatmap: the whole outline is visible as a continuous signal, just with
+// large brightness swings along it. Simply lowering the threshold
+// globally isn't safe — 25 was already tried and rejected for a real
+// regression (caught soft internal shading as false strokes, see
+// OUTLINE_QUANTIZE_COLORS's history below). Fixed with hysteresis
+// thresholding instead (the same two-threshold edge-linking technique
+// Canny edge detection uses): OUTLINE_TOPHAT_THRESHOLD still gates which
+// pixels can SEED a stroke (safe, unchanged, no new false positives on
+// flat regions), but a lower threshold is now allowed to EXTEND an
+// already-seeded stroke through low-contrast stretches, since a weak
+// pixel only counts if it's connected to a real seed — isolated soft
+// shading with no strong stroke nearby still never qualifies.
+const OUTLINE_TOPHAT_LOW_THRESHOLD = 15; // luminance units — only reachable by growing from a real seed, see detectOutlineMask
 
 // Some source PNGs carry subtle, structured pixel-level variation in
 // otherwise visually-flat regions (compression-artifact-like, not simple
@@ -473,11 +494,40 @@ function detectOutlineMask(data: Buffer, w: number, h: number): Uint8Array {
   const opened = boxMinMax(eroded, w, h, OUTLINE_STROKE_RADIUS, true);
   const dilated = boxMinMax(lum, w, h, OUTLINE_STROKE_RADIUS, true);
   const closed = boxMinMax(dilated, w, h, OUTLINE_STROKE_RADIUS, false);
-  const mask = new Uint8Array(n);
+  const topHat = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const whiteTopHat = lum[i] - opened[i];
     const blackTopHat = closed[i] - lum[i];
-    if (Math.max(whiteTopHat, blackTopHat) > OUTLINE_TOPHAT_THRESHOLD) mask[i] = 1;
+    topHat[i] = Math.max(whiteTopHat, blackTopHat);
+  }
+
+  // Hysteresis linking (Canny's technique): every strong (> HIGH) pixel is
+  // a seed; from each seed, flood outward through 8-connected neighbors
+  // that clear the LOWER threshold, so a genuine stroke's low-contrast
+  // stretches get included via connectivity to a real seed, while
+  // low-contrast noise with no strong seed anywhere nearby still never
+  // qualifies on its own.
+  const mask = new Uint8Array(n);
+  const visited = new Uint8Array(n);
+  const stack: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (topHat[i] > OUTLINE_TOPHAT_THRESHOLD) { visited[i] = 1; mask[i] = 1; stack.push(i); }
+  }
+  while (stack.length) {
+    const i = stack.pop()!;
+    const x = i % w, y = (i - x) / w;
+    for (let dy = -1; dy <= 1; dy++) {
+      const ny = y + dy;
+      if (ny < 0 || ny >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        if (nx < 0 || nx >= w) continue;
+        const j = ny * w + nx;
+        if (visited[j]) continue;
+        if (topHat[j] > OUTLINE_TOPHAT_LOW_THRESHOLD) { visited[j] = 1; mask[j] = 1; stack.push(j); }
+      }
+    }
   }
   return mask;
 }

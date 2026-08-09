@@ -50,6 +50,7 @@ import { savePattern, updatePattern } from '../src/lib/pattern-storage';
 import { renderCoverThumbnailPng } from '../src/lib/server-cover-thumbnail';
 import { createGeneration, attachDraft } from '../src/lib/ai-design-generations';
 import { analyzeImage, imageTypeToMode } from '../src/lib/image-analysis';
+import type { ConversionMode } from '../src/lib/image-analysis';
 import type { GroundingAssessment } from '../src/lib/trend-detection';
 
 const IMAGE_PATH = process.argv[2];
@@ -64,9 +65,27 @@ const EXISTING_PATTERN_ID = process.argv[5]; // if given, update in place instea
 // "Data store and provenance tracking"). Omit for a manual/non-AI-trend
 // save (e.g. the Fawn design test, which explicitly skips detectTrend()).
 const GENERATION_META_PATH = process.argv[6];
+// 2026-08-09: for a plain manual image import (no detectTrend() research
+// behind it — e.g. Olga's own source photos), there was previously no
+// way to pick a target width without inventing a fake GenerationMeta
+// just to carry targetWidth, which would wrongly pollute
+// AiDesignGenerations with a record that isn't actually AI-trend-sourced.
+// Optional 7th arg overrides the width directly instead.
+const TARGET_WIDTH_OVERRIDE = process.argv[7] ? Number(process.argv[7]) : undefined;
+// 2026-08-09: found live — analyzeImage() misclassified a genuinely flat
+// cel-shaded illustration (bold flat color regions + white keyline
+// separators, exactly what the outline-preservation system was built
+// for) as 'typography' instead of 'illustration' — likely confused by
+// the crisp bold outline/whisker strokes reading as text-like features
+// to the heuristic. Since 'illustration' is only ever chosen when
+// analyzeImage() itself returns that type (imageTypeToMode() has no
+// confidence-based path INTO illustration, only into line-art), a
+// type-level misclassification can't be worked around by a confidence
+// threshold — needs a real manual override.
+const MODE_OVERRIDE = process.argv[8] as ConversionMode | undefined;
 
 if (!IMAGE_PATH || !OWNER_ID) {
-  console.error('Usage: save-ai-draft.ts <image.png> <ownerID> [name] [existingPatternId] [generationMetaPath]');
+  console.error('Usage: save-ai-draft.ts <image.png> <ownerID> [name] [existingPatternId] [generationMetaPath] [targetWidth]');
   process.exit(1);
 }
 
@@ -271,28 +290,39 @@ async function main() {
   // already matches the research and this derivation just carries it
   // through correctly, with no distortion from convertImage()'s
   // fit:'fill' resize.
-  const targetWidth = generationMeta?.targetWidth ?? DEFAULT_TARGET_WIDTH;
+  const targetWidth = TARGET_WIDTH_OVERRIDE ?? generationMeta?.targetWidth ?? DEFAULT_TARGET_WIDTH;
 
   const rawBuffer = readFileSync(IMAGE_PATH);
   const imageMeta = await sharp(rawBuffer).metadata();
   const targetHeight = Math.round(targetWidth * ((imageMeta.height ?? 1) / (imageMeta.width ?? 1)));
 
   // 2026-08-09: was hardcoded 'illustration' regardless of actual image
-  // content — analyzeImage() already exists for exactly this. Doesn't
-  // change convertImage()'s own behavior (pattern-converter.ts treats
-  // 'illustration' and 'line-art' identically in every branch), but DOES
-  // gate the background-erasure fallback below, and surfaces the
-  // classifier's warnings/suggestedMinWidth for visibility.
+  // content — analyzeImage() already exists for exactly this.
+  //
+  // A `mode === 'photo' ? 'illustration' : mode` override briefly lived
+  // here (same day) as a safety net against the classifier saying
+  // 'photo' on AI-generated illustration content — reasonable back when
+  // this script only ever saw detectTrend()-sourced images, which are
+  // always meant to be illustration-style. Removed (Olga's call) once
+  // this script started also handling Olga's own arbitrary image
+  // imports (e.g. a real photo) — forcing every real photo through the
+  // outline-detection pipeline (tuned for flat-color keylines, not
+  // photographic noise/texture) risked unpredictable results on genuine
+  // photos. Trust the classifier's real verdict everywhere now,
+  // including a real 'photo'; if it misclassifies an illustration as a
+  // photo, fix the classifier itself (image-analysis.ts) or pass
+  // MODE_OVERRIDE explicitly, rather than silently overriding one
+  // specific outcome for every caller.
   const analysis = await analyzeImage(rawBuffer);
-  const mode = imageTypeToMode(analysis.type, analysis.confidence);
-  console.log(`Image analysis: type=${analysis.type} confidence=${analysis.confidence} -> mode=${mode}`, analysis.warnings);
+  const mode = MODE_OVERRIDE ?? imageTypeToMode(analysis.type, analysis.confidence);
+  console.log(`Image analysis: type=${analysis.type} confidence=${analysis.confidence} -> mode=${imageTypeToMode(analysis.type, analysis.confidence)}${MODE_OVERRIDE ? ` (overridden to ${MODE_OVERRIDE})` : ''}`, analysis.warnings);
 
   const converted = await convertImage(
     rawBuffer,
     targetWidth,
     targetHeight,
     MAX_COLORS,
-    mode === 'photo' ? 'illustration' : mode,
+    mode,
     'final-only',
   );
 
