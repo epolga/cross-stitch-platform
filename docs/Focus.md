@@ -62,32 +62,21 @@ this new CLI path (see Open item #9).
 
 ## Next session — pick up here first
 
-**2026-08-09: discuss embeddings/vectors with Olga, for Track 2's
-avoid-list dedup problem.** Found live 2026-08-08: `detectTrend()`
-proposed "frog" three times in one session (once already published,
-"Kawaii Cottagecore Frog", DesignID 5463) because the avoid-list it's
-given is 114 ALBUM captions, not individual design names — album 54
-(which actually holds ~16 frog-themed designs) is captioned "Children,"
-so nothing in the avoid-list said "frog" at all. Stopgap fix applied
-same day: sample individual design captions instead of album captions
-(see PROGRESS.md/OPPORTUNITIES.md for the exact mechanism). Olga's ask:
-tomorrow, discuss the "real" fix — embeddings/vector similarity for
-this dedup check (and likely other Track 2 matching problems) instead
-of exact-keyword sampling. GenAI learning-track topic — explain in
-detail, not tersely (`feedback_genai_track_explain_in_detail` memory).
-**Second idea from the same conversation, worth combining:** instead of
-(or alongside) precomputing/dumping the avoid-list into every prompt,
-give the `detectTrend()` model itself a custom `search_catalog` tool —
-plain Anthropic API custom tool-use (function calling), the same
-`tools:[...]` mechanism `web_search` already uses in this file, NOT
-MCP (that's a different protocol for exposing tools to AI *clients*
-like Claude Code across sessions, not for one function's own internal
-model call) — so the model queries the catalog on demand mid-reasoning
-instead of receiving a static dump. Could combine with the embeddings
-idea above: the tool's own implementation could do semantic (vector)
-search instead of exact-string matching, catching near-duplicates
-("kawaii green frog" vs. "Kawaii Cottagecore Frog") that plain
-substring matching still misses either way.
+~~2026-08-09: discuss embeddings/vectors with Olga, for Track 2's
+avoid-list dedup problem.~~ — **discussed and built same day.** Walked
+through embeddings/vector similarity in detail (contrasted against
+`GetHashCode()`/exact-match search), then Olga's own reasoning converged
+on the session's "second idea" (a custom `search_catalog` tool instead of
+a static dump) — built the same session: `findNearestTextMatch()`
+(`semantic-search.ts`) + `search_catalog` tool wired into `detectTrend()`'s
+tool-use loop (`trend-detection.ts`), the old text avoid-list removed
+entirely. No hardcoded similarity threshold (no real score data exists
+yet — model judges the raw score itself). Full detail: `DECISIONS.md`
+ADR-009, `PROGRESS.md` 2026-08-09 entry, `OPPORTUNITIES.md` Opportunity 9.
+Verified via `tsc`/`eslint`/Vitest only — **not yet exercised by a real
+`detectTrend()` API call**; next session should run it for real and check
+whether `search_catalog` actually fires (Open item, add below if not
+picked up same-session).
 
 **2026-08-08 (tomorrow): walk through `search-service/app/evaluation.py`
 line by line with Olga.** Requested 2026-08-07 explicitly for tomorrow —
@@ -152,152 +141,14 @@ new contract doc: `docs/integration/publish-to-catalog-web.md`):
   "Giraffes") published and verified; found+fixed a `Description`-field
   bug from that first run. Required a real production IAM fix (EB role was
   missing `CrossStitchBusinessHistory` access for the Pinterest token).
-
-**Shipped 2026-08-04** (commits `38e1cea`, `c7a73fb`, deployed & health-checked Green):
-
-Reworked outline/stroke preservation (illustration/line-art mode,
-`web/src/lib/pattern-converter.ts`) after Olga flagged two real bugs in the
-2026-08-03 version: it assumed every outline was white and force-wrote pure
-white onto anything it flagged, and it treated any sharp edge — including
-ordinary boundaries between two flat color regions — as an "outline."
-- **Detection**: replaced the brightness-gated Sobel edge detector with a
-  brightness-agnostic morphological top-hat (white top-hat + black top-hat,
-  structuring-element radius 2px, `OUTLINE_STROKE_RADIUS`). This finds any
-  feature narrower than the structuring element regardless of whether it's
-  lighter or darker than its surroundings — a black ink line and a white
-  keyline are found the same way. Top-hat threshold `OUTLINE_TOPHAT_THRESHOLD`
-  ended at **50** (luminance units) after tuning: 25 caught genuine strokes
-  but also caught soft internal shading as false positives (see below); 50
-  is the current best trade-off.
-- **Color**: instead of always forcing detected strokes to white, each
-  stroke is now force-written to the DMC nearest its own averaged sampled
-  color from the source (`resolveOutlineComponents`).
-- **Grouping bug found and fixed**: connected candidate cells are grouped
-  into components (flood fill) BEFORE the distinctness check and DMC snap,
-  not judged pixel-by-pixel. Pixel-by-pixel judging had a real bug: two
-  adjacent dark candidate cells (e.g. both part of the baby's eye outline in
-  the "Lady of Perpetual Love" design) would suppress each other as "not
-  distinct" since each read as close to its neighbor — backwards, since
-  mutual agreement between candidates is evidence FOR a stroke. Grouping
-  first, then comparing the group's average color against its true
-  (non-candidate) bordering neighbors, fixed this — confirmed via direct
-  pipeline tracing (`resolveOutlineComponents`'s component/border logic).
-  This also incidentally fixed a bull test-image regression (34 colors →
-  20-21) caused by an earlier, wrong attempt at this same fix (excluding
-  candidate neighbors from comparison entirely, which weakened the filter
-  exactly where dense noise needed it strongest).
-- **Verified against 3 real illustrations**: puppy (white keyline strokes +
-  white eye-highlight dots), a stitched-bull test asset (wavy white
-  keylines, deliberately textured), and "Lady of Perpetual Love" (white
-  keylines + a dark hairline + a small gold star + the baby's face). At
-  target width 100 stitches, the baby's eyebrow/eye were initially invisible
-  (too small/low-contrast to survive); raising the top-hat threshold to 50
-  fixed this AND shrank an over-thick eyebrow blob down to ~2 stitches each
-  for eyebrow and eye, which Olga confirmed as sufficient. Confirmed via
-  both the standalone converter (with `removeConfetti` replicated in the
-  test script, matching the client's automatic post-conversion cleanup) and
-  the real `/photo-to-cross-stitch` browser flow end-to-end.
-- **Known remaining minor issue, not fixed, not blocking**: Olga noticed a
-  handful of small (1-4 stitch) stray-color patches inside otherwise
-  visually-flat regions on the puppy (the orange ear, a paw) — e.g. DMC 3776
-  "Light Mahogany" (198,113,54) scattered inside a field of DMC 922 "Light
-  Copper" (221,117,63). Investigated in depth: the source PNG looks
-  perfectly flat there to the eye, but direct pixel sampling shows real
-  (if subtle) local variation. **Median-filter denoising was tried and
-  rejected**: tested radius 3, 5, and 7 (`sharp().median(n)`) applied only to
-  the outline-detection input (not the color-clustering input, so a
-  preserved stroke's color stays true to source) — none of the three
-  changed the ear/paw speckle pattern AT ALL (pixel-identical output),
-  while radius 7 was already destructive enough to erase the Lady's
-  eyebrow entirely. Since even a 15×15 median window didn't touch it, this
-  is probably NOT simple per-pixel noise/dithering — more likely a
-  compression-artifact-like pattern (e.g. JPEG blockiness baked into the
-  PNG at export) that's structured rather than random, which a median
-  filter doesn't reliably remove.
-  - **Proposed next step (not implemented)**: instead of denoising, run a
-    coarse k-means color quantization (~16-20 colors — much finer than the
-    final stitch grid, but coarse enough to collapse compression noise into
-    its nearest real color) on the FULL-resolution image, and run
-    `detectOutlineMask` on that quantized copy instead of the raw source.
-    Genuine strokes would survive as their own cluster; sub-visible
-    compression noise should disappear since it'd almost always cluster
-    into its dominant surrounding color. More expensive (an extra full-res
-    k-means pass) — not started, needs Olga's go-ahead given the cost/risk,
-    and should be verified against all 3 test images again before shipping.
-  - **Test images and what to check in each, if picking this back up:**
-    - **Puppy** — `D:\Stitch Craft\Charts\ReadyCharts\2026_07_04\Puppy.png`.
-      Convert at illustration mode, ~150 wide, ~20 colors. Check: the white
-      keyline strokes separating body/ear/head color regions stay white and
-      continuous (not broken into dots); both eyes keep their white
-      specular-highlight dot; no stray 1-2 stitch confetti after the
-      client's automatic cleanup. Known cosmetic issue (Open item #16): a
-      few small stray-color patches (DMC 3776 inside DMC 922) in the ear and
-      a paw — real but very subtle source pixel variation, not visible to
-      the eye in the source PNG, survives median-filter denoising up to
-      radius 7. Not fixed; not blocking.
-    - **Lady of Perpetual Love** —
-      `D:\Stitch Craft\Charts\ReadyCharts\2026_06_26\Lady of Perpetual
-      Love.png`. Convert at illustration mode, width 100 (the specific case
-      Olga tested). Check: white keylines between mantle/robe/halo regions
-      stay crisp; the small gold 8-point star charm on the mantle keeps its
-      shape and color; the dark hairline separating Mary's hair from her
-      face is preserved in its own dark brown (NOT forced white — this was
-      the original bug); the baby's eyebrow and eye each render as a small
-      (~2 stitch) distinct patch rather than disappearing into the skin
-      tone (top-hat threshold 50 was tuned specifically to make this work
-      without over-thickening the eyebrow — see above).
-    - **Bull ("Style3")** — no stable source file. This was a synthetic
-      test asset built earlier in the same session (a "smoothed"/stitched
-      version of an image Olga calls "Style3.png"), created via ad hoc
-      image-editing steps and saved only to the session's scratchpad
-      (`.../scratchpad/Style3-smooth.png`), which is NOT persistent across
-      sessions. Searching `D:\Stitch Craft` for "Style3" or "bull" turns up
-      nothing (only an unrelated `BULLDOG.SCC`). **To retest this case,
-      either ask Olga for the bull image again, or substitute any other
-      flat illustration that uses wavy/curved white keyline strokes** — the
-      case this asset exercised was specifically: do continuous curved
-      white strokes survive intact, and does texture/noise in the fill stay
-      low (this synthetic file had deliberately baked-in dot texture from
-      earlier testing, so some speckle in the body fill is an expected
-      baseline for THIS file, not a regression — judge by whether the white
-      strokes themselves stay continuous and by total color count staying
-      in the ~20 range, not by fill-texture alone).
-
-**Shipped 2026-08-04, second pass** (Open item #16, the k-means
-quantization idea above — implemented, hit a real regression, fixed):
-
-- Added `kmeansQuantize` (`pattern-converter.ts`) — quantizes the
-  full-resolution source to `OUTLINE_QUANTIZE_COLORS` colors via k-means
-  before `detectOutlineMask` runs, instead of feeding it the raw source.
-  Fits centroids on the sample across `KMEANS_RUNS` runs but assigns the
-  full pixel set only once (not once per run, unlike `kmeansLab`) — full-res
-  assignment is the expensive part. Color fidelity is untouched:
-  `downsampleOutlineMask` still samples the ORIGINAL buffer for a stroke's
-  actual color; quantization only decides where the mask fires.
-- **First attempt used 18 colors and had a real regression**, caught by
-  Olga from a rendered comparison: the baby's eyebrow/eye in "Lady of
-  Perpetual Love" — which survive via this SAME outline/stroke path as
-  keylines, not via normal color clustering, per the 2026-08-03 tuning note
-  above — blurred into the skin tone instead of staying a distinct ~2-stitch
-  patch. Root cause: the eyebrow's contrast against skin is subtle, similar
-  in magnitude to the noise this pass exists to erase, so at 18 clusters it
-  lost the fight for cluster budget against the image's larger flat regions.
-  **Fixed by raising `OUTLINE_QUANTIZE_COLORS` to 30** — re-verified the
-  puppy noise fix and the eyebrow/eye together; both hold at this value.
-- Also caught (separately, in the verification script, not production
-  code): the script forced height = width for both test images. The puppy
-  source is square (1254×1254) so it didn't show, but "Lady of Perpetual
-  Love" is 1024×1536 (2:3 portrait) — forcing 100×100 squashed it
-  vertically by 1.5×. Fixed by deriving height from each source's real
-  aspect ratio, same as `ImportFromPhotoDialog.tsx`'s aspect-lock already
-  does for real users; the production conversion path was never affected.
-- **Re-verified against all 3 test images** (puppy, Lady of Perpetual
-  Love, bull/Style3 — Olga recovered the bull file from a prior session's
-  scratchpad): puppy ear/leg noise stays fixed, Lady's keylines/star/
-  hairline/eyebrow/eye all intact at correct 100×150 proportions, bull's
-  wavy white keylines stay continuous (24→27 colors, +3, not a concern —
-  the body's baked-in speckle texture is this synthetic file's own known
-  baseline, unchanged either way). 61/61 Vitest suite passes.
+- [x] **Outline/stroke preservation reworked** (illustration/line-art mode,
+  commits `38e1cea`/`c7a73fb`) — two real bugs fixed (forced-white strokes,
+  any sharp edge misread as an outline) via a brightness-agnostic
+  morphological top-hat detector + per-stroke DMC coloring; a follow-up
+  pass added a k-means quantization pre-pass to fix a stray-noise
+  regression found on the puppy test image. Verified against 3 test
+  illustrations (puppy, "Lady of Perpetual Love", bull/Style3), 61/61
+  Vitest passing. Full narrative: `docs/session-log/2026-08.md`.
 
 **Shipped 2026-08-03** (full detail: `docs/session-log/2026-08.md`):
 - [x] Editor defaults to "Whole Chart" zoom on every load path (commit `3fdf9e6`).
@@ -464,11 +315,10 @@ didn't log the user in).
     (`amazon-cloudwatch-agent.service`, seen in `eb-engine.log`) is actually
     running on the current instance, or needs a restart/reconfig.
 16. ~~Outline-preservation: stray small-patch noise in visually-flat
-    regions~~ — **done 2026-08-04** (second pass), see the "Shipped
-    2026-08-04, second pass" entry above / `docs/session-log/2026-08.md`.
-    K-means quantization pre-pass (`OUTLINE_QUANTIZE_COLORS = 30`) fixed the
-    puppy ear/leg noise; verified against all 3 test images with no
-    regression.
+    regions~~ — **done 2026-08-04** (second pass), see
+    `docs/session-log/2026-08.md`. K-means quantization pre-pass
+    (`OUTLINE_QUANTIZE_COLORS = 30`) fixed the puppy ear/leg noise;
+    verified against all 3 test images with no regression.
 17. **Track 2 grounding-gate fix — needs a real `detectTrend()` run to
     confirm.** 2026-08-08: Round 2 live run (theme "kawaii cottagecore
     frog") hit a real grounding-gate failure — 15 real search queries, 0
@@ -528,6 +378,16 @@ didn't log the user in).
     toast for any non-silent error instead of showing nothing. Verified
     live against the real pattern after both the IAM fix and the code
     fix. Full detail: `docs/genai-growth/PROGRESS.md`.
+20. **Track 2 catalog-dedup `search_catalog` tool — needs a real
+    `detectTrend()` run to confirm.** 2026-08-09: replaced the text
+    avoid-list with a custom client-side tool (`search_catalog`) that runs
+    a real embedding-similarity check against the catalog — full detail
+    `docs/genai-growth/DECISIONS.md` ADR-009. Verified only via
+    `tsc`/`eslint`/Vitest against mocked input, **not yet against a real
+    Anthropic API call** — next live run should confirm the model actually
+    calls the tool, and ideally re-test the "kawaii green frog" scenario
+    specifically to get a first real similarity-score data point (no
+    threshold is hardcoded yet, see ADR-009).
 
 ## Done when
 
@@ -547,4 +407,5 @@ didn't log the user in).
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
 - [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
 - [ ] Track 2 grounding-gate `buildPrompt()` fix confirmed against a real `detectTrend()` run (see Open item #17)
+- [ ] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18) — deployed 2026-08-08, Health Green, verified

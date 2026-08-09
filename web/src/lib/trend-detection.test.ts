@@ -137,23 +137,16 @@ describe('assessGrounding', () => {
 });
 
 describe('buildPrompt', () => {
-  it('includes every theme', () => {
-    const prompt = buildPrompt(['Cats', 'Dogs', 'Christmas']);
-    expect(prompt).toContain('Cats, Dogs, Christmas');
-  });
-
-  // 2026-08-08: was capped (and this test asserted the cap) — removed
-  // after a real live failure where an album-caption cap of 80 silently
-  // excluded ~30% of the catalog from the avoid-list, then again when
-  // the switch to design-level captions could have repeated the same
-  // mistake. No cap now — see the comment above getExistingDesignCaptions()
-  // in trend-detection.ts for why this is safe against the model's
-  // context window.
-  it('does not truncate a very large catalog', () => {
-    const themes = Array.from({ length: 3000 }, (_, i) => `Theme${i}`);
-    const prompt = buildPrompt(themes);
-    expect(prompt).toContain('Theme0');
-    expect(prompt).toContain('Theme1999');
-    expect(prompt).toContain('Theme2999');
+  // 2026-08-09: buildPrompt() used to take the full list of existing
+  // catalog captions and dump it into the prompt as a text avoid-list —
+  // replaced with an instruction to use the search_catalog tool instead
+  // (see trend-detection.ts's SEARCH_CATALOG_TOOL comment for why: exact-
+  // string matching against a static list can't catch a near-duplicate
+  // like "kawaii green frog" vs "Kawaii Cottagecore Frog"). No more
+  // themes argument, so nothing left to test for inclusion/truncation —
+  // just confirm the model is actually told about the tool.
+  it('instructs the model to use search_catalog before finalizing a theme', () => {
+    const prompt = buildPrompt();
+    expect(prompt).toContain('search_catalog');
   });
 });

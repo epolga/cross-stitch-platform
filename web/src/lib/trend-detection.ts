@@ -10,7 +10,8 @@
 // human reads the raw text) instead of that file's free-text email body.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { fetchAllDesigns } from './data-access';
+import { getDesignById } from './data-access';
+import { findNearestTextMatch } from './semantic-search';
 
 export interface ParsedTrend {
   theme: string;
@@ -42,7 +43,13 @@ export interface TrendDetectionResult extends ParsedTrend {
 // of six research angles, so it very likely needs far fewer searches in
 // practice, but the ceiling itself is cheap to leave generous.
 const MAX_SEARCH_USES = 15;
-const MAX_CONTINUATIONS = 2;
+// 2026-08-09: was 2 — bumped when search_catalog (a client-side tool, see
+// below) started sharing this same continuation budget with pause_turn
+// (web_search). Each search_catalog round-trip now costs one continuation
+// too, and the model may reasonably want to check 1-2 candidate themes
+// against the catalog in addition to its research turns — 2 was tuned
+// only against the old web_search-only flow and left no room for that.
+const MAX_CONTINUATIONS = 4;
 const MODEL = 'claude-sonnet-5';
 // 2026-08-08: was 2000 — confirmed via a real failure (extractJson's new
 // "no JSON found" logging showed the response cut off mid-sentence, still
@@ -54,28 +61,60 @@ const MODEL = 'claude-sonnet-5';
 // not scientifically tuned, revisit if truncation recurs.
 const MAX_TOKENS = 4096;
 
-// 2026-08-08: was ALBUM captions (114 of them, e.g. "Children"), not
-// individual design names — a real dedup gap, found live: detectTrend()
+// 2026-08-09: replaced the old text avoid-list approach (dump every unique
+// design caption into the prompt, ~2398 of them, and trust the model to
+// visually spot overlap) with a client-side tool the model calls on demand
+// instead. The text-dump version had a real dedup gap: detectTrend()
 // proposed "frog" three times in one session (one already published as
-// "Kawaii Cottagecore Frog") because nothing in the album-caption list
-// said "frog" at all — the ~16 existing frog designs all live inside an
-// album captioned "Children", not a "Frog" album. Switched to unique
-// individual DESIGN captions instead (still deduplicated — no point
-// repeating "Frog" 16 times). No size cap: 5275 designs -> 2398 unique
-// captions -> ~31KB / ~7800 tokens, checked live 2026-08-08 — trivial
-// against the model's context window, and a cap here is exactly the bug
-// class that already bit this file once (an earlier album-caption cap of
-// 80 silently excluded ~30% of albums alphabetically). Revisit if the
-// catalog grows enough to make this a real cost/context concern.
+// "Kawaii Cottagecore Frog") — first because the list was ALBUM captions
+// (114 of them, e.g. "Children") not individual design names (fixed
+// 2026-08-08), and more fundamentally because exact-string comparison
+// can't catch a near-duplicate like "kawaii green frog" against "Kawaii
+// Cottagecore Frog" — no shared substring, but semantically the same
+// subject. search_catalog runs a real embedding-similarity lookup
+// (findNearestTextMatch(), semantic-search.ts) against the catalog's
+// precomputed Titan text embeddings, so it judges by meaning, not
+// spelling, and the model can check as many candidate themes as it likes
+// mid-reasoning instead of eyeballing one static list once.
+const SEARCH_CATALOG_TOOL: Anthropic.Tool = {
+  name: 'search_catalog',
+  description:
+    "Check whether a candidate cross-stitch design theme already closely matches an existing design in my catalog. This uses semantic similarity, not exact text matching, so it catches near-duplicates a literal name comparison would miss (e.g. 'kawaii green frog' vs an existing 'Kawaii Cottagecore Frog' design). Call this for any theme you're seriously considering before finalizing your answer, and call it again if you switch to a different candidate theme.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      candidateTheme: {
+        type: 'string',
+        description: "The theme you're currently considering, e.g. 'autumn hedgehog'",
+      },
+    },
+    required: ['candidateTheme'],
+  },
+};
+
+// Executes search_catalog when the model calls it. Non-fatal by design —
+// same "never block the pipeline over a helper AI/lookup failure" pattern
+// as design-seo-description.ts: if the embedding call or vector load
+// fails, tell the model to fall back to its own judgment rather than
+// throwing out of detectTrend() entirely.
 //
-// Stopgap, not the real fix — Olga's ask (2026-08-08): discuss embeddings/
-// vector similarity for this matching problem next session (see Focus.md
-// "Next session"). Exact-string dedup still can't catch e.g. "kawaii
-// green frog" as a near-duplicate of "Kawaii Cottagecore Frog" the way a
-// semantic match could.
-async function getExistingDesignCaptions(): Promise<string[]> {
-  const designs = await fetchAllDesigns();
-  return Array.from(new Set(designs.map((d) => d.Caption).filter((c): c is string => !!c)));
+// The similarity threshold for "counts as a duplicate" is NOT enforced
+// here — this returns the raw score and lets the model judge, since no
+// real-world calibration data exists yet for what score actually means
+// "same subject" for Titan's text embeddings. Revisit once a few real
+// runs show what scores genuine near-duplicates (like the frog case)
+// versus genuinely distinct themes actually produce.
+async function runSearchCatalogTool(candidateTheme: string): Promise<string> {
+  try {
+    const match = await findNearestTextMatch(candidateTheme);
+    if (!match) return 'No existing designs found to compare against.';
+    const design = await getDesignById(match.designId);
+    const caption = design?.Caption ?? `design #${match.designId}`;
+    return `Closest existing match: "${caption}" (similarity score ${match.similarity.toFixed(3)}; higher means more similar — treat anything that reads as clearly the same subject as already covered).`;
+  } catch (e) {
+    console.error('[trend-detection] search_catalog tool execution failed:', e);
+    return 'Catalog search is temporarily unavailable — proceed using your own judgment.';
+  }
 }
 
 // 2026-08-08: the "respond with ONLY a JSON object, no other text" instruction
@@ -90,16 +129,14 @@ async function getExistingDesignCaptions(): Promise<string[]> {
 // change. Not yet confirmed this actually fixes the gate (citation
 // attachment is the model's call, not something forced by instruction) —
 // next live detectTrend() run will show whether distinctCitedUrls improves.
-export function buildPrompt(existingThemes: string[]): string {
-  const avoidList = existingThemes.join(', ');
-
+export function buildPrompt(): string {
   return `I run cross-stitch.com, a cross-stitch pattern catalog site. I want to grow the catalog by generating a new design around a theme that is genuinely trending RIGHT NOW specifically within the cross-stitch hobby community — not general home-decor or craft trends.
 
 Search specifically within cross-stitch sources: cross-stitch-tagged Pinterest boards/pins, Etsy cross-stitch-pattern bestsellers or new-and-notable listings, r/CrossStitch discussion threads, and cross-stitch-specific Google Trends queries. Do not rely on general "trending in home decor" or "popular crafts" searches — the signal has to come from the cross-stitch niche itself.
 
 Propose exactly ONE visual theme suitable for a cross-stitch pattern. It must be:
 - A single clear subject (e.g. "a fox"), NOT an abstract concept and NOT a busy multi-subject scene — this needs to convert cleanly into a limited-color-palette image later, so simplicity matters more than novelty.
-- Something NOT already well covered in my existing catalog. Here is the full list of my current catalog's individual design names, so you can avoid overlapping with them (an album may hold many differently-named designs on the same subject — a subject appearing repeatedly by name here, even under an unrelated album, counts as already covered): ${avoidList}
+- Something NOT already well covered in my existing catalog. Use the search_catalog tool to check any candidate theme against my catalog before settling on it — it tells you the closest existing match by meaning, not just by name, so a differently-worded near-duplicate still counts as already covered. Check as many candidates as you need to find one that's genuinely new.
 
 Also research, from the same cross-stitch-specific sources, TWO more things about this theme:
 - **Size**: what finished/pattern size is currently popular for this kind of subject in cross-stitch listings/patterns — small quick-stitch motifs, medium wall-art pieces, or large detailed portraits. Translate that into an approximate stitch-count size (width x height in stitches — typical range is roughly 40-250 per side; small quick projects are 40-90, medium wall art 90-160, large detailed pieces 160-250).
@@ -260,8 +297,6 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  const existingThemes = await getExistingDesignCaptions();
-
   // 2026-08-08: explicit timeout, shorter than the SDK's own 10-minute
   // default (confirmed in client.d.ts — and retried on timeout by
   // default, so worst case is even longer). This is a manually-triggered,
@@ -273,34 +308,60 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
   const client = new Anthropic({ apiKey, timeout: 120_000 });
   const tools: Anthropic.Tool[] = [
     { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCH_USES } as unknown as Anthropic.Tool,
+    SEARCH_CATALOG_TOOL,
   ];
-  let messages: Anthropic.MessageParam[] = [{ role: 'user', content: buildPrompt(existingThemes) }];
+  let messages: Anthropic.MessageParam[] = [{ role: 'user', content: buildPrompt() }];
 
-  // Accumulated across every response in the pause_turn loop, not just the
-  // final one — search calls and their citations can land in an earlier
-  // continuation than the one that finally emits the JSON answer, so both
-  // the search-evidence check and the grounding assessment need the full
-  // conversation's content, not just response.content from the last turn.
+  // Accumulated across every response in the pause_turn/tool_use loop, not
+  // just the final one — search calls and their citations can land in an
+  // earlier continuation than the one that finally emits the JSON answer,
+  // so both the search-evidence check and the grounding assessment need
+  // the full conversation's content, not just response.content from the
+  // last turn.
   const allContent: Anthropic.ContentBlock[] = [];
 
   let response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
   allContent.push(...response.content);
 
   let continuations = 0;
-  while (response.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
+  while (
+    (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') &&
+    continuations < MAX_CONTINUATIONS
+  ) {
     messages = [...messages, { role: 'assistant', content: response.content }];
+
+    // pause_turn (web_search) needs nothing from us — Anthropic already
+    // executed it server-side. tool_use (search_catalog) is a CLIENT tool:
+    // we have to actually run it ourselves and hand the result back as a
+    // tool_result message before the model can continue.
+    if (response.stop_reason === 'tool_use') {
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type !== 'tool_use' || block.name !== 'search_catalog') continue;
+        const input = block.input as { candidateTheme?: string };
+        const resultText = input?.candidateTheme
+          ? await runSearchCatalogTool(input.candidateTheme)
+          : 'Missing candidateTheme argument.';
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: resultText });
+      }
+      if (toolResults.length > 0) {
+        messages = [...messages, { role: 'user', content: toolResults }];
+      }
+    }
+
     response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
     allContent.push(...response.content);
     continuations++;
   }
-  if (response.stop_reason === 'pause_turn') {
+  if (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') {
     // Loop exited only because MAX_CONTINUATIONS was hit, not because the
     // model naturally finished — the conversation was still mid-flow
-    // (more searches queued, or mid-sentence). Temporary diagnostic added
-    // 2026-08-08 after two real truncated-response failures survived a
-    // max_tokens bump — confirms whether the real bottleneck is turn count
-    // (MAX_CONTINUATIONS) rather than per-turn token budget.
-    console.warn('[trend-detection] exited the continuation loop while still pause_turn — MAX_CONTINUATIONS reached before the model naturally finished');
+    // (more searches or catalog checks queued, or mid-sentence). Temporary
+    // diagnostic added 2026-08-08 after two real truncated-response
+    // failures survived a max_tokens bump — confirms whether the real
+    // bottleneck is turn count (MAX_CONTINUATIONS) rather than per-turn
+    // token budget.
+    console.warn(`[trend-detection] exited the continuation loop while still ${response.stop_reason} — MAX_CONTINUATIONS reached before the model naturally finished`);
   }
 
   if (!hasRealWebSearchEvidence(allContent)) {

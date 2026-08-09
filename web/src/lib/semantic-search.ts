@@ -90,3 +90,22 @@ export async function imageSearch(base64Image: string, count = 60): Promise<numb
   const [index, queryVec] = await Promise.all([loadVectorIndex(), embedImage(base64Image)]);
   return rankByVector(queryVec, index.img, count);
 }
+
+export interface CatalogMatch {
+  designId: number;
+  similarity: number;
+}
+
+// Same brute-force approach as rankByVector, but returns the single
+// closest design and its raw score instead of a ranked ID list — for
+// duplicate-detection callers (trend-detection.ts's search_catalog tool)
+// that need to know HOW similar the nearest match is, not just its rank.
+export async function findNearestTextMatch(text: string): Promise<CatalogMatch | null> {
+  const [index, queryVec] = await Promise.all([loadVectorIndex(), embedText(text)]);
+  let best: CatalogMatch | null = null;
+  for (const [designId, vec] of index.txt) {
+    const similarity = dotProduct(queryVec, vec);
+    if (!best || similarity > best.similarity) best = { designId, similarity };
+  }
+  return best;
+}

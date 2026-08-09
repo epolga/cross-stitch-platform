@@ -218,6 +218,13 @@
    planned before drawing a real conclusion. Still open: decide the
    trigger mechanism (button vs. scheduled — Olga wants to revisit this
    once the pipeline is more settled).
+   **Catalog dedup rebuilt on a `search_catalog` tool 2026-08-09** — see
+   the dated entry further down and `DECISIONS.md` ADR-009. **Pick up here
+   next:** run `detectTrend()` for real, confirm the model actually calls
+   `search_catalog`, and record what similarity score a known near-
+   duplicate ("kawaii green frog" vs. the real "Kawaii Cottagecore Frog"
+   caption) actually produces — first real calibration data point, no
+   threshold exists yet.
 
    **First real end-to-end run, same day:** the OpenAI capybara image
    (raw, with its vignette background — Olga's explicit pick, not the
@@ -712,6 +719,44 @@
      by `ai-design-generations.ts`, so no redeploy needed, just a commit.
      **Not yet re-run for real** after this fix — next live `detectTrend()`
      call will show whether "frog" stops recurring.
+   - **Real fix, 2026-08-09 — the embeddings/vectors discussion Olga asked
+     for, plus implementation the same session.** Walked through what
+     embeddings are (contrasted against `GetHashCode()`/exact `LIKE`
+     matching — distance-preserving vs no notion of closeness), confirmed
+     the catalog already has precomputed Titan text embeddings
+     (`embeddings/vectors.json`, from Opportunity 2's already-shipped
+     semantic search) and existing brute-force comparison code
+     (`rankByVector`/`dotProduct` in `semantic-search.ts`) that could be
+     reused rather than requiring new infrastructure (OpenSearch discussed
+     and explicitly deferred — real k-NN indexing only matters at a scale
+     far beyond today's ~5,271 designs; brute-force is already fast enough
+     here). Olga's own insight mid-discussion — the dedup check shouldn't
+     be a static list OR a bolt-on post-hoc check, it should let the
+     *search* itself query the catalog live — converged on exactly
+     Focus.md's "second idea" from 2026-08-08 (a custom `search_catalog`
+     tool). Full design + trade-offs: `DECISIONS.md` ADR-009. **Built the
+     same session:** `findNearestTextMatch()` (new export,
+     `semantic-search.ts`) + `SEARCH_CATALOG_TOOL`/`runSearchCatalogTool()`
+     (`trend-detection.ts`) + `tool_use` handling added to `detectTrend()`'s
+     continuation loop (previously only handled `pause_turn`) +
+     `MAX_CONTINUATIONS` 2→4 (client-tool round-trips now share that
+     budget with `web_search` continuations) + the old text avoid-list and
+     `getExistingDesignCaptions()` removed entirely from `buildPrompt()`.
+     Verified: `tsc --noEmit` clean, `eslint` clean, Vitest 88/88 (13/13 in
+     `trend-detection.test.ts`, rewritten for `buildPrompt()`'s new no-arg
+     signature). **No similarity threshold hardcoded** — deliberate, see
+     ADR-009: no real score data exists yet for what Titan's text
+     embeddings actually produce for a genuine near-duplicate vs. a
+     genuinely new theme, so the model gets the raw score and judges it
+     itself rather than a guessed cutoff. **Still not part of the deployed
+     web app** — same as the 2026-08-08 fix, `trend-detection.ts` has no
+     route calling it; only trigger remains the manual
+     `run-trend-detection.ts` script, so no `eb deploy` needed, just a
+     commit. **Not yet exercised by a real API call** — next live
+     `detectTrend()` run is what will show whether the model actually
+     calls `search_catalog`, and what real similarity scores look like for
+     a known case (re-run the "kawaii green frog" scenario specifically to
+     get a first real calibration data point).
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
