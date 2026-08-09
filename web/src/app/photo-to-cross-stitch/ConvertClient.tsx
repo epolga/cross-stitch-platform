@@ -517,6 +517,19 @@ export default function ConvertPage() {
 
   function snap(): Snapshot { return { grid: gridRef.current, palette: paletteRef.current }; }
 
+  // Ask for a quality rating a few seconds after the user has had a
+  // moment to actually look at the result — used both right after a
+  // fresh photo conversion (handleImport) and after saving edits to an
+  // already-open pattern (handleSave), so a "No, here's why" reason gets
+  // captured (and shows up in /admin/editor-analytics's recent-reasons
+  // list) whether the user is judging a first conversion or a round of
+  // manual touch-ups, not just the former.
+  function armQualityFeedback() {
+    if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
+    setShowQualityFeedback(false);
+    qualityFeedbackTimerRef.current = setTimeout(() => setShowQualityFeedback(true), 4000);
+  }
+
   // Import from photo (called by ImportFromPhotoDialog on success)
   function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
     setPatternName('');
@@ -553,11 +566,7 @@ export default function ConvertPage() {
       postEditorEvent('pattern_generated_return_visit', { gapHours: returnCheck.gapHours });
     }
 
-    // Ask for a quality rating a few seconds after generation, once the
-    // user has had a moment to actually look at the result.
-    if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
-    setShowQualityFeedback(false);
-    qualityFeedbackTimerRef.current = setTimeout(() => setShowQualityFeedback(true), 4000);
+    armQualityFeedback();
   }
 
   // Download PDF from current (edited) grid
@@ -993,7 +1002,7 @@ export default function ConvertPage() {
           // the diff compares this just-saved grid/palette against the AI
           // snapshot, so it only makes sense once the save has landed.
           if (isAdmin && isAiDraft && needsAiReview) startAiReview();
-          else showToast('Saved ✓');
+          else { showToast('Saved ✓'); armQualityFeedback(); }
         })
         .catch((e: unknown) => {
           // Silent only for errors that already showed their own feedback
