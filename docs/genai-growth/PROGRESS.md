@@ -829,6 +829,29 @@
      (`distinctCitedUrls: 0` despite 15 real search queries) — same
      still-open, separate issue as Open item #17, not something this
      session's work touched or fixed.
+   - **Open item #17 (grounding gate) actually fixed, same session,
+     2026-08-09 — the 2026-08-08 prompt fix was confirmed NOT the real
+     cause.** Researched Anthropic's own docs directly rather than
+     guessing further (a dedicated Explore-style research pass): citations
+     are documented as "always enabled" for `web_search` — no missing
+     config flag explains empty citations. Real finding:
+     `web_search_20260209`'s `allowed_callers` defaults to
+     `['code_execution_20260120']`, meaning searches route through a
+     code-execution intermediary rather than the model calling the tool
+     directly — plausibly also *why* the `container_id` 400 error existed
+     earlier in this same session (same underlying code-execution
+     routing). Forced `allowed_callers: ['direct']` explicitly on the tool
+     definition. **Next live run ("praying mantis", a deliberate
+     grounding-gate-only test, not an image-generation round) passed
+     cleanly**: `distinctCitedUrls: 2`, real Etsy + Alibris citations with
+     actual quoted `citedText`, `passesGate: true` — first real pass
+     across 3+ live attempts (Round 2, Round 3, and two runs this
+     session). Not fully explained by documentation (Anthropic doesn't
+     document `allowed_callers` as a citations lever specifically — this
+     was an inferred, then empirically-confirmed fix, not a documented
+     one), so worth re-confirming on a couple more real runs before
+     treating this as fully settled, same caution as any n=1(-ish) finding
+     elsewhere in this doc.
 
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.

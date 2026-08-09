@@ -358,7 +358,19 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
   // out the SDK default.
   const client = new Anthropic({ apiKey, timeout: 120_000 });
   const tools: Anthropic.Tool[] = [
-    { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCH_USES } as unknown as Anthropic.Tool,
+    // 2026-08-09: allowed_callers explicitly forced to ['direct'] — the
+    // default for web_search_20260209 is ['code_execution_20260120'],
+    // meaning searches route through a code-execution intermediary
+    // instead of the model calling the tool directly. Confirmed via
+    // Anthropic's own docs: citations are "always enabled" for web_search
+    // (no missing-flag explanation for our real, repeated
+    // distinctCitedUrls: 0 across every live run so far), and the
+    // container_id 400 error found the same day is itself evidence of
+    // code-execution-backed tool routing. Not confirmed yet whether this
+    // is the actual cause of the citation gap (undocumented), but it's
+    // the one real lever available to test the hypothesis — verify via
+    // the next live run whether distinctCitedUrls improves.
+    { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCH_USES, allowed_callers: ['direct'] } as unknown as Anthropic.Tool,
     SEARCH_CATALOG_TOOL,
   ];
   let messages: Anthropic.MessageParam[] = [{ role: 'user', content: buildPrompt() }];

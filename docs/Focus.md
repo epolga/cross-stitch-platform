@@ -319,18 +319,21 @@ didn't log the user in).
     `docs/session-log/2026-08.md`. K-means quantization pre-pass
     (`OUTLINE_QUANTIZE_COLORS = 30`) fixed the puppy ear/leg noise;
     verified against all 3 test images with no regression.
-17. **Track 2 grounding-gate fix — needs a real `detectTrend()` run to
-    confirm.** 2026-08-08: Round 2 live run (theme "kawaii cottagecore
-    frog") hit a real grounding-gate failure — 15 real search queries, 0
-    cited URLs (`distinctCitedUrls: 0`). Suspected cause: `buildPrompt()`'s
-    old "respond with ONLY a JSON object, no other text" instruction left
-    no room for citation markup to attach. Changed `buildPrompt()`
-    (`web/src/lib/trend-detection.ts`) to ask for a short cited paragraph
-    before the JSON — **not yet verified against a real API call**. Next
-    time `detectTrend()` runs for real, check whether `grounding.
-    distinctCitedUrls`/`passesGate` actually improves. Full detail:
-    `docs/genai-growth/PROGRESS.md`, `docs/genai-growth/
-    IMAGE_GENERATION_PREFERENCES.md` Round 2.
+17. ~~Track 2 grounding-gate fix — needs a real `detectTrend()` run to
+    confirm.~~ — **actually fixed 2026-08-09**, after the 2026-08-08
+    "cited paragraph" prompt fix was confirmed NOT to work (`distinctCitedUrls:
+    0` recurred on 2026-08-09's "luna moth" run despite it). Real cause,
+    found via researching Anthropic's own docs rather than guessing
+    further: `web_search_20260209`'s `allowed_callers` defaults to
+    `['code_execution_20260120']` — searches were routing through a
+    code-execution intermediary instead of the model calling the tool
+    directly (this is also almost certainly *why* the `container_id` 400
+    error existed at all — same underlying code-execution routing).
+    Explicitly forced `allowed_callers: ['direct']` on the tool
+    (`web/src/lib/trend-detection.ts`) — next live run ("praying mantis")
+    passed the gate cleanly: `distinctCitedUrls: 2`, real Etsy/Alibris
+    citations with actual cited text, `passesGate: true`. First real pass
+    in 3+ live attempts. Full detail: `docs/genai-growth/PROGRESS.md`.
 18. ~~Real product bug: `pattern-converter.ts`'s `convertImage()` gave
     transparent-PNG uploads a BLACK background instead of white~~ —
     **fixed and deployed 2026-08-08.** Found while investigating the
@@ -429,6 +432,6 @@ didn't log the user in).
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
 - [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
-- [ ] Track 2 grounding-gate `buildPrompt()` fix confirmed against a real `detectTrend()` run (see Open item #17)
+- [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17) — fixed 2026-08-09 via `allowed_callers: ['direct']`, not the original 08-08 prompt fix
 - [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20) — confirmed 2026-08-09, 3 real bugs found+fixed along the way
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18) — deployed 2026-08-08, Health Green, verified

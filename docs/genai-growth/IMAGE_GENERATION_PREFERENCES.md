@@ -10,7 +10,7 @@ back into future generation prompts, not model fine-tuning. Started
 
 ## Running score
 
-- **OpenAI (gpt-image-1): 3**
+- **OpenAI (gpt-image-1): 4**
 - **Stability AI (stable-image-core): 0**
 
 ## Providers in play
@@ -157,6 +157,15 @@ not drifting or theme-dependent. Images: `D:\ann\tmp_scratch_genai\
 stability.png`, `D:\ann\tmp_scratch_genai\openai.png` (overwritten from
 Round 2 — same filenames each run, save a copy first if a past round's
 image needs to survive the next run).
+
+## Round 4 — 2026-08-09, theme: "luna moth"
+
+Real end-to-end run through the newly-fixed `search_catalog` dedup pipeline (see `PROGRESS.md`/`DECISIONS.md` ADR-009 for that session's 3 real bugs found+fixed). `detectTrend()`: `targetWidth: 150, targetHeight: 130` — first non-square researched size seen in any real round, so `pickStabilityAspectRatio`/`pickOpenAiSize` finally got exercised on a real non-square case (Stability requested 5:4). Grounding gate failed again on this specific run (`distinctCitedUrls: 0`) — fixed immediately after, see Open item #17 below.
+
+- **Stability**: same pattern as every prior round — ignored the flat-kawaii/no-shading/no-shadow instructions entirely, produced a photorealistic moth with a soft drop shadow.
+- **OpenAI**: style followed well — flat illustration, bold clean outlines, colors matching the researched `colorPalette` (mint-green wings, dusty pink-lavender edging, rust-brown eyespots).
+
+**Olga's verdict:** OpenAI, same reason as Rounds 1-3 — sharper, reads as background-free without a removal step. Scored **OpenAI +1**, running score now **4-0**. Four consecutive rounds on the exact same stated criterion — signal continues to hold, still short of the file's own 5-8 round threshold before treating it as fully settled, but one round away. Saved as a real draft pattern (not published to catalog): `save-ai-draft.ts`, pattern id `099bf986-e768-4e3c-9098-904ea8c03f89`, owner Olga's account, 150x150 converted → 143x109 after Size to Design, 31 colors. Generation tracked: `AiDesignGenerations` id `0ba8c38e-245f-4a06-b89f-9886f4bbb35d`.
 
 ## Next rounds
 
