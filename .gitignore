@@ -25,6 +25,7 @@ send-log-*.jsonl
 reports/
 .a5c_backup/
 **/lambda/dist/
+embeddings-progress.json
 
 # Scratch/diagnostic scripts (one-off, underscore-prefixed by convention)
 **/scripts/_*.ts

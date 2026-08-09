@@ -378,16 +378,39 @@ didn't log the user in).
     toast for any non-silent error instead of showing nothing. Verified
     live against the real pattern after both the IAM fix and the code
     fix. Full detail: `docs/genai-growth/PROGRESS.md`.
-20. **Track 2 catalog-dedup `search_catalog` tool — needs a real
-    `detectTrend()` run to confirm.** 2026-08-09: replaced the text
-    avoid-list with a custom client-side tool (`search_catalog`) that runs
-    a real embedding-similarity check against the catalog — full detail
-    `docs/genai-growth/DECISIONS.md` ADR-009. Verified only via
-    `tsc`/`eslint`/Vitest against mocked input, **not yet against a real
-    Anthropic API call** — next live run should confirm the model actually
-    calls the tool, and ideally re-test the "kawaii green frog" scenario
-    specifically to get a first real similarity-score data point (no
-    threshold is hardcoded yet, see ADR-009).
+20. ~~Track 2 catalog-dedup `search_catalog` tool — needs a real
+    `detectTrend()` run to confirm.~~ — **confirmed live 2026-08-09**,
+    after fixing 3 real bugs the first live attempts surfaced (see
+    `docs/genai-growth/PROGRESS.md` for full detail):
+    - **400 error, `container_id is required...`** — a client tool
+      (`search_catalog`) coexisting with `web_search`'s `pause_turn`
+      continuations needs the server's `container` id echoed back on every
+      follow-up request. Fixed.
+    - **`extractJson()` rejected a valid response** — model returned
+      `targetWidth`/`targetHeight` as quoted numeric strings (`"70"`), not
+      numbers; strict `typeof` check discarded an otherwise-complete,
+      well-grounded answer. Now coerces either shape.
+    - **Real embedding-staleness gap found (not a `search_catalog` logic
+      bug)**: `vectors.json` had 5260/5276 designs — 16 published designs
+      (including a real "Capybara", DesignID 5462) had no embedding at
+      all, so `search_catalog` couldn't have found them regardless of
+      similarity logic. Backfilled the 16 (`generate-embeddings.ts` now
+      seeds from the existing S3 file instead of redoing all 5276 when the
+      local checkpoint is missing), and — Olga's ask — this is no longer a
+      one-off manual fix: `detectTrend()` now calls a new
+      `backfillMissingEmbeddings()` (`semantic-search.ts`) itself before
+      every run, so this gap can't silently reopen.
+    - **First real successful result**: theme "luna moth", 150x130 (first
+      non-square researched size), real cited Etsy/Pinterest sources, and
+      the model's own `reasoning` referenced an actual existing catalog
+      design ("unlike the existing generic Butterfly entry") — verified
+      real, not hallucinated (59 real "Butterfly*"-captioned designs
+      exist). Strong indirect evidence `search_catalog`/catalog-awareness
+      is working, though no direct per-tool-call log exists yet to prove
+      the tool itself fired vs. general model knowledge.
+    - **Grounding gate failed again** (`distinctCitedUrls: 0` despite 15
+      real queries) — same still-open, separate issue as Open item #17;
+      not addressed by this work.
 
 ## Done when
 
@@ -407,5 +430,5 @@ didn't log the user in).
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
 - [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
 - [ ] Track 2 grounding-gate `buildPrompt()` fix confirmed against a real `detectTrend()` run (see Open item #17)
-- [ ] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
+- [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20) — confirmed 2026-08-09, 3 real bugs found+fixed along the way
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18) — deployed 2026-08-08, Health Green, verified

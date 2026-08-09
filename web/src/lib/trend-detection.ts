@@ -11,7 +11,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getDesignById } from './data-access';
-import { findNearestTextMatch } from './semantic-search';
+import { findNearestTextMatch, backfillMissingEmbeddings } from './semantic-search';
 
 export interface ParsedTrend {
   theme: string;
@@ -156,6 +156,22 @@ Then, on its own line after that paragraph, respond with a JSON object with exac
 }`;
 }
 
+// 2026-08-09: found via a real live run — the model returned
+// `"targetWidth": "70"` (a quoted numeric string), not `70`, despite
+// buildPrompt() asking for "a number". A strict `typeof === 'number'`
+// check rejected an otherwise-complete, well-grounded response (real
+// theme, real cited sources) over a formatting slip unrelated to
+// anything the caller actually cares about. Accepts either shape and
+// normalizes to a real number either way.
+function coerceNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 export function extractJson(text: string): ParsedTrend | null {
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {
@@ -170,18 +186,36 @@ export function extractJson(text: string): ParsedTrend | null {
   }
   try {
     const parsed = JSON.parse(match[0]);
+    const targetWidth = coerceNumber(parsed.targetWidth);
+    const targetHeight = coerceNumber(parsed.targetHeight);
     if (
       typeof parsed.theme === 'string' &&
       typeof parsed.imagePrompt === 'string' &&
       typeof parsed.signalSource === 'string' &&
       typeof parsed.reasoning === 'string' &&
-      typeof parsed.targetWidth === 'number' &&
-      typeof parsed.targetHeight === 'number' &&
+      targetWidth !== undefined &&
+      targetHeight !== undefined &&
       typeof parsed.colorPalette === 'string'
     ) {
-      return parsed as ParsedTrend;
+      return { ...parsed, targetWidth, targetHeight } as ParsedTrend;
     }
-    console.error('[trend-detection] parsed JSON missing expected fields:', parsed);
+    // 2026-08-09: this branch only ever logged the (partial) parsed
+    // object, not the raw match — indistinguishable from "the model wrote
+    // a genuinely different shape" vs. "generation got cut off mid-JSON
+    // and the regex's greedy match happened to still find a `}` later in
+    // the text, producing a parseable but truncated object." Found live:
+    // a response with only `theme`/`imagePrompt` present, nothing else —
+    // consistent with hitting MAX_TOKENS before finishing, now more
+    // likely since search_catalog's extra turns/tool_result content grow
+    // the conversation. Log length + raw match so a future occurrence is
+    // diagnosable instead of just "some fields were missing."
+    console.error(
+      '[trend-detection] parsed JSON missing expected fields:',
+      parsed,
+      '| full text length:', text.length,
+      '| matched JSON length:', match[0].length,
+      '| matched JSON snippet (last 500 chars):', match[0].slice(-500),
+    );
     return null;
   } catch (e) {
     console.error('[trend-detection] failed to parse JSON from response:', e);
@@ -297,6 +331,23 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
+  // 2026-08-09: run every time, not a one-off manual fix (Olga's ask) —
+  // search_catalog is only useful if the embedding it searches against
+  // actually exists. Cheap when nothing's missing (just the index load
+  // findNearestTextMatch() needs anyway); only costs real Bedrock calls
+  // when the catalog has genuinely grown since the last run. Non-fatal:
+  // a backfill failure shouldn't block trend detection itself, since
+  // search_catalog still degrades gracefully (runSearchCatalogTool()'s
+  // own try/catch) against whatever the index already has.
+  try {
+    const backfill = await backfillMissingEmbeddings();
+    if (backfill.added > 0 || backfill.errors > 0) {
+      console.log(`[trend-detection] catalog embedding backfill: +${backfill.added}, ${backfill.errors} errors`);
+    }
+  } catch (e) {
+    console.error('[trend-detection] catalog embedding backfill failed, proceeding with existing index:', e);
+  }
+
   // 2026-08-08: explicit timeout, shorter than the SDK's own 10-minute
   // default (confirmed in client.d.ts — and retried on timeout by
   // default, so worst case is even longer). This is a manually-triggered,
@@ -322,6 +373,16 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
 
   let response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
   allContent.push(...response.content);
+  // 2026-08-09: found via a real live failure the first time search_catalog
+  // (a client tool) coexisted with web_search's pause_turn continuations in
+  // the same run: "container_id is required when there are pending tool
+  // uses generated by code execution with tools" (400 error). The SDK's
+  // Message type documents `container` as "for the code execution tool,"
+  // but it's returned whenever the server needs one to keep a multi-turn
+  // tool-use conversation coherent — every continuation must echo the same
+  // container id back, or the server can't resolve the pending tool uses
+  // from the previous turn.
+  let containerId: string | undefined = response.container?.id;
 
   let continuations = 0;
   while (
@@ -349,8 +410,15 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
       }
     }
 
-    response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
+    response = await client.messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      tools,
+      messages,
+      container: containerId,
+    });
     allContent.push(...response.content);
+    containerId = response.container?.id ?? containerId;
     continuations++;
   }
   if (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') {

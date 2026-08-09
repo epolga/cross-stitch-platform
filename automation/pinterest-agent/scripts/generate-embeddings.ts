@@ -27,7 +27,7 @@ dotenv.config({ path: path.join(process.cwd(), ".env") });
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 
 const REGION = process.env.AWS_REGION ?? "us-east-1";
 const ITEMS_TABLE = process.env.ITEMS_TABLE_NAME ?? "CrossStitchItems";
@@ -62,12 +62,32 @@ interface Progress {
   startedAt?: string;
 }
 
-function loadProgress(): Progress {
+// 2026-08-09: found live — the local checkpoint file is machine-specific
+// and not committed to git (see .gitignore), so a fresh checkout/machine
+// has no local progress even though S3 already has almost everything
+// (found via a real gap: vectors.json had 5260/5276 designs, capybara
+// among the 16 missing, published after the last embeddings run and
+// never backfilled). Without this, a plain re-run here would silently
+// redo all 5276 designs from scratch (~2-3h, ~$0.35) instead of the ~16
+// actually missing. Seeding from the S3 file that's already the source
+// of truth for what's live means this script naturally stays a
+// cheap "fill the gaps" operation regardless of which machine/checkout
+// runs it, not just when its own local checkpoint happens to survive.
+async function loadProgress(): Promise<Progress> {
   if (fs.existsSync(PROGRESS_FILE)) {
-    console.log(`Resuming from ${PROGRESS_FILE}`);
+    console.log(`Resuming from local checkpoint ${PROGRESS_FILE}`);
     return JSON.parse(fs.readFileSync(PROGRESS_FILE, "utf-8"));
   }
-  return { vectors: {}, errors: [], startedAt: new Date().toISOString() };
+  try {
+    const resp = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: "embeddings/vectors.json" }));
+    const text = await resp.Body!.transformToString();
+    const vectors = JSON.parse(text) as Record<string, EmbeddingVector>;
+    console.log(`No local checkpoint — seeded from s3://${S3_BUCKET}/embeddings/vectors.json (${Object.keys(vectors).length} designs already done)`);
+    return { vectors, errors: [], startedAt: new Date().toISOString() };
+  } catch (err) {
+    console.log(`No local checkpoint and no existing S3 vectors file (${err instanceof Error ? err.message : err}) — starting fresh.`);
+    return { vectors: {}, errors: [], startedAt: new Date().toISOString() };
+  }
 }
 
 function saveProgress(progress: Progress) {
@@ -170,7 +190,7 @@ async function main() {
   let designs = await fetchAllDesigns();
   if (DRY_RUN) designs = designs.slice(0, 5);
 
-  const progress = loadProgress();
+  const progress = await loadProgress();
   const remaining = designs.filter(d => !progress.vectors[String(d.designId)] && !progress.errors.includes(d.designId));
 
   console.log(`Total: ${designs.length} | Done: ${Object.keys(progress.vectors).length} | Errors: ${progress.errors.length} | Remaining: ${remaining.length}`);

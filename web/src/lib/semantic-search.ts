@@ -1,5 +1,6 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
+import { fetchAllDesigns } from "@/lib/data-access";
 
 const S3_BUCKET = "cross-stitch-sitemap-cache";
 const VECTORS_KEY = "embeddings/vectors.json";
@@ -108,4 +109,71 @@ export async function findNearestTextMatch(text: string): Promise<CatalogMatch |
     if (!best || similarity > best.similarity) best = { designId, similarity };
   }
   return best;
+}
+
+// 2026-08-09: found live — vectors.json had 5260/5276 designs (the
+// "Capybara" design published via "Publish to Catalog" among the 16
+// missing), because nothing regenerates embeddings when a design is
+// added; only the standalone batch script
+// (automation/pinterest-agent/scripts/generate-embeddings.ts) does, and
+// only when someone remembers to run it. A stale index isn't just a
+// staleness nitpick here — it's a silent false negative for
+// trend-detection.ts's search_catalog tool (a genuinely duplicate theme
+// reads as brand new because the real match's vector simply isn't in the
+// index to be found). Olga's ask: always keep this current, not a
+// one-off manual fix — so detectTrend() calls this itself before running
+// (see trend-detection.ts), instead of relying on someone remembering to
+// run the batch script.
+//
+// Deliberately NOT the same code path as generate-embeddings.ts (that
+// one is a from-scratch full-catalog batch tool, DynamoDB Scan + its own
+// checkpoint file, meant to be run standalone in
+// automation/pinterest-agent). This is the same Titan calls, reusing
+// this file's own embedText/embedImage plus data-access.ts's already-
+// cached fetchAllDesigns(), so a "nothing missing" call (the common
+// case) costs no more than the index load already needed to serve a
+// search.
+export async function backfillMissingEmbeddings(): Promise<{ added: number; errors: number }> {
+  const [index, designs] = await Promise.all([loadVectorIndex(), fetchAllDesigns()]);
+  const missing = designs.filter((d) => !index.txt.has(d.DesignID));
+  if (missing.length === 0) return { added: 0, errors: 0 };
+
+  let added = 0;
+  let errors = 0;
+  for (const design of missing) {
+    try {
+      const imageUrl =
+        design.ImageUrl ||
+        `https://d2o1uvvg91z7o4.cloudfront.net/photos/${design.AlbumID}/${design.DesignID}/4.jpg`;
+      const imgResp = await fetch(imageUrl);
+      if (!imgResp.ok) throw new Error(`image fetch HTTP ${imgResp.status}`);
+      const base64Image = Buffer.from(await imgResp.arrayBuffer()).toString("base64");
+      const [imageVec, textVec] = await Promise.all([
+        embedImage(base64Image),
+        embedText(design.Caption || `design #${design.DesignID}`),
+      ]);
+      index.img.set(design.DesignID, imageVec);
+      index.txt.set(design.DesignID, textVec);
+      added++;
+    } catch (e) {
+      errors++;
+      console.error(`[semantic-search] backfill failed for design ${design.DesignID}:`, e);
+    }
+  }
+
+  if (added > 0) {
+    const merged: VectorsFile = {};
+    for (const [id, vec] of index.img) {
+      merged[id] = { imageVec: Array.from(vec), textVec: Array.from(index.txt.get(id) ?? []) };
+    }
+    await s3.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: VECTORS_KEY,
+      Body: JSON.stringify(merged),
+      ContentType: "application/json",
+    }));
+    devLog(`[semantic-search] Backfilled ${added} missing design embeddings (${errors} errors)`);
+  }
+
+  return { added, errors };
 }

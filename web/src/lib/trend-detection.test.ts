@@ -25,6 +25,39 @@ describe('extractJson', () => {
     });
   });
 
+  // 2026-08-09: real live failure — the model returned targetWidth/
+  // targetHeight as quoted numeric strings ("70") instead of numbers,
+  // despite buildPrompt() asking for numbers. A strict typeof check
+  // rejected an otherwise well-formed, well-grounded response over this.
+  it('coerces numeric-string targetWidth/targetHeight instead of rejecting them', () => {
+    const text = JSON.stringify({
+      theme: 'capybara portrait',
+      imagePrompt: 'A capybara.',
+      signalSource: 'Pinterest capybara cross-stitch board',
+      reasoning: 'Sustained niche demand.',
+      targetWidth: '70',
+      targetHeight: '70',
+      colorPalette: 'warm rodent-brown palette',
+    });
+    const result = extractJson(text);
+    expect(result?.targetWidth).toBe(70);
+    expect(result?.targetHeight).toBe(70);
+    expect(typeof result?.targetWidth).toBe('number');
+  });
+
+  it('returns null when targetWidth is a non-numeric string', () => {
+    const text = JSON.stringify({
+      theme: 'autumn fox',
+      imagePrompt: 'A fox.',
+      signalSource: 'r/CrossStitch',
+      reasoning: 'Popular.',
+      targetWidth: 'large',
+      targetHeight: 100,
+      colorPalette: 'warm autumn palette',
+    });
+    expect(extractJson(text)).toBeNull();
+  });
+
   it('returns null when a new size/color field is missing', () => {
     const text = JSON.stringify({
       theme: 'autumn fox',
