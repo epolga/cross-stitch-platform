@@ -37,8 +37,26 @@ export interface ParsedTrend {
   colorPalette: string;
 }
 
+// 2026-08-09: was a hard reject (returned null, threw the whole result
+// away) — Olga's call to soften it back to informational, same day it was
+// added. Reasoning: the check is text-only (caption+description
+// embeddings), so it can't tell whether a textually-similar theme would
+// actually render as a visually distinct design — a real risk of
+// discarding a genuinely different design over a caption-similarity
+// false positive. Surfaced in the result instead, same pattern as
+// `grounding`, so a human (Olga, reviewing the draft) makes the actual
+// accept/reject call with the real generated image in front of her,
+// not the model or this code guessing blind from text alone.
+export interface DuplicateCheckResult {
+  flagged: boolean;
+  similarity: number | null; // null only if the check itself failed (non-fatal)
+  matchedDesignId?: number;
+  matchedCaption?: string;
+}
+
 export interface TrendDetectionResult extends ParsedTrend {
   grounding: GroundingAssessment;
+  duplicateCheck: DuplicateCheckResult;
 }
 
 // Same cap and reasoning as aiToolsScan.ts: max_uses bounds the search
@@ -62,11 +80,9 @@ const MODEL = 'claude-sonnet-5';
 // actual "Capybara" design already in the catalog (well above the ~0.37
 // noise floor measured for a genuine non-match), meaning either the
 // model never called the tool for this theme, or called it and didn't
-// treat a clearly-duplicate score as disqualifying. Rather than trust
-// the model's judgment alone, detectTrend() now does its own final
-// design-level check on the model's SETTLED theme before returning it,
-// and hard-rejects (returns null) past this threshold — real code-level
-// enforcement, not just an informational tool result.
+// treat a clearly-duplicate score as disqualifying. detectTrend() now
+// does its own final design-level check on the model's SETTLED theme
+// before returning it.
 // Calibration is provisional (n=2): 0.6265 for a confirmed real
 // duplicate (capybara), ~0.37 for a confirmed real non-match (an
 // unrelated "Beaver" design was the nearest neighbor for a genuinely new
@@ -76,6 +92,15 @@ const MODEL = 'claude-sonnet-5';
 // definitely-not-a-match album-level nearest-neighbor scored 0.643 —
 // higher than the design-level real-duplicate score), and there isn't
 // enough real album-level data yet to trust a threshold there.
+// 2026-08-09, same day, softened back from a hard reject to informational
+// — Olga's call: this check is text-only (caption+description
+// embeddings), so it can't tell whether a caption-similar theme would
+// actually render as a visually distinct design. A hard reject risked
+// silently discarding a genuinely new design over a false positive, with
+// no way for a human to catch it. Now surfaced as `duplicateCheck` on the
+// returned result (see DuplicateCheckResult) instead of blocking —
+// Olga reviews the real generated image before deciding, not this
+// text-only heuristic.
 const DESIGN_DUPLICATE_THRESHOLD = 0.5;
 // 2026-08-08: was 2000 — confirmed via a real failure (extractJson's new
 // "no JSON found" logging showed the response cut off mid-sentence, still
@@ -590,24 +615,31 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  // Hard reject, not just informational — see DESIGN_DUPLICATE_THRESHOLD's
-  // comment above for why. Runs on the model's final, settled theme
+  // Informational, not a hard reject — see DuplicateCheckResult's comment
+  // above for why (Olga's call, 2026-08-09: a text-only check can't tell
+  // whether a caption-similar theme would actually render as a visually
+  // distinct design). Runs on the model's final, settled theme
   // (parsed.theme), independent of whether/how the model used
-  // search_catalog mid-reasoning — this is the real backstop.
+  // search_catalog mid-reasoning.
+  let duplicateCheck: DuplicateCheckResult = { flagged: false, similarity: null };
   try {
     const finalCheck = await findNearestTextMatch(parsed.theme);
-    if (finalCheck && finalCheck.similarity >= DESIGN_DUPLICATE_THRESHOLD) {
-      const existing = await getDesignById(finalCheck.designId);
-      console.error(
-        `[trend-detection] REJECTED — final theme "${parsed.theme}" scores ${finalCheck.similarity.toFixed(4)} against existing design "${existing?.Caption ?? finalCheck.designId}" (>= threshold ${DESIGN_DUPLICATE_THRESHOLD}). Treating as a duplicate, not returning this result.`,
-      );
-      return null;
+    if (finalCheck) {
+      const flagged = finalCheck.similarity >= DESIGN_DUPLICATE_THRESHOLD;
+      duplicateCheck = { flagged, similarity: finalCheck.similarity, matchedDesignId: finalCheck.designId };
+      if (flagged) {
+        const existing = await getDesignById(finalCheck.designId);
+        duplicateCheck.matchedCaption = existing?.Caption;
+        console.warn(
+          `[trend-detection] flagged (not rejected) — final theme "${parsed.theme}" scores ${finalCheck.similarity.toFixed(4)} against existing design "${existing?.Caption ?? finalCheck.designId}" (>= threshold ${DESIGN_DUPLICATE_THRESHOLD}). Review the generated image before deciding — text similarity alone doesn't mean the picture will look the same.`,
+        );
+      }
     }
   } catch (e) {
     // Non-fatal — same "don't block the pipeline over a helper check
-    // failing" pattern as runSearchCatalogTool(). Worse to silently
-    // reject a good result over a transient Bedrock/S3 error than to let
-    // one possible duplicate through occasionally.
+    // failing" pattern as runSearchCatalogTool(). duplicateCheck stays at
+    // its default (flagged: false, similarity: null) so the caller can
+    // tell "checked, looks fine" apart from "the check itself failed."
     console.error('[trend-detection] final duplicate check failed, proceeding without it:', e);
   }
 
@@ -618,5 +650,5 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     );
   }
 
-  return { ...parsed, grounding };
+  return { ...parsed, grounding, duplicateCheck };
 }

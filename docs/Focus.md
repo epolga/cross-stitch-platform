@@ -437,6 +437,41 @@ didn't log the user in).
     Verified: "vintage teapot" → "Teapot" (0.406), "mountain landscape" →
     "Mountain" (0.432), "red fox" → "Red Fox" (0.461), "capybara" →
     "Capybara" (0.520) — all now correct, on-topic matches.
+22. ~~Real production bug: "Minimalist Line Art Face" AI-draft saved
+    almost entirely empty~~ — **found (Olga's live catch) and fixed for
+    real 2026-08-09, three rounds before it was actually right.**
+    `save-ai-draft.ts` hardcoded conversion `mode` to `'illustration'`,
+    never called the existing `analyzeImage()` classifier.
+    - **Round 1**: traced the missing outline to
+      `detectBackgroundByFloodFill()`'s "harmless no-op for real-alpha
+      sources" fallback actually running for real on this no-alpha OpenAI
+      output — tolerance-30 flood fill tunneled through anti-aliased grey
+      edge pixels along the thin line, erasing 97.65%. Fixed by wiring in
+      `analyzeImage()` for real mode selection and skipping the
+      background-erasure fallback entirely for line-art/typography.
+    - **Round 2 (Olga caught it)**: the "skip entirely" fix traded one
+      bug for another — checked the actual saved palette directly and
+      found "blanc White" occupying 9175/10404 cells (88%) as a real
+      color to stitch, not blank canvas. Olga's proposed real fix: merge
+      anti-aliased grey edge pixels into pure black/white first
+      (`mergeGrayscaleTowardBlackWhite()`, new, `pattern-converter.ts`,
+      gated to `mode === 'line-art'`), then run the background-erasure
+      with EXACT match (tolerance 0) instead of skipping it — a uniform
+      background can't gradient-tunnel since there's no intermediate
+      shade left.
+    - **Round 3**: tolerance-0 erasure still ate the line — traced
+      step-by-step again and found a real, previously-hidden bug
+      independent of tolerance: the border-seeding loop marked EVERY
+      border cell as a background seed with NO color check at all. The
+      portrait's hairline/neck touch the frame edge, so a BLACK border
+      cell got seeded — the walk then correctly chained through
+      color-matching neighbors, but since it started ON the black
+      stroke, it consumed the entire connected outline (557 of 653 black
+      cells erased, confirmed directly). Fixed: a border cell only seeds
+      the fill if its own color is close to white first.
+    - Final verified result: 80x102, 4 real colors (black + 3 accents),
+      full outline intact, no spurious background color. Full detail:
+      `docs/genai-growth/PROGRESS.md`.
 
 ## Done when
 

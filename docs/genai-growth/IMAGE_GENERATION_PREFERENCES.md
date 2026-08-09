@@ -10,7 +10,7 @@ back into future generation prompts, not model fine-tuning. Started
 
 ## Running score
 
-- **OpenAI (gpt-image-1): 4**
+- **OpenAI (gpt-image-1): 5**
 - **Stability AI (stable-image-core): 0**
 
 ## Providers in play
@@ -166,6 +166,15 @@ Real end-to-end run through the newly-fixed `search_catalog` dedup pipeline (see
 - **OpenAI**: style followed well — flat illustration, bold clean outlines, colors matching the researched `colorPalette` (mint-green wings, dusty pink-lavender edging, rust-brown eyespots).
 
 **Olga's verdict:** OpenAI, same reason as Rounds 1-3 — sharper, reads as background-free without a removal step. Scored **OpenAI +1**, running score now **4-0**. Four consecutive rounds on the exact same stated criterion — signal continues to hold, still short of the file's own 5-8 round threshold before treating it as fully settled, but one round away. Saved as a real draft pattern (not published to catalog): `save-ai-draft.ts`, pattern id `099bf986-e768-4e3c-9098-904ea8c03f89`, owner Olga's account, 150x150 converted → 143x109 after Size to Design, 31 colors. Generation tracked: `AiDesignGenerations` id `0ba8c38e-245f-4a06-b89f-9886f4bbb35d`.
+
+## Round 5 — 2026-08-09, theme: "Mothman cryptid"
+
+Real end-to-end run through the newly-added hard duplicate threshold + grounding retry (see `DECISIONS.md` ADR-009's later 2026-08-09 updates). `detectTrend()` checked 9 different candidate themes via `search_catalog` before settling — all correctly matched sensible existing designs (Mouse, Aliens, Kawaii Pink Axolotl, Hummingbird, Goose, Ball, Bat, Blue Bow, Moon, Mushroom), confirming the Luna Moth embedding bug fix (Open item #21) held for real, not just in isolated spot-checks. Final theme "Mothman cryptid" checked against "Bat" (0.416) and "Monsters" album (0.518), both below the 0.5 design-level threshold — not rejected. Grounding passed cleanly on the first attempt (5 real citations: TheStitchCrypt.com, Pinterest, 2x Etsy), no retry needed. `targetWidth: 90, targetHeight: 100` (near-square, both pickers chose 1:1).
+
+- **Stability**: same pattern as every prior round — ignored the flat/no-shading/no-texture instructions entirely, produced a detailed, textured, shaded illustration (visible cross-hatching-like wing detail, subtle body shading) on an off-white/cream background rather than pure flat white.
+- **OpenAI**: style followed well — flat illustration, bold clean black outlines, solid flat color fills, vivid saturated red-orange eyes matching the researched `colorPalette`, clean flat white background.
+
+**Olga's verdict:** OpenAI, same stated reason as every prior round — sharper, reads as background-free without a removal step. Scored **OpenAI +1**, running score now **5-0**. This crosses the file's own 5-8 round threshold for the first time — five consecutive rounds on the exact same stated criterion (sharpness + no-background-removal-needed), never contradicted, never a different reason given. Worth treating as a settled preference for this pipeline going forward (default to OpenAI/gpt-image-1) rather than continuing to run every theme through both providers, though still worth a periodic spot-check against Stability given the "provider strategy" note below was about limiting providers tested per round, not committing to never re-checking. **Not saved as a draft** — Olga asked to search for a different theme instead of proceeding with Mothman.
 
 ## Next rounds
 

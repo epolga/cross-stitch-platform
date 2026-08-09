@@ -136,6 +136,27 @@ export interface CatalogMatch {
   similarity: number;
 }
 
+// 2026-08-09 (Olga's explicit priority correction): text-caption
+// similarity was never the actual thing worth avoiding — a name
+// collision is trivially fixed by renaming after the fact, based on what
+// the generated picture actually shows. VISUAL similarity to an existing
+// design is the real thing to catch, and nothing before this checked it —
+// findNearestTextMatch() only ever compared candidate THEME TEXT against
+// catalog caption/description text, never the generated IMAGE itself
+// against the catalog's image embeddings. This is the actual duplicate
+// check that matters; run it against the real generated image (after
+// generation, since no image exists yet during trend-detection's
+// text-only research phase) before saving a draft.
+export async function findNearestImageMatch(base64Image: string): Promise<CatalogMatch | null> {
+  const [index, queryVec] = await Promise.all([loadVectorIndex(), embedImage(base64Image)]);
+  let best: CatalogMatch | null = null;
+  for (const [designId, vec] of index.img) {
+    const similarity = dotProduct(queryVec, vec);
+    if (!best || similarity > best.similarity) best = { designId, similarity };
+  }
+  return best;
+}
+
 // Same brute-force approach as rankByVector, but returns the single
 // closest design and its raw score instead of a ranked ID list — for
 // duplicate-detection callers (trend-detection.ts's search_catalog tool)

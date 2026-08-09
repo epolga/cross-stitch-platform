@@ -588,6 +588,44 @@ function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: 
   return out;
 }
 
+// 2026-08-09 (Olga's ask, real live case): line-art source images
+// (AI-generated or otherwise) commonly have anti-aliased grey pixels
+// along the stroke's edges — a real saved draft ended up with 7 distinct
+// grey DMC entries from this alone. For a true line-art design these
+// aren't meaningful colors, just soft-edge artifacts of the line and the
+// background meeting; snap anything grayscale (low saturation — real
+// accent colors like the turquoise eye/gold earring in that same design
+// stay far more saturated than this) to whichever pure endpoint (black
+// ink or white background) it's closer to in lightness. Only applied in
+// line-art mode — a real illustration/photo can have legitimate grey
+// content (a cat's fur, a stone wall) that must NOT be forced to black
+// or white.
+const GRAYSCALE_SATURATION_THRESHOLD = 20;
+
+function nearestPureDmcIndex(target: 0 | 255): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < DMC.length; i++) {
+    const c = DMC[i];
+    const d = (c.r - target) ** 2 + (c.g - target) ** 2 + (c.b - target) ** 2;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+function mergeGrayscaleTowardBlackWhite(pixelDmc: number[], transparent: Uint8Array): void {
+  const blackIdx = nearestPureDmcIndex(0);
+  const whiteIdx = nearestPureDmcIndex(255);
+  for (let i = 0; i < pixelDmc.length; i++) {
+    if (transparent[i]) continue;
+    const c = DMC[pixelDmc[i]];
+    const saturation = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b);
+    if (saturation >= GRAYSCALE_SATURATION_THRESHOLD) continue;
+    const lightness = (c.r + c.g + c.b) / 3;
+    pixelDmc[i] = lightness < 128 ? blackIdx : whiteIdx;
+  }
+}
+
 // ── Main converter ───────────────────────────────────────────────────────────
 
 export async function convertImage(
@@ -715,6 +753,8 @@ export async function convertImage(
       if (dmc !== null) pixelDmc[i] = dmc;
     }
   }
+
+  if (mode === 'line-art') mergeGrayscaleTowardBlackWhite(pixelDmc, transparent);
 
   // Build compact palette — excluding transparent (background) pixels, so a
   // real alpha-transparent background never becomes a spurious "white"

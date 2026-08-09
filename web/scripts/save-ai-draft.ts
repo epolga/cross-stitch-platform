@@ -22,14 +22,34 @@
 // alpha data than this script's own flood-fill guess ever could.
 // detectBackgroundByFloodFill()/eraseBackground() below are kept as a
 // fallback for sources with NO alpha channel (e.g. Stability's output) —
-// harmless no-op for a real-alpha source, since convertImage() already
-// blanked the border cells this flood-fill starts from.
+// assumed "harmless no-op for a real-alpha source, since convertImage()
+// already blanked the border cells this flood-fill starts from."
+//
+// 2026-08-09: that assumption is WRONG for a real no-alpha, sparse
+// line-art source — found live (Olga's catch: a saved "Minimalist Line
+// Art Face" draft rendered almost entirely empty on the site). Root
+// cause traced step-by-step: `hasAlpha: false` on this particular OpenAI
+// output (unlike other rounds' images, which did have real alpha), so
+// the flood-fill fallback actually ran for real, not a no-op. It erased
+// 9765/10000 cells (97.65%) — the tolerance-30 flood fill chained through
+// several intermediate anti-aliased grey shades along the thin line's
+// soft edges (the palette had 5 distinct greys) and tunneled from the
+// white border all the way through to touch nearly everything, despite
+// black and white themselves being far outside any single tolerance
+// hop. `mode` was also hardcoded to `'illustration'` here regardless of
+// actual image content — `image-analysis.ts`'s `analyzeImage()` already
+// exists for exactly this and was never wired in. Both fixed below: mode
+// is now chosen from a real classification, and the flood-fill fallback
+// is skipped entirely when that classification is line-art/typography —
+// content that's mostly-background-by-design and specifically vulnerable
+// to this gradient-tunneling failure mode.
 import { readFileSync } from 'fs';
 import sharp from 'sharp';
 import { convertImage } from '../src/lib/pattern-converter';
 import { savePattern, updatePattern } from '../src/lib/pattern-storage';
 import { renderCoverThumbnailPng } from '../src/lib/server-cover-thumbnail';
 import { createGeneration, attachDraft } from '../src/lib/ai-design-generations';
+import { analyzeImage, imageTypeToMode } from '../src/lib/image-analysis';
 import type { GroundingAssessment } from '../src/lib/trend-detection';
 
 const IMAGE_PATH = process.argv[2];
@@ -137,6 +157,26 @@ function sizeToDesign(grid: number[][]): number[][] | null {
 // changing neighbor colors (per-channel RGB step <= tolerance) — a
 // "magic wand with contiguous tolerance" over the already-quantized
 // palette. Marks the reached region as background (true) for erasure.
+//
+// 2026-08-09: found live, via a real destroyed line-art draft — the
+// border-seeding loop below used to mark EVERY border cell as a
+// background seed unconditionally, with no color check at all. Harmless
+// for a typical "colorful subject on white" illustration (the border is
+// almost always genuinely white), but for a portrait whose outline
+// touches the frame edge — very plausible for line-art, and exactly what
+// happened here (hairline touching the top edge, neck touching the
+// bottom) — a BLACK border cell got seeded as a "background" starting
+// point too. From there the flood correctly only walks to color-matching
+// neighbors, but since it started ON the black stroke, it walked the
+// ENTIRE connected black line, marking most of the outline itself as
+// "background" and erasing it — confirmed directly: 557 of 653 black
+// cells were getting marked, even at tolerance 0 (exact match), which
+// should have made this impossible if the seed itself had been
+// color-checked. Fixed: a border cell only seeds the fill if its color
+// is itself close to the assumed background color (white, the fixed
+// convention every image-generation prompt in this codebase already
+// requires) — a real black-touching-the-border case no longer becomes a
+// seed, so it can't start a chain through the line at all.
 function detectBackgroundByFloodFill(grid: number[][], palette: { r: number; g: number; b: number }[], tolerance: number): boolean[][] {
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
@@ -144,13 +184,22 @@ function detectBackgroundByFloodFill(grid: number[][], palette: { r: number; g: 
   const colorOf = (ci: number) => (ci >= 0 ? palette[ci] : null);
   const dist = (a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }) =>
     Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b));
+  const WHITE = { r: 255, g: 255, b: 255 };
+  // Seeding tolerance is deliberately generous (not the caller's
+  // possibly-0 propagation tolerance) — a border cell just needs to be
+  // "background-ish" to qualify as a seed; the walk itself still only
+  // propagates through cells within the real `tolerance`.
+  const SEED_TOLERANCE = 40;
 
   const DIRS: [number, number][] = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
   const stack: [number, number][] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) {
-        if (!visited[r][c]) { visited[r][c] = true; stack.push([r, c]); }
+        if (visited[r][c]) continue;
+        const color = colorOf(grid[r][c]);
+        if (!color || dist(color, WHITE) > SEED_TOLERANCE) continue;
+        visited[r][c] = true; stack.push([r, c]);
       }
     }
   }
@@ -228,22 +277,51 @@ async function main() {
   const imageMeta = await sharp(rawBuffer).metadata();
   const targetHeight = Math.round(targetWidth * ((imageMeta.height ?? 1) / (imageMeta.width ?? 1)));
 
+  // 2026-08-09: was hardcoded 'illustration' regardless of actual image
+  // content — analyzeImage() already exists for exactly this. Doesn't
+  // change convertImage()'s own behavior (pattern-converter.ts treats
+  // 'illustration' and 'line-art' identically in every branch), but DOES
+  // gate the background-erasure fallback below, and surfaces the
+  // classifier's warnings/suggestedMinWidth for visibility.
+  const analysis = await analyzeImage(rawBuffer);
+  const mode = imageTypeToMode(analysis.type, analysis.confidence);
+  console.log(`Image analysis: type=${analysis.type} confidence=${analysis.confidence} -> mode=${mode}`, analysis.warnings);
+
   const converted = await convertImage(
     rawBuffer,
     targetWidth,
     targetHeight,
     MAX_COLORS,
-    'illustration',
+    mode === 'photo' ? 'illustration' : mode,
     'final-only',
   );
 
   const cleanedGrid = removeConfetti(converted.grid);
   console.log(`Converted: ${converted.width}x${converted.height}, ${converted.palette.length} colors`);
 
-  const bgMask = detectBackgroundByFloodFill(cleanedGrid, converted.palette, 30);
+  // 2026-08-09: found live — the flood-fill fallback (meant to be a
+  // no-op for real-alpha sources, see file header) actually ran for real
+  // on a no-alpha line-art image and erased 97.65% of it, gradient-
+  // tunneling through anti-aliased grey edge pixels along the thin line
+  // (tolerance 30 let it chain white -> pale grey -> mid grey -> ... ,
+  // each hop within tolerance of the last, even though white and black
+  // themselves are nowhere near each other). First fix attempt just
+  // skipped this for line-art entirely — safe, but left a real second
+  // bug exposed: without ANY erasure, the huge white background survives
+  // as a real "White" DMC palette color (Olga caught this too — checked
+  // directly: 9175/10404 cells, 88%, all counted as a real color to
+  // stitch). Real fix (Olga's proposal): now that
+  // mergeGrayscaleTowardBlackWhite() (pattern-converter.ts) snaps
+  // anti-aliased edge pixels to pure black/white first, the background
+  // is uniformly one exact color with no gradient — tolerance 0 (exact
+  // match only) can safely flood-fill just that connected white mass
+  // and nothing else, since there's no intermediate shade left for it to
+  // tunnel through to reach the line.
+  const tolerance = mode === 'line-art' ? 0 : 30;
+  const bgMask = detectBackgroundByFloodFill(cleanedGrid, converted.palette, tolerance);
   const erasedGrid = eraseBackground(cleanedGrid, bgMask);
   const erasedCount = bgMask.flat().filter(Boolean).length;
-  console.log(`Erased background: ${erasedCount} cells`);
+  console.log(`Erased background: ${erasedCount} cells (tolerance ${tolerance})`);
 
   const sized = sizeToDesign(erasedGrid);
   const finalGrid = sized ?? cleanedGrid;
