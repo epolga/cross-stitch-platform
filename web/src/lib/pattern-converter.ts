@@ -633,6 +633,26 @@ function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: 
     if (minDist < OUTLINE_DISTINCT_MIN_DIST2) continue;
 
     const dmc = nearestDmcLab(avg, dist);
+
+    // 2026-08-09 (real case: a mouse's whiskers): only force this
+    // component to one uniform averaged color if plain per-cell
+    // clustering (pixelDmc, already computed independently of any
+    // outline candidate) genuinely never lands on this DMC anywhere in
+    // the component on its own — i.e. the detail is truly invisible
+    // without protection (a real low-contrast case, e.g. a white keyline
+    // on white/cream background). If plain clustering ALREADY picked
+    // this exact DMC for at least one cell here, the detail has enough
+    // natural contrast to survive unprotected — skip the override and
+    // let each cell's own independently-clustered answer stand. Verified
+    // live: four whiskers close together were getting forced into one
+    // dark blob by the override even though each cell's own plain
+    // clustering already resolved several of them correctly on its own;
+    // skipping the override there lets them render as the natural
+    // dashed/partial look a thin high-contrast stroke gets at this
+    // resolution, instead of one merged patch swallowing all four.
+    const naturallyPresent = component.some(i => pixelDmc[i] === dmc);
+    if (naturallyPresent) continue;
+
     for (const i of component) out[i] = dmc;
   }
   return out;
