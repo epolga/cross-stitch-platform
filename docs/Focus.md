@@ -414,6 +414,29 @@ didn't log the user in).
     - **Grounding gate failed again** (`distinctCitedUrls: 0` despite 15
       real queries) — same still-open, separate issue as Open item #17;
       not addressed by this work.
+21. ~~Investigate: "Luna Moth" keeps surfacing as the nearest-neighbor
+    DESIGN match for completely unrelated candidate themes~~ — **found and
+    fixed 2026-08-09, same session.** Confirmed real via a direct test:
+    "Luna Moth" topped the match even for "vintage teapot" (0.536),
+    "mountain landscape" (0.563), "geometric mandala pattern" (0.517),
+    "birthday cake" (0.533) — nothing animal/nature-cluster-specific about
+    it, a genuine bug. Root cause: `backfillMissingEmbeddings()`
+    (`semantic-search.ts`) embedded `design.Caption` ALONE ("Luna Moth",
+    9 chars) instead of caption+`SeoDescription` together (~1200 chars),
+    unlike the original batch tool
+    (`automation/pinterest-agent/scripts/generate-embeddings.ts`), which
+    already did this correctly. A/B-tested directly on the same design:
+    the short-text embedding scored 0.53-0.60 against totally unrelated
+    queries; the same design re-embedded with the long text scored a sane
+    0.19-0.22 against those same queries — Titan's text embeddings for
+    very short inputs land in a less discriminative region of the space.
+    Only one design was affected (Luna Moth itself — the only one so far
+    backfilled via this code path rather than the batch tool). Fixed the
+    function to match the batch tool's `[caption, seoDescription].join(".
+    ")` convention, and re-embedded Luna Moth's vector directly in S3.
+    Verified: "vintage teapot" → "Teapot" (0.406), "mountain landscape" →
+    "Mountain" (0.432), "red fox" → "Red Fox" (0.461), "capybara" →
+    "Capybara" (0.520) — all now correct, on-topic matches.
 
 ## Done when
 

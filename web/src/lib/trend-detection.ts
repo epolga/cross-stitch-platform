@@ -56,6 +56,27 @@ const MAX_SEARCH_USES = 15;
 // only against the old web_search-only flow and left no room for that.
 const MAX_CONTINUATIONS = 4;
 const MODEL = 'claude-sonnet-5';
+// 2026-08-09 (Olga's ask, ADR-009's "Revisit When" condition triggered
+// for real): search_catalog alone wasn't enough — a live run proposed
+// "kawaii capybara" again with a real 0.6265 similarity against the
+// actual "Capybara" design already in the catalog (well above the ~0.37
+// noise floor measured for a genuine non-match), meaning either the
+// model never called the tool for this theme, or called it and didn't
+// treat a clearly-duplicate score as disqualifying. Rather than trust
+// the model's judgment alone, detectTrend() now does its own final
+// design-level check on the model's SETTLED theme before returning it,
+// and hard-rejects (returns null) past this threshold — real code-level
+// enforcement, not just an informational tool result.
+// Calibration is provisional (n=2): 0.6265 for a confirmed real
+// duplicate (capybara), ~0.37 for a confirmed real non-match (an
+// unrelated "Beaver" design was the nearest neighbor for a genuinely new
+// theme) — 0.5 sits with margin on both sides of that gap. Only applied
+// to the DESIGN-level check for now, not album-level: the two aren't on
+// the same scale (a real album-level match scored 0.754, but a
+// definitely-not-a-match album-level nearest-neighbor scored 0.643 —
+// higher than the design-level real-duplicate score), and there isn't
+// enough real album-level data yet to trust a threshold there.
+const DESIGN_DUPLICATE_THRESHOLD = 0.5;
 // 2026-08-08: was 2000 — confirmed via a real failure (extractJson's new
 // "no JSON found" logging showed the response cut off mid-sentence, still
 // inside the cited paragraph, never reaching the JSON at all) that this
@@ -172,7 +193,7 @@ Propose exactly ONE visual theme suitable for a cross-stitch pattern. It must be
 
 Also research, from the same cross-stitch-specific sources, TWO more things about this theme:
 - **Size**: what finished/pattern size is currently popular for this kind of subject in cross-stitch listings/patterns — small quick-stitch motifs, medium wall-art pieces, or large detailed portraits. Translate that into an approximate stitch-count size (width x height in stitches — typical range is roughly 40-250 per side; small quick projects are 40-90, medium wall art 90-160, large detailed pieces 160-250).
-- **Color combination**: what color palette is currently popular for this kind of subject (e.g. muted autumn tones, bold primary colors, pastel kawaii palette) — describe the SUBJECT's own colors, not the background (the background must stay solid flat white regardless, see below — that is a fixed technical constraint of the conversion pipeline, unrelated to color trends).
+- **Color combination**: what color palette is currently popular for this kind of subject (e.g. muted autumn tones, bold primary colors, pastel kawaii palette) — describe the SUBJECT's own colors, not the background (the background must stay solid flat white regardless, see below — that is a fixed technical constraint of the conversion pipeline, unrelated to color trends). Whatever the popular palette turns out to be, lean toward its brightest/most vivid, saturated version rather than a muted or pastel-washed-out one — vivid colors read better once converted to a limited-color cross-stitch chart.
 
 After researching, first write a short paragraph (2-4 sentences) citing your actual sources with real URLs inline — e.g. "According to https://www.pinterest.com/... and https://www.etsy.com/listing/...". Do not skip this even though the JSON below restates the same findings — the citation step matters.
 
@@ -418,74 +439,150 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     SEARCH_CATALOG_TOOL,
   ];
   let messages: Anthropic.MessageParam[] = [{ role: 'user', content: buildPrompt() }];
+  let containerId: string | undefined;
 
-  // Accumulated across every response in the pause_turn/tool_use loop, not
-  // just the final one — search calls and their citations can land in an
-  // earlier continuation than the one that finally emits the JSON answer,
-  // so both the search-evidence check and the grounding assessment need
-  // the full conversation's content, not just response.content from the
-  // last turn.
+  // Cumulative across every attempt AND every continuation within an
+  // attempt — used only for hasRealWebSearchEvidence() (a monotonic "was
+  // there ever a real search" check, safe to accumulate) and the
+  // MAX_GROUNDING_ATTEMPTS retry's continued context. NOT used for text/
+  // JSON extraction or grounding — see attemptContent below for why.
   const allContent: Anthropic.ContentBlock[] = [];
 
-  let response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages });
-  allContent.push(...response.content);
-  // 2026-08-09: found via a real live failure the first time search_catalog
-  // (a client tool) coexisted with web_search's pause_turn continuations in
-  // the same run: "container_id is required when there are pending tool
-  // uses generated by code execution with tools" (400 error). The SDK's
-  // Message type documents `container` as "for the code execution tool,"
-  // but it's returned whenever the server needs one to keep a multi-turn
-  // tool-use conversation coherent — every continuation must echo the same
-  // container id back, or the server can't resolve the pending tool uses
-  // from the previous turn.
-  let containerId: string | undefined = response.container?.id;
+  // 2026-08-09 (Olga's ask): grounding used to only ever warn, never
+  // retry — a thin-sourced answer (e.g. 1 citation, gate needs >=2) was
+  // still accepted as-is. Now gives the model one real chance to search
+  // more specifically and re-cite before accepting, instead of settling
+  // for the first pass. Bounded at 2 total attempts (not unbounded) since
+  // each attempt carries real web_search billing.
+  const MAX_GROUNDING_ATTEMPTS = 2;
+  let parsed: ParsedTrend | null = null;
+  let grounding: GroundingAssessment | null = null;
 
-  let continuations = 0;
-  while (
-    (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') &&
-    continuations < MAX_CONTINUATIONS
-  ) {
+  for (let attempt = 1; attempt <= MAX_GROUNDING_ATTEMPTS; attempt++) {
+    // This attempt's own turns only — kept separate from allContent so a
+    // retry's extraction/grounding reflects THIS attempt's final answer,
+    // not a garbled concatenation of two attempts' text blocks (extractJson's
+    // regex is greedy from the first `{` to the last `}` in the string —
+    // two JSON objects back to back would parse as one malformed blob).
+    const attemptContent: Anthropic.ContentBlock[] = [];
+
+    let response = await client.messages.create({ model: MODEL, max_tokens: MAX_TOKENS, tools, messages, container: containerId });
+    allContent.push(...response.content);
+    attemptContent.push(...response.content);
+    // 2026-08-09: found via a real live failure the first time search_catalog
+    // (a client tool) coexisted with web_search's pause_turn continuations in
+    // the same run: "container_id is required when there are pending tool
+    // uses generated by code execution with tools" (400 error). The SDK's
+    // Message type documents `container` as "for the code execution tool,"
+    // but it's returned whenever the server needs one to keep a multi-turn
+    // tool-use conversation coherent — every continuation must echo the same
+    // container id back, or the server can't resolve the pending tool uses
+    // from the previous turn.
+    containerId = response.container?.id ?? containerId;
+
+    let continuations = 0;
+    while (
+      (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') &&
+      continuations < MAX_CONTINUATIONS
+    ) {
+      messages = [...messages, { role: 'assistant', content: response.content }];
+
+      // pause_turn (web_search) needs nothing from us — Anthropic already
+      // executed it server-side. tool_use (search_catalog) is a CLIENT tool:
+      // we have to actually run it ourselves and hand the result back as a
+      // tool_result message before the model can continue.
+      if (response.stop_reason === 'tool_use') {
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const block of response.content) {
+          if (block.type !== 'tool_use' || block.name !== 'search_catalog') continue;
+          const input = block.input as { candidateTheme?: string };
+          // 2026-08-09: found live — "kawaii capybara" was proposed again
+          // (real similarity 0.6265 against the actual "Capybara" design,
+          // well above the noise floor of ~0.37 for a genuine non-match)
+          // with no way to tell from the logs whether search_catalog was
+          // ever called for it at all, or was called and the model just
+          // didn't treat the result as disqualifying. This log is the
+          // direct evidence that was missing — check it on the next run
+          // that recurs a theme.
+          console.log(`[trend-detection] search_catalog called with candidateTheme: "${input?.candidateTheme}"`);
+          const resultText = input?.candidateTheme
+            ? await runSearchCatalogTool(input.candidateTheme)
+            : 'Missing candidateTheme argument.';
+          console.log(`[trend-detection] search_catalog result: ${resultText}`);
+          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: resultText });
+        }
+        if (toolResults.length > 0) {
+          messages = [...messages, { role: 'user', content: toolResults }];
+        }
+      }
+
+      response = await client.messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        tools,
+        messages,
+        container: containerId,
+      });
+      allContent.push(...response.content);
+      attemptContent.push(...response.content);
+      containerId = response.container?.id ?? containerId;
+      continuations++;
+    }
+    if (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') {
+      // Loop exited only because MAX_CONTINUATIONS was hit, not because the
+      // model naturally finished — the conversation was still mid-flow
+      // (more searches or catalog checks queued, or mid-sentence). Temporary
+      // diagnostic added 2026-08-08 after two real truncated-response
+      // failures survived a max_tokens bump — confirms whether the real
+      // bottleneck is turn count (MAX_CONTINUATIONS) rather than per-turn
+      // token budget.
+      console.warn(`[trend-detection] attempt ${attempt}: exited the continuation loop while still ${response.stop_reason} — MAX_CONTINUATIONS reached before the model naturally finished`);
+    }
+    // Carries this attempt's final turn into the shared history so a
+    // retry (if any) has full context of what was already said/found —
+    // it's asked to improve on this, not start over blind.
     messages = [...messages, { role: 'assistant', content: response.content }];
 
-    // pause_turn (web_search) needs nothing from us — Anthropic already
-    // executed it server-side. tool_use (search_catalog) is a CLIENT tool:
-    // we have to actually run it ourselves and hand the result back as a
-    // tool_result message before the model can continue.
-    if (response.stop_reason === 'tool_use') {
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of response.content) {
-        if (block.type !== 'tool_use' || block.name !== 'search_catalog') continue;
-        const input = block.input as { candidateTheme?: string };
-        const resultText = input?.candidateTheme
-          ? await runSearchCatalogTool(input.candidateTheme)
-          : 'Missing candidateTheme argument.';
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: resultText });
-      }
-      if (toolResults.length > 0) {
-        messages = [...messages, { role: 'user', content: toolResults }];
-      }
+    // 2026-08-08: was `response.content` (the LAST turn only) — a real bug,
+    // inconsistent with the accumulated-content principle this file
+    // already applies elsewhere. If the model wrote its final JSON answer
+    // on an earlier continuation and the LAST turn ended with no text of
+    // its own (e.g. pure tool_use, or hit MAX_CONTINUATIONS mid-flow), the
+    // real answer existed but got discarded — confirmed as the cause of
+    // two consecutive real "empty text response" failures. Scoped to
+    // attemptContent (not the cumulative allContent) since 2026-08-09's
+    // grounding-retry change — see attemptContent's comment above.
+    const attemptText = attemptContent
+      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n\n');
+
+    if (!attemptText.trim()) {
+      console.error(`[trend-detection] attempt ${attempt}: empty text response`);
+      continue;
     }
 
-    response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      tools,
-      messages,
-      container: containerId,
-    });
-    allContent.push(...response.content);
-    containerId = response.container?.id ?? containerId;
-    continuations++;
+    const attemptParsed = extractJson(attemptText);
+    if (!attemptParsed) continue;
+
+    parsed = attemptParsed;
+    grounding = assessGrounding(attemptContent);
+
+    if (grounding.passesGate || attempt === MAX_GROUNDING_ATTEMPTS) break;
+
+    console.warn(
+      `[trend-detection] attempt ${attempt}: grounding gate failed, asking the model to search more and re-cite before accepting:`,
+      { distinctCitedUrls: grounding.distinctCitedUrls, citedDomains: grounding.citedDomains },
+    );
+    messages = [...messages, {
+      role: 'user',
+      content: `Your sourcing was too thin (${grounding.distinctCitedUrls} distinct cited URL(s); I need at least 2, with at least one from pinterest.com, etsy.com, reddit.com, or trends.google.com). Please search more specifically for stronger evidence that "${parsed.theme}" is genuinely trending in cross-stitch right now, then write a new cited paragraph and JSON answer with better sourcing — it can be the same theme with better evidence, or a different one if you can't find enough support for this one.`,
+    }];
   }
-  if (response.stop_reason === 'pause_turn' || response.stop_reason === 'tool_use') {
-    // Loop exited only because MAX_CONTINUATIONS was hit, not because the
-    // model naturally finished — the conversation was still mid-flow
-    // (more searches or catalog checks queued, or mid-sentence). Temporary
-    // diagnostic added 2026-08-08 after two real truncated-response
-    // failures survived a max_tokens bump — confirms whether the real
-    // bottleneck is turn count (MAX_CONTINUATIONS) rather than per-turn
-    // token budget.
-    console.warn(`[trend-detection] exited the continuation loop while still ${response.stop_reason} — MAX_CONTINUATIONS reached before the model naturally finished`);
+
+  if (!parsed || !grounding) {
+    console.error('[trend-detection] no valid JSON answer across all attempts');
+    return null;
   }
 
   if (!hasRealWebSearchEvidence(allContent)) {
@@ -493,34 +590,30 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     return null;
   }
 
-  // 2026-08-08: was `response.content` (the LAST turn only) — a real bug,
-  // inconsistent with the accumulated-allContent principle this file
-  // already applies to hasRealWebSearchEvidence()/assessGrounding() just
-  // above. If the model wrote its final JSON answer on an earlier
-  // continuation and the LAST turn ended with no text of its own (e.g.
-  // pure tool_use, or hit MAX_CONTINUATIONS mid-flow), the real answer
-  // existed in allContent but this discarded it — confirmed as the cause
-  // of two consecutive real "empty text response" failures the same day,
-  // right after buildPrompt() started asking for more output (a cited
-  // paragraph before the JSON), which likely made hitting this edge case
-  // more common by needing an extra turn more often.
-  const text = allContent
-    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n\n');
-
-  if (!text.trim()) {
-    console.error('[trend-detection] empty text response');
-    return null;
+  // Hard reject, not just informational — see DESIGN_DUPLICATE_THRESHOLD's
+  // comment above for why. Runs on the model's final, settled theme
+  // (parsed.theme), independent of whether/how the model used
+  // search_catalog mid-reasoning — this is the real backstop.
+  try {
+    const finalCheck = await findNearestTextMatch(parsed.theme);
+    if (finalCheck && finalCheck.similarity >= DESIGN_DUPLICATE_THRESHOLD) {
+      const existing = await getDesignById(finalCheck.designId);
+      console.error(
+        `[trend-detection] REJECTED — final theme "${parsed.theme}" scores ${finalCheck.similarity.toFixed(4)} against existing design "${existing?.Caption ?? finalCheck.designId}" (>= threshold ${DESIGN_DUPLICATE_THRESHOLD}). Treating as a duplicate, not returning this result.`,
+      );
+      return null;
+    }
+  } catch (e) {
+    // Non-fatal — same "don't block the pipeline over a helper check
+    // failing" pattern as runSearchCatalogTool(). Worse to silently
+    // reject a good result over a transient Bedrock/S3 error than to let
+    // one possible duplicate through occasionally.
+    console.error('[trend-detection] final duplicate check failed, proceeding without it:', e);
   }
 
-  const parsed = extractJson(text);
-  if (!parsed) return null;
-
-  const grounding = assessGrounding(allContent);
   if (!grounding.passesGate) {
     console.warn(
-      '[trend-detection] grounding gate failed (flag for manual review, not an automatic reject):',
+      '[trend-detection] grounding gate still failing after all attempts (flag for manual review, not an automatic reject):',
       { distinctCitedUrls: grounding.distinctCitedUrls, citedDomains: grounding.citedDomains },
     );
   }

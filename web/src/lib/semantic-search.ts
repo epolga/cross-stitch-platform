@@ -215,9 +215,24 @@ export async function backfillMissingEmbeddings(): Promise<{ added: number; erro
       const imgResp = await fetch(imageUrl);
       if (!imgResp.ok) throw new Error(`image fetch HTTP ${imgResp.status}`);
       const base64Image = Buffer.from(await imgResp.arrayBuffer()).toString("base64");
+      // 2026-08-09: found live — this embedded design.Caption ALONE
+      // ("Luna Moth", 9 chars), while the original batch tool
+      // (automation/pinterest-agent/scripts/generate-embeddings.ts)
+      // embeds caption+seoDescription together (~1200 chars typically).
+      // Direct A/B test on the same design confirmed the short-text
+      // embedding is the cause, not a fluke: querying against the SHORT
+      // ("Luna Moth" alone) embedding scored 0.53-0.60 for completely
+      // unrelated themes ("vintage teapot", "mountain landscape", "red
+      // fox") — a Titan text-embedding artifact where very short inputs
+      // land in a less discriminative region of the space. The SAME
+      // design re-embedded with the LONG text (caption+seoDescription)
+      // scored a sane 0.19-0.22 against those same unrelated queries.
+      // Matches the batch tool's convention now so newly-published
+      // designs backfilled here don't get a systematically-broken vector.
+      const text = [design.Caption, design.SeoDescription].filter(Boolean).join(". ") || `design #${design.DesignID}`;
       const [imageVec, textVec] = await Promise.all([
         embedImage(base64Image),
-        embedText(design.Caption || `design #${design.DesignID}`),
+        embedText(text),
       ]);
       index.img.set(design.DesignID, imageVec);
       index.txt.set(design.DesignID, textVec);

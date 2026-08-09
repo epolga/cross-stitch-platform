@@ -853,6 +853,13 @@
      treating this as fully settled, same caution as any n=1(-ish) finding
      elsewhere in this doc.
 
+**2026-08-09, continued — hard duplicate threshold, grounding retry, and a real embedding bug found via a live anomaly.** Full design rationale in `DECISIONS.md` ADR-009 (three more dated updates the same day). Summary:
+- Real trigger for the hard threshold: "kawaii capybara" was proposed again on a live run with `search_catalog` confirmed called (new logging) and returning a real 0.6265 similarity against the actual "Capybara" design — the model didn't self-reject despite the signal. Added `DESIGN_DUPLICATE_THRESHOLD = 0.5` as a genuine code-level reject on the model's final theme, calibrated from real duplicate (0.6265) vs. real non-match (~0.37) scores. Confirmed working on the next two live runs: correctly rejected "kawaii capybara" again and separately "vivid pink axolotl" (0.5898 against the already-published "Kawaii Pink Axolotl").
+- Grounding gate no longer just warns on a thin-citations answer — `MAX_GROUNDING_ATTEMPTS = 2` gives the model one bounded retry (same conversation, not a fresh run) to search more and re-cite before the result is accepted as-is.
+- `buildPrompt()`'s color-research instruction now explicitly steers toward the brightest/most saturated version of whatever palette is popular (Olga's ask) — muted/pastel-washed-out palettes were previously left as an equally likely outcome.
+- **Real bug found and fixed, unrelated to the above but found while investigating a live anomaly**: "Luna Moth" kept winning as nearest-DESIGN match for completely unrelated live-run themes (capybara, axolotl, mushroom, hummingbird, jellyfish, snail — all six checked in a single run). Root cause: `backfillMissingEmbeddings()` embedded `design.Caption` alone (9 chars) instead of caption+`SeoDescription` (~1200 chars) like the original batch tool — confirmed via direct A/B test on the same design (short-text embedding scored 0.53-0.60 against control queries like "vintage teapot"; long-text scored 0.19-0.22 against the same queries). Fixed the function, re-embedded the one affected design directly in S3. Verified: unrelated queries now correctly match their own real designs again ("red fox" → "Red Fox" 0.461, not "Luna Moth"). Full detail: Focus.md Open item #21.
+- Verified: `tsc --noEmit` clean, `eslint` clean, Vitest 90/90 throughout all of the above changes.
+
 ## Constraints
 - Product development must not be slowed unnecessarily for teaching.
 - Production AI code stays in normal application folders/services.
