@@ -1,9 +1,16 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import { fetchAllDesigns } from "@/lib/data-access";
+import { fetchAllDesigns, getAllAlbumCaptions } from "@/lib/data-access";
 
 const S3_BUCKET = "cross-stitch-sitemap-cache";
 const VECTORS_KEY = "embeddings/vectors.json";
+// 2026-08-09: separate file from VECTORS_KEY, not a namespaced entry in
+// the same one — albums (114) and designs (~5276) have very different
+// scale/growth patterns, and design IDs vs album IDs live in different
+// numeric spaces (a shared JSON object keyed by plain number strings
+// could collide). Text-only (no imageVec) since there's no single
+// "album photo" the way there's one per design.
+const ALBUM_VECTORS_KEY = "embeddings/album-vectors.json";
 
 import { devLog } from "@/lib/devLog";
 
@@ -41,6 +48,38 @@ async function loadVectorIndex(): Promise<VectorIndex> {
     return g.__vectorIndex;
   })().finally(() => { g.__vectorLoadPromise = undefined; });
   return g.__vectorLoadPromise;
+}
+
+// Use globalThis so the cache survives Next.js HMR module re-requires in dev mode
+const ga = globalThis as typeof globalThis & {
+  __albumVectorIndex?: Map<number, Float32Array>;
+  __albumVectorLoadPromise?: Promise<Map<number, Float32Array>>;
+};
+
+async function loadAlbumVectorIndex(): Promise<Map<number, Float32Array>> {
+  if (ga.__albumVectorIndex) return ga.__albumVectorIndex;
+  if (ga.__albumVectorLoadPromise) return ga.__albumVectorLoadPromise;
+  ga.__albumVectorLoadPromise = (async () => {
+    try {
+      const resp = await s3.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: ALBUM_VECTORS_KEY }));
+      const text = await resp.Body!.transformToString();
+      const all = JSON.parse(text) as Record<string, number[]>;
+      const index = new Map<number, Float32Array>();
+      for (const [id, vec] of Object.entries(all)) index.set(Number(id), new Float32Array(vec));
+      ga.__albumVectorIndex = index;
+      devLog(`[semantic-search] Loaded album vectors for ${index.size} albums`);
+      return index;
+    } catch (e) {
+      // First-ever run (file doesn't exist in S3 yet) — treat as empty,
+      // backfillMissingAlbumEmbeddings() below will populate it.
+      const notFound = (e as { name?: string })?.name === 'NoSuchKey';
+      if (!notFound) console.error('[semantic-search] failed to load album vectors:', e);
+      const index = new Map<number, Float32Array>();
+      ga.__albumVectorIndex = index;
+      return index;
+    }
+  })().finally(() => { ga.__albumVectorLoadPromise = undefined; });
+  return ga.__albumVectorLoadPromise;
 }
 
 async function embedText(text: string): Promise<Float32Array> {
@@ -111,6 +150,34 @@ export async function findNearestTextMatch(text: string): Promise<CatalogMatch |
   return best;
 }
 
+export interface AlbumCatalogMatch {
+  albumId: number;
+  similarity: number;
+}
+
+// 2026-08-09: Olga's ask, after checking Album 59 ("Butterflies", 73
+// designs) — the design-level check (findNearestTextMatch) already
+// catches most near-duplicates since individual design captions
+//("Butterfly 1", "Butterfly 2"...) carry the real subject word. But an
+// album-level check is a genuinely different signal, not a redundant
+// one: it catches the case the OLD album-caption-only avoid-list existed
+// for in the first place (a subject that's clearly, thematically
+// "already a whole album" — e.g. proposing "butterfly" as a new theme
+// when a 73-design dedicated Butterflies album exists), even in cases
+// where individual design captions are terse/generic enough that no
+// single one scores as high as the album's own caption does. Runs
+// alongside, not instead of, the design-level check — see
+// runSearchCatalogTool() in trend-detection.ts.
+export async function findNearestAlbumMatch(text: string): Promise<AlbumCatalogMatch | null> {
+  const [index, queryVec] = await Promise.all([loadAlbumVectorIndex(), embedText(text)]);
+  let best: AlbumCatalogMatch | null = null;
+  for (const [albumId, vec] of index) {
+    const similarity = dotProduct(queryVec, vec);
+    if (!best || similarity > best.similarity) best = { albumId, similarity };
+  }
+  return best;
+}
+
 // 2026-08-09: found live — vectors.json had 5260/5276 designs (the
 // "Capybara" design published via "Publish to Catalog" among the 16
 // missing), because nothing regenerates embeddings when a design is
@@ -173,6 +240,42 @@ export async function backfillMissingEmbeddings(): Promise<{ added: number; erro
       ContentType: "application/json",
     }));
     devLog(`[semantic-search] Backfilled ${added} missing design embeddings (${errors} errors)`);
+  }
+
+  return { added, errors };
+}
+
+// Same backfill pattern as backfillMissingEmbeddings(), for the album
+// index instead — text-only (no image fetch needed), 114 albums total
+// so a full first-run backfill is trivially cheap either way.
+export async function backfillMissingAlbumEmbeddings(): Promise<{ added: number; errors: number }> {
+  const [index, albums] = await Promise.all([loadAlbumVectorIndex(), getAllAlbumCaptions()]);
+  const missing = (albums ?? []).filter((a) => !index.has(a.albumId));
+  if (missing.length === 0) return { added: 0, errors: 0 };
+
+  let added = 0;
+  let errors = 0;
+  for (const album of missing) {
+    try {
+      const vec = await embedText(album.Caption || `album #${album.albumId}`);
+      index.set(album.albumId, vec);
+      added++;
+    } catch (e) {
+      errors++;
+      console.error(`[semantic-search] album backfill failed for album ${album.albumId}:`, e);
+    }
+  }
+
+  if (added > 0) {
+    const merged: Record<string, number[]> = {};
+    for (const [id, vec] of index) merged[id] = Array.from(vec);
+    await s3.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: ALBUM_VECTORS_KEY,
+      Body: JSON.stringify(merged),
+      ContentType: "application/json",
+    }));
+    devLog(`[semantic-search] Backfilled ${added} missing album embeddings (${errors} errors)`);
   }
 
   return { added, errors };

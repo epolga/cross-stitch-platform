@@ -10,8 +10,13 @@
 // human reads the raw text) instead of that file's free-text email body.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { getDesignById } from './data-access';
-import { findNearestTextMatch, backfillMissingEmbeddings } from './semantic-search';
+import { getDesignById, getAlbumCaption } from './data-access';
+import {
+  findNearestTextMatch,
+  findNearestAlbumMatch,
+  backfillMissingEmbeddings,
+  backfillMissingAlbumEmbeddings,
+} from './semantic-search';
 
 export interface ParsedTrend {
   theme: string;
@@ -79,7 +84,7 @@ const MAX_TOKENS = 4096;
 const SEARCH_CATALOG_TOOL: Anthropic.Tool = {
   name: 'search_catalog',
   description:
-    "Check whether a candidate cross-stitch design theme already closely matches an existing design in my catalog. This uses semantic similarity, not exact text matching, so it catches near-duplicates a literal name comparison would miss (e.g. 'kawaii green frog' vs an existing 'Kawaii Cottagecore Frog' design). Call this for any theme you're seriously considering before finalizing your answer, and call it again if you switch to a different candidate theme.",
+    "Check whether a candidate cross-stitch design theme already closely matches an existing design OR an existing whole album in my catalog. This uses semantic similarity, not exact text matching, so it catches near-duplicates a literal name comparison would miss (e.g. 'kawaii green frog' vs an existing 'Kawaii Cottagecore Frog' design). The album-level check matters separately from the design-level one — a theme can score low against every individual (often terse/generic, e.g. 'Butterfly 1') design caption while still clearly overlapping with an entire dedicated album (e.g. a 'Butterflies' album with 73 designs). Call this for any theme you're seriously considering before finalizing your answer, and call it again if you switch to a different candidate theme.",
   input_schema: {
     type: 'object',
     properties: {
@@ -104,17 +109,44 @@ const SEARCH_CATALOG_TOOL: Anthropic.Tool = {
 // "same subject" for Titan's text embeddings. Revisit once a few real
 // runs show what scores genuine near-duplicates (like the frog case)
 // versus genuinely distinct themes actually produce.
+//
+// 2026-08-09: added the album-level check (Olga's ask, after checking
+// Album 59 "Butterflies" — 73 designs, individually captioned "Butterfly
+// N", terse enough that a candidate theme's embedding might not score
+// strongly against any ONE of them even though the subject is clearly
+// already a whole dedicated album). Runs both checks and reports both —
+// deliberately doesn't pick one signal over the other or combine them
+// into a single score, since design-level and album-level similarity
+// aren't directly comparable numbers.
 async function runSearchCatalogTool(candidateTheme: string): Promise<string> {
+  const parts: string[] = [];
   try {
     const match = await findNearestTextMatch(candidateTheme);
-    if (!match) return 'No existing designs found to compare against.';
-    const design = await getDesignById(match.designId);
-    const caption = design?.Caption ?? `design #${match.designId}`;
-    return `Closest existing match: "${caption}" (similarity score ${match.similarity.toFixed(3)}; higher means more similar — treat anything that reads as clearly the same subject as already covered).`;
+    if (match) {
+      const design = await getDesignById(match.designId);
+      const caption = design?.Caption ?? `design #${match.designId}`;
+      parts.push(`Closest existing DESIGN: "${caption}" (similarity ${match.similarity.toFixed(3)})`);
+    } else {
+      parts.push('No existing designs found to compare against.');
+    }
   } catch (e) {
-    console.error('[trend-detection] search_catalog tool execution failed:', e);
-    return 'Catalog search is temporarily unavailable — proceed using your own judgment.';
+    console.error('[trend-detection] search_catalog design-level check failed:', e);
+    parts.push('Design-level catalog search is temporarily unavailable.');
   }
+  try {
+    const albumMatch = await findNearestAlbumMatch(candidateTheme);
+    if (albumMatch) {
+      const caption = (await getAlbumCaption(albumMatch.albumId)) ?? `album #${albumMatch.albumId}`;
+      parts.push(`Closest existing ALBUM: "${caption}" (similarity ${albumMatch.similarity.toFixed(3)})`);
+    } else {
+      parts.push('No existing albums found to compare against.');
+    }
+  } catch (e) {
+    console.error('[trend-detection] search_catalog album-level check failed:', e);
+    parts.push('Album-level catalog search is temporarily unavailable.');
+  }
+  parts.push('Higher similarity means more similar — treat anything that reads as clearly the same subject as already covered, whether the match came from the design-level or album-level check.');
+  return parts.join(' ');
 }
 
 // 2026-08-08: the "respond with ONLY a JSON object, no other text" instruction
@@ -346,6 +378,18 @@ export async function detectTrend(): Promise<TrendDetectionResult | null> {
     }
   } catch (e) {
     console.error('[trend-detection] catalog embedding backfill failed, proceeding with existing index:', e);
+  }
+  // 2026-08-09: same reasoning as the design backfill above, for the new
+  // album-level index (Olga's ask, adding album-level search_catalog
+  // checking) — only 114 albums, so even a from-scratch first run is
+  // trivially cheap.
+  try {
+    const albumBackfill = await backfillMissingAlbumEmbeddings();
+    if (albumBackfill.added > 0 || albumBackfill.errors > 0) {
+      console.log(`[trend-detection] album embedding backfill: +${albumBackfill.added}, ${albumBackfill.errors} errors`);
+    }
+  } catch (e) {
+    console.error('[trend-detection] album embedding backfill failed, proceeding with existing index:', e);
   }
 
   // 2026-08-08: explicit timeout, shorter than the SDK's own 10-minute
