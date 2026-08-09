@@ -347,7 +347,23 @@ async function main() {
   // match only) can safely flood-fill just that connected white mass
   // and nothing else, since there's no intermediate shade left for it to
   // tunnel through to reach the line.
-  const tolerance = mode === 'line-art' ? 0 : 30;
+  // 2026-08-09: tolerance 30 had a second real bug, found on a mouse
+  // illustration with a cream belly patch (DMC 3866, 245/240/229) fully
+  // enclosed by fur. Its own anti-aliased edge pixel clustered to pure
+  // white (DMC B5200) — same DMC as the real background — so the flood
+  // fill reached it via ordinary border-connectivity and, since
+  // |255-245| etc. maxes out at 26 <= 30, hopped straight from that edge
+  // pixel onto the belly's real DMC 3866, erasing all 330+ of its cells
+  // as "background". Traced the actual flood-fill parent chain to
+  // confirm this was one direct hop, not a long gradient chain. Lowering
+  // to 20 (comfortably under the 26-unit gap) verified empirically
+  // against all 4 reference images (mouse, puppy, Lady of Perpetual
+  // Love, kitten): erased-cell count is IDENTICAL at every tolerance
+  // from 30 down to 5 for the other three — the real background never
+  // needed more than a few units of slack — while the mouse's erased
+  // count drops sharply once tolerance passes below 26, confirming this
+  // was purely the belly bridge, not genuine anti-aliasing variance.
+  const tolerance = mode === 'line-art' ? 0 : 20;
   const bgMask = detectBackgroundByFloodFill(cleanedGrid, converted.palette, tolerance);
   const erasedGrid = eraseBackground(cleanedGrid, bgMask);
   const erasedCount = bgMask.flat().filter(Boolean).length;
