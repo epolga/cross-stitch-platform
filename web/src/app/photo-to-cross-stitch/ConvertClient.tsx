@@ -1107,7 +1107,20 @@ export default function ConvertPage() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error ?? 'Review failed');
       if (data.finalized) {
-        setNeedsAiReview(false);
+        // 2026-08-09: found live — this used to setNeedsAiReview(false)
+        // here, which permanently hid the Approve button and stopped
+        // startAiReview() from ever being offered again on later saves,
+        // contradicting the whole point of the 2026-08-08 multi-round
+        // change (server-side status stays 'draft-saved' forever by
+        // design — see review/route.ts's header comment — precisely so
+        // every future save keeps offering review). Olga hit this
+        // directly: round 1's review recorded her corrections, but her
+        // very next Save after further edits did nothing visible at all
+        // — confirmed via DynamoDB that the pattern itself DID re-save
+        // (modifiedAt updated), but no round-2 AiDesignCorrection was
+        // ever created, because needsAiReview was stuck false and
+        // handleSave()'s `if (... && needsAiReview) startAiReview()`
+        // never fired again. needsAiReview intentionally stays as-is here.
         setAiReviewDiff(null);
         showToast('Approved ✓');
       } else {
@@ -1140,7 +1153,8 @@ export default function ConvertPage() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error ?? 'Review failed');
-      setNeedsAiReview(false);
+      // 2026-08-09: was setNeedsAiReview(false) — same real bug as
+      // startAiReview()'s finalized branch above, see that comment.
       setAiReviewDiff(null);
       setAiReviewModalOpen(false);
       showToast('Feedback recorded ✓');
