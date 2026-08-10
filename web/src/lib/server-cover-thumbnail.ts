@@ -81,7 +81,19 @@ export async function renderCoverThumbnailPng(
     const oc = out.getContext('2d') as unknown as Ctx2D;
     oc.save();
     oc.beginPath(); oc.rect(0, 0, cellPx, cellPx); oc.clip();
-    oc.shadowColor = 'rgba(0,0,0,0.45)';
+    // 2026-08-10: shadow alpha now scales with the thread color's own
+    // perceived lightness instead of a flat 0.45 for every color — found
+    // live (Olga's ask, a near-white/pale-grey goose illustration): a fixed
+    // dark shadow reads as a believable bit of thread depth on a dark or
+    // saturated color, but on a near-white thread the same shadow doesn't
+    // have enough real color underneath to compete with, so it visually
+    // reads as grime rather than depth, washing out exactly the palest,
+    // most delicate designs the most. Linear from 0.45 at black down to
+    // 0.12 at white keeps the effect for colors that can absorb it while
+    // easing off well before a thread goes pale enough for it to dominate.
+    const lightness = (0.299 * p.r + 0.587 * p.g + 0.114 * p.b) / 255;
+    const shadowAlpha = 0.45 - 0.33 * lightness;
+    oc.shadowColor = `rgba(0,0,0,${shadowAlpha.toFixed(3)})`;
     oc.shadowBlur = shadowBlur;
     oc.shadowOffsetX = shadowOff;
     oc.shadowOffsetY = shadowOff;
@@ -98,11 +110,20 @@ export async function renderCoverThumbnailPng(
     }
   }
 
-  // Fabric holes at every grid intersection — one repeating tile (dot at its
-  // corner) instead of a moveTo+arc per intersection. A large design has
-  // 75,000+ intersections; that many individual native-canvas calls was
-  // slow enough to make the whole render hang in practice, whereas a tiled
-  // fillRect is a single call regardless of design size.
+  // Fabric holes at every grid intersection, everywhere — back to the
+  // original single flat fillRect over the whole canvas, drawn last.
+  //
+  // 2026-08-10: two masked variants were tried (holes only on bare fabric,
+  // holes only under stitches) to fix a pale design (a near-white goose
+  // illustration) looking washed out. Both technically worked but made the
+  // holes themselves barely perceptible — masking to half the canvas at a
+  // time, combined with the shadow/weave already layered around each dot,
+  // pushed it below the threshold of actually being seen (confirmed with
+  // an isolated debug render: the masking logic was correct, the dot was
+  // just visually swamped). Olga's read: she could clearly see the holes
+  // everywhere before either masked attempt, and wants that visibility
+  // back — the washed-out look is being fixed via the shadow-alpha change
+  // above instead, not by touching hole coverage.
   const hr = Math.max(0.5, cellPx * 0.11);
   const holeTile = createCanvas(cellPx, cellPx);
   const htx = holeTile.getContext('2d') as unknown as Ctx2D;

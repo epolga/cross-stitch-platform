@@ -288,13 +288,69 @@ function stampSimpleCross(
   const oc = out.getContext('2d')!;
   oc.save();
   oc.beginPath(); oc.rect(0, 0, ecs, ecs); oc.clip();
-  oc.shadowColor = 'rgba(0,0,0,0.3)';
+  // Experimental (2026-08-10, Olga's ask): shadow alpha scaled by the
+  // thread color's own perceived lightness, same idea already tried in
+  // server-cover-thumbnail.ts — a flat dark shadow reads as thread depth
+  // on saturated/dark colors but as grime on near-white ones. Same relative
+  // proportion as that file's 0.45->0.12 change, applied to this file's
+  // baseline 0.3 instead (0.3 -> ~0.08 at white).
+  const lightness = (0.299 * col.r + 0.587 * col.g + 0.114 * col.b) / 255;
+  const shadowAlpha = 0.3 - 0.22 * lightness;
+  oc.shadowColor = `rgba(0,0,0,${shadowAlpha.toFixed(3)})`;
   oc.shadowBlur = shadowBlur * 1.3;
   oc.shadowOffsetX = shadowOff * 0.6;
   oc.shadowOffsetY = shadowOff * 0.6;
   oc.drawImage(tmp, 0, 0);
   oc.restore();
   return out;
+}
+
+// Fixed-hue accent (e.g. the site's own rose-red) reads fine on pale designs
+// but blends into warm/neutral ones (beige, grey) — Olga's ask after seeing
+// it fail on the Labrador/Elephant tests: derive the outline-dot color from
+// each design's own palette instead, as its complementary hue, so it always
+// contrasts with that specific design rather than matching or clashing by luck.
+function computeContrastAccentColor(palette: { r: number; g: number; b: number; stitchCount: number }[]): string {
+  let rSum = 0, gSum = 0, bSum = 0, wSum = 0;
+  for (const p of palette) {
+    const w = p.stitchCount || 1;
+    rSum += p.r * w; gSum += p.g * w; bSum += p.b * w; wSum += w;
+  }
+  if (wSum === 0) return '190,18,60';
+  const rn = rSum / wSum / 255, gn = gSum / wSum / 255, bn = bSum / wSum / 255;
+
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const d = max - min;
+  const l = (max + min) / 2;
+  let h = 0;
+  if (d !== 0) {
+    switch (max) {
+      case rn: h = 60 * (((gn - bn) / d) % 6); break;
+      case gn: h = 60 * ((bn - rn) / d + 2); break;
+      default: h = 60 * ((rn - gn) / d + 4); break;
+    }
+  }
+  if (h < 0) h += 360;
+
+  const accentHue = (h + 180) % 360;
+  const accentS = 0.6;
+  const accentL = 0.32; // dark enough to stay visible against the pale Aida cloth regardless of hue
+
+  const c = (1 - Math.abs(2 * accentL - 1)) * accentS;
+  const x = c * (1 - Math.abs(((accentHue / 60) % 2) - 1));
+  const m = accentL - c / 2;
+  let r2 = 0, g2 = 0, b2 = 0;
+  if (accentHue < 60) { r2 = c; g2 = x; b2 = 0; }
+  else if (accentHue < 120) { r2 = x; g2 = c; b2 = 0; }
+  else if (accentHue < 180) { r2 = 0; g2 = c; b2 = x; }
+  else if (accentHue < 240) { r2 = 0; g2 = x; b2 = c; }
+  else if (accentHue < 300) { r2 = x; g2 = 0; b2 = c; }
+  else { r2 = c; g2 = 0; b2 = x; }
+
+  const R = Math.round((r2 + m) * 255);
+  const G = Math.round((g2 + m) * 255);
+  const B = Math.round((b2 + m) * 255);
+  return `${R},${G},${B}`;
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -353,6 +409,8 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
   const stitchedRef    = useRef(stitchedCells);
   const focusColorRef  = useRef(focusColorIndex);
   const markTargetRef  = useRef(false); // whether the in-progress mark drag is marking or unmarking
+  const accentColorRef = useRef<string>('190,18,60');
+  accentColorRef.current = computeContrastAccentColor(palette);
   gridRef.current      = grid;
   paletteRef.current   = palette;
   modeRef.current      = mode;
@@ -474,13 +532,42 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         if (aidaLayerRef.current) ctx.drawImage(aidaLayerRef.current, ML, MT, w, h);
         ctx.drawImage(crossLayerRef.current!, ML, MT, w, h);
 
-        // Holes overlay — always on top of stitches so thread ends visibly enter the cloth
+        // Outline dots — 2026-08-10 (Olga's ask, after live comparison):
+        // drawn only at intersections where NONE of the up to 4 surrounding
+        // cells are stitched, i.e. on bare cloth just outside the design —
+        // this reads as a highlight framing the shape rather than fabric
+        // holes competing with the stitches themselves. Color comes from
+        // computeContrastAccentColor() (complementary to the design's own
+        // palette) instead of a fixed hue, since a fixed rose-red looked
+        // right on pale designs (goose, ghost) but did nothing for a grey
+        // or beige one.
+        //
+        // At low zoom the dots stay fully drawn (not faded to invisible —
+        // Olga: "не точки должны гаснуть") but their color is blended
+        // toward white as cs shrinks, so contrast against the cloth drops
+        // instead of the dots vanishing. A first attempt faded opacity to
+        // zero below ~6px, which she pointed out was the wrong fix — the
+        // dots themselves shouldn't disappear, the hole *contrast* should.
         {
+          const minContrast = 0.25;
+          const contrastT = Math.max(0, Math.min(1, (cs - 6) / (14 - 6)));
+          const contrastFactor = minContrast + (1 - minContrast) * contrastT;
+          const [ar, ag, ab] = accentColorRef.current.split(',').map(Number);
+          const br = Math.round(ar + (255 - ar) * (1 - contrastFactor));
+          const bg = Math.round(ag + (255 - ag) * (1 - contrastFactor));
+          const bb = Math.round(ab + (255 - ab) * (1 - contrastFactor));
+
+          const isStitched = (rr: number, cc: number): boolean => {
+            if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) return false;
+            const ci = g[rr][cc];
+            return ci >= 0 && !(hiddenColors?.has(ci) ?? false);
+          };
           const hr = Math.max(0.5, cs * 0.11);
-          ctx.fillStyle = 'rgba(40,25,8,0.70)';
+          ctx.fillStyle = `rgba(${br},${bg},${bb},0.75)`;
           ctx.beginPath();
           for (let r = 0; r <= rows; r++) {
             for (let c = 0; c <= cols; c++) {
+              if (isStitched(r - 1, c - 1) || isStitched(r - 1, c) || isStitched(r, c - 1) || isStitched(r, c)) continue;
               const hx = c * cs + ML;
               const hy = r * cs + MT;
               ctx.moveTo(hx + hr, hy);
@@ -1071,12 +1158,19 @@ const PatternCanvas = forwardRef<PatternCanvasHandle, Props>(function PatternCan
         }
       }
 
-      // Holes overlay
+      // Holes overlay — fabric-hole dots drawn only where actually stitched.
+      // 2026-08-10: the live canvas draw loop above moved to a different
+      // "outline dots outside the design, palette-contrast color" scheme
+      // (Olga's ask); this export path was not part of that change and
+      // still uses the original inside-stitching / fixed dark-brown look.
+      const isStitchedForHole = (rr: number, cc: number): boolean =>
+        rr >= 0 && rr < rows && cc >= 0 && cc < cols && g[rr][cc] >= 0;
       const hr = Math.max(0.5, cs * 0.11);
       ctx.fillStyle = 'rgba(40,25,8,0.70)';
       ctx.beginPath();
       for (let r = 0; r <= rows; r++) {
         for (let c = 0; c <= cols; c++) {
+          if (!isStitchedForHole(r - 1, c - 1) && !isStitchedForHole(r - 1, c) && !isStitchedForHole(r, c - 1) && !isStitchedForHole(r, c)) continue;
           ctx.moveTo(c * cs + hr, r * cs);
           ctx.arc(c * cs, r * cs, hr, 0, Math.PI * 2);
         }
