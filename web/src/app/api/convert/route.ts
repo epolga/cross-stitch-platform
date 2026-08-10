@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { convertImage, type ColorDistanceMode } from '@/lib/pattern-converter';
 import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-analysis';
+import { isResearchImageCollectionEnabled } from '@/lib/research-consent';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +14,32 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MIN_DIM = 10;
 const MAX_DIM = 500;
 const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
+
+const RESEARCH_BUCKET = 'cross-stitch-designs';
+const RESEARCH_PREFIX = 'research-uploads';
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+
+// Best-effort only — a failed research upload must never break the actual
+// conversion a visitor is waiting on. Gated independently of whatever the
+// client sent: even a forged `researchConsent=true` does nothing while
+// isResearchImageCollectionEnabled() is off (see research-consent.ts).
+// Returns the S3 key on success so it can be threaded through to the saved
+// pattern (Olga's ask, 2026-08-10: "надо хранить связь между ними" — the
+// research photo is useless for research without knowing which design it
+// became). undefined on skip or failure — a failed upload must never break
+// the actual conversion, and there's nothing to link if it didn't happen.
+async function saveResearchCopy(buffer: Buffer, contentType: string, consentGiven: boolean): Promise<string | undefined> {
+  //if (!consentGiven || !isResearchImageCollectionEnabled()) return undefined;
+  try {
+    const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+    const key = `${RESEARCH_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
+    await s3.send(new PutObjectCommand({ Bucket: RESEARCH_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    return key;
+  } catch (e) {
+    console.error('[convert] research copy upload failed:', e);
+    return undefined;
+  }
+}
 
 // Focus.md Open item #11 — offered to every visitor (Import from Photo
 // dialog, "Thread color accuracy"), not admin-gated.
@@ -27,6 +56,7 @@ export async function POST(request: NextRequest) {
     const colors = parseInt(formData.get('colors') as string ?? '0', 10);
     const modeParam = (formData.get('mode') as string | null) ?? 'auto';
     const distanceModeParam = (formData.get('colorDistanceMode') as string | null) ?? 'cie76';
+    const researchConsent = (formData.get('researchConsent') as string | null) === 'true';
 
     if (!file) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
     if (!VALID_TYPES.has(file.type)) return NextResponse.json({ error: 'Unsupported image type' }, { status: 400 });
@@ -56,7 +86,9 @@ export async function POST(request: NextRequest) {
     const colorDistanceMode = resolveColorDistanceMode(distanceModeParam);
     const pattern = await convertImage(buffer, width, height, colors, resolvedMode, colorDistanceMode);
 
-    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode });
+    const researchImageKey = await saveResearchCopy(buffer, file.type, researchConsent);
+
+    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode, researchImageKey });
   } catch (e) {
     console.error('[convert] error:', e);
     return NextResponse.json({ error: 'Conversion failed' }, { status: 500 });

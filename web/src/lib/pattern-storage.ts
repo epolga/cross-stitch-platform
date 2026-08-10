@@ -89,6 +89,7 @@ export interface SavedPattern {
   progress?: string;
   cellSize?: number;
   sourceGenerationId?: string;
+  researchImageKey?: string;
 }
 
 export async function savePattern(
@@ -101,6 +102,7 @@ export async function savePattern(
   thumbnail?: string,
   hiddenColors?: number[],
   sourceGenerationId?: string,
+  researchImageKey?: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -127,6 +129,10 @@ export async function savePattern(
   // "Data store and provenance tracking". A manually-created/imported
   // pattern never sets this.
   if (sourceGenerationId) item.sourceGenerationId = { S: sourceGenerationId };
+  // Set once, at first save, same as sourceGenerationId above — the link is
+  // to the original uploaded photo, so a later edit-resave (updatePattern)
+  // must never touch or clear it.
+  if (researchImageKey) item.researchImageKey = { S: researchImageKey };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
@@ -142,6 +148,7 @@ export async function updatePattern(
   ownerID: string,
   thumbnail?: string,
   hiddenColors?: number[],
+  researchImageKey?: string,
 ): Promise<void> {
   await ensureTable();
   const rle = rleEncode(grid);
@@ -168,6 +175,15 @@ export async function updatePattern(
 
   if (hiddenColors && hiddenColors.length > 0) { values[':hc'] = { S: JSON.stringify(hiddenColors) }; setParts.push('hiddenColors = :hc'); }
   else removeParts.push('hiddenColors');
+
+  // Only set, never remove: an existing pattern's link to its original
+  // research photo must survive a routine edit-resave that has no new
+  // photo to report (client sends undefined then). Re-importing a new
+  // photo into an already-saved pattern (Redo/Load New) does carry a fresh
+  // key here and should overwrite the old link — found missing 2026-08-10
+  // when Olga's real test resaved an already-open pattern via PUT and the
+  // link silently never got recorded (savePattern-only had covered POST).
+  if (researchImageKey) { values[':rk'] = { S: researchImageKey }; setParts.push('researchImageKey = :rk'); }
 
   let updateExpression = `SET ${setParts.join(', ')}`;
   if (removeParts.length > 0) updateExpression += ` REMOVE ${removeParts.join(', ')}`;
@@ -276,6 +292,7 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     progress:     Item.progress?.S,
     cellSize:     Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
     sourceGenerationId: Item.sourceGenerationId?.S,
+    researchImageKey: Item.researchImageKey?.S,
   };
 }
 

@@ -21,6 +21,10 @@ export interface ConvertedPattern {
   palette: PatternPalette[];
   width: number;
   height: number;
+  // S3 key of the research-consent copy of the source photo (see
+  // research-consent.ts), when the visitor opted in and the feature is
+  // enabled. Threaded through to the saved pattern so the two stay linked.
+  researchImageKey?: string;
 }
 
 const DMC: DmcColor[] = dmcColors;

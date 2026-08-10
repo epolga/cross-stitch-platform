@@ -123,7 +123,7 @@ describe('PUT /api/converter/patterns/[id]', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: VALID_ID });
     expect(mocks.updatePattern).toHaveBeenCalledWith(
-      VALID_ID, 'Horse Updated', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'owner-u1', undefined, undefined,
+      VALID_ID, 'Horse Updated', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'owner-u1', undefined, undefined, undefined,
     );
   });
 
@@ -135,7 +135,19 @@ describe('PUT /api/converter/patterns/[id]', () => {
 
     await PUT(makePutRequest(VALID_ID, { ...VALID_BODY, thumbnail: thumb }), makeParams(VALID_ID));
     expect(mocks.updatePattern).toHaveBeenCalledWith(
-      VALID_ID, 'Horse Updated', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'owner-u1', thumb, undefined,
+      VALID_ID, 'Horse Updated', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'owner-u1', thumb, undefined, undefined,
+    );
+  });
+
+  it('passes researchImageKey through to updatePattern when a new photo was imported', async () => {
+    mocks.getSession.mockResolvedValueOnce({ userId: 'owner-u1', email: 'a@b.com' });
+    mocks.loadPattern.mockResolvedValueOnce({ ...PATTERN });
+    mocks.updatePattern.mockResolvedValueOnce(undefined);
+
+    await PUT(makePutRequest(VALID_ID, { ...VALID_BODY, researchImageKey: 'research-uploads/2026-08-10/xyz.jpg' }), makeParams(VALID_ID));
+    expect(mocks.updatePattern).toHaveBeenCalledWith(
+      VALID_ID, 'Horse Updated', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'owner-u1', undefined, undefined,
+      'research-uploads/2026-08-10/xyz.jpg',
     );
   });
 });

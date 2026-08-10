@@ -59,8 +59,19 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
   const [analyzing, setAnalyzing] = useState(false);
   const [userMode, setUserMode] = useState<UserMode>('auto');
   const [colorDistanceMode, setColorDistanceMode] = useState<ColorDistanceMode>('cie76');
+  // Off (both the flag fetch and the checkbox default) until Olga confirms
+  // the consent wording is GDPR-compliant — see research-consent.ts.
+  const [researchCollectionEnabled, setResearchCollectionEnabled] = useState(false);
+  const [researchConsent, setResearchConsent] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
+
+  useEffect(() => {
+    fetch('/api/config/research-collection')
+      .then(r => r.json())
+      .then((d: { enabled?: boolean }) => setResearchCollectionEnabled(Boolean(d.enabled)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (open && initialFile) handleFile(initialFile);
@@ -199,6 +210,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       form.append('colors', String(numColors));
       form.append('mode', mode);
       form.append('colorDistanceMode', colorDistanceMode);
+      form.append('researchConsent', String(researchCollectionEnabled && researchConsent));
       trackEvent('pattern_generation_started', {
         width: innerW,
         height: innerH,
@@ -424,6 +436,24 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               : 'The closest possible thread-color match — takes noticeably longer to generate.'}
           </p>
         </div>
+
+        {researchCollectionEnabled && (
+          <label className="flex items-start gap-2 mb-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={researchConsent}
+              onChange={e => setResearchConsent(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="text-xs text-gray-500">
+              Allow us to save a copy of this photo for research purposes, to help improve the converter.
+              Optional — the pattern still generates either way. See our{' '}
+              <a href="/privacy-policy" target="_blank" rel="noreferrer" className="text-rose-600 underline hover:text-rose-700">
+                Privacy Policy
+              </a>.
+            </span>
+          </label>
+        )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 

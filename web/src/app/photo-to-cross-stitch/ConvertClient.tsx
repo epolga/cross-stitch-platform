@@ -463,6 +463,14 @@ export default function ConvertPage() {
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [afterSaveAction, setAfterSaveAction] = useState<'copyLink' | null>(null);
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
+  // S3 key of the research-consent photo copy for the current design's
+  // source image (see research-consent.ts) — set from handleImport() when
+  // the visitor opted in, sent along on the first save so the two stay
+  // linked (Olga's ask, 2026-08-10). Only relevant for a brand-new save
+  // (POST); once a pattern has a savedPatternId this is already persisted
+  // server-side and re-sending it on every edit-resave (PUT) would be inert
+  // anyway since updatePattern() never touches this field.
+  const [researchImageKey, setResearchImageKey] = useState<string | undefined>(undefined);
   // Track 2 (Opportunity 9) — set from the pattern-load response when this
   // pattern has AI-draft provenance. needsAiReview specifically means the
   // Approve/Approve-with-changes step (docs/genai-growth/DESIGN_FEEDBACK_LOOP.md)
@@ -581,6 +589,7 @@ export default function ConvertPage() {
     setPatternName('');
     setNameInput('');
     setEditingName(true);
+    setResearchImageKey(data.researchImageKey);
     updatePalette(data.palette);
     const confettiResult = removeConfetti(paddedGrid);
     updateGrid(confettiResult.grid);
@@ -1096,7 +1105,11 @@ export default function ConvertPage() {
     const pal = paletteRef.current;
     const thumbnail = generatePatternThumbnail(g, pal);
     const hiddenColorsArr = hiddenColors.size > 0 ? Array.from(hiddenColors) : undefined;
-    const body = JSON.stringify({ name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail, hiddenColors: hiddenColorsArr });
+    const body = JSON.stringify({
+      name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail,
+      hiddenColors: hiddenColorsArr,
+      researchImageKey, // no-op on PUT (updatePattern doesn't accept it) — only takes effect on the first save
+    });
     const resp = await fetch(
       existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',
       { method: existingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body },
