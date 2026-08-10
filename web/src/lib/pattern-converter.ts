@@ -212,6 +212,25 @@ function nearestDmcLab(lab: Lab, dist: (a: Lab, b: Lab) => number): number {
   return best;
 }
 
+// Real DMC thread inventory doesn't have infinitely fine gradation — two
+// genuinely different source shades can both snap to the SAME nearest
+// thread (confirmed live: a ghost's near-white body vs a near-white
+// background, real Lab averages 4 units apart, both closest to the same
+// single "off-white" thread — there's no second thread that close). When
+// that happens and the two regions still need to render as visually
+// distinct, fall back to the next-nearest DISTINCT thread rather than
+// giving up — a slightly-less-exact color match that's still visible
+// beats an exact match that's invisible against its neighbor.
+function nearestDmcLabExcluding(lab: Lab, dist: (a: Lab, b: Lab) => number, exclude: number): number {
+  let best = -1, bestDist = Infinity;
+  for (let i = 0; i < DMC_LAB.length; i++) {
+    if (i === exclude) continue;
+    const d = dist(lab, DMC_LAB[i]);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
 // ── Seeded PRNG (mulberry32) ──────────────────────────────────────────────────
 
 function makePrng(seed: number): () => number {
@@ -658,6 +677,217 @@ function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: 
   return out;
 }
 
+// EXPERIMENTAL (2026-08-10, not shipped): plain k-means minimizes total
+// quantization error, not perceptual distinctness — two colors that are
+// numerically close (e.g. a near-white subject on a near-white background,
+// 16 LAB units apart) get pooled into ONE cluster even with a generous
+// cluster budget, because splitting them barely reduces total error
+// compared to giving a cluster to a more visually distinct color. Real
+// case: a ghost illustration's entire body (a huge, spatially coherent
+// region) vanished — same DMC as the true background, confirmed even
+// after raising k-means' cluster budget for illustration mode didn't help.
+// Fix: after clustering settles every cell's color, look at each color's
+// actual cells as a shape — if they form 2+ large, separate connected
+// components (not just scattered confetti), that's a sign color-only
+// clustering conflated two real, different regions. Give every component
+// past the largest its own DMC, computed from ITS OWN true average color
+// (not the merged one) — same "push past maxColors for a good reason"
+// exception the outline-preservation pass above already uses.
+// v2: a blob that's genuinely touching its neighbor (no separating stroke —
+// exactly the ghost-body-on-background case) forms ONE connected component
+// even after being wrongly pooled into one DMC — there's no gap for
+// connected-component analysis to find, because none exists in the pixel
+// grid. Fix: instead of looking for spatial gaps, look for hidden color
+// variation WITHIN the blob using each cell's real (pre-quantization) Lab
+// value — run a local 2-means split restricted to just this blob's real
+// colors, then only accept the split if the smaller side is both large
+// enough AND spatially coherent (its own largest connected component
+// covers most of it) — the latter check is what rejects a false-positive
+// split on a blob that's genuinely one uniform color with only sensor/
+// dithering noise, since noise splits scatter randomly rather than
+// forming one region.
+const LARGE_REGION_MIN_FRACTION = 0.02; // 2% of non-transparent pixels
+const LARGE_REGION_MIN_ABSOLUTE = 40;   // px floor so tiny designs aren't exempt
+const LARGE_REGION_COHERENCE_FRACTION = 0.6; // smaller side's largest component must cover this much of it
+
+function avgLab(idxs: number[], pixelsLab: Lab[]): Lab {
+  let sumL = 0, sumA = 0, sumB = 0;
+  for (const i of idxs) { const l = pixelsLab[i]; sumL += l[0]; sumA += l[1]; sumB += l[2]; }
+  return [sumL / idxs.length, sumA / idxs.length, sumB / idxs.length];
+}
+
+function largestConnectedComponentSize(idxs: number[], w: number, h: number): number {
+  const set = new Set(idxs);
+  const visited = new Set<number>();
+  let largest = 0;
+  for (const start of idxs) {
+    if (visited.has(start)) continue;
+    let size = 0;
+    const stack = [start];
+    visited.add(start);
+    while (stack.length) {
+      const i = stack.pop()!;
+      size++;
+      const x = i % w, y = (i / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const ni = ny * w + nx;
+          if (visited.has(ni) || !set.has(ni)) continue;
+          visited.add(ni);
+          stack.push(ni);
+        }
+      }
+    }
+    if (size > largest) largest = size;
+  }
+  return largest;
+}
+
+// Connected components of `cells` (8-connected), regardless of color —
+// used to check whether a DMC's pixels form 2+ genuinely separate spatial
+// blobs (a real gap/stroke already divides them, e.g. a ghost design that
+// DOES have a drawn outline between body and background) as opposed to one
+// contiguous mass (no drawn separation at all, e.g. a ghost with none).
+function connectedComponents(idxs: number[], w: number, h: number): number[][] {
+  const set = new Set(idxs);
+  const visited = new Set<number>();
+  const comps: number[][] = [];
+  for (const start of idxs) {
+    if (visited.has(start)) continue;
+    const comp: number[] = [];
+    const stack = [start];
+    visited.add(start);
+    while (stack.length) {
+      const i = stack.pop()!;
+      comp.push(i);
+      const x = i % w, y = (i / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const ni = ny * w + nx;
+          if (visited.has(ni) || !set.has(ni)) continue;
+          visited.add(ni);
+          stack.push(ni);
+        }
+      }
+    }
+    comps.push(comp);
+  }
+  return comps;
+}
+
+// Looks for hidden color variation within a single spatially-contiguous
+// blob via a local 2-means split on the real (pre-quantization) Lab
+// values — this is what recovers a case like a ghost whose body touches
+// the background directly with no outline at all (so there's no spatial
+// gap for connectedComponents to find; the only signal left is the faint
+// real color difference). Returns the smaller side's cell list if a
+// genuine split was found, else null. Requires the smaller side to be
+// both large enough AND spatially coherent (its own largest connected
+// component covers most of it) — that check is what rejects a
+// false-positive split on a blob that's genuinely one uniform color with
+// only sensor/dithering noise, since noise splits scatter randomly
+// rather than forming one region.
+function findHiddenColorSplit(
+  cells: number[],
+  pixelsLab: Lab[],
+  w: number,
+  h: number,
+  dist: (a: Lab, b: Lab) => number,
+  minSize: number,
+): number[] | null {
+  let seedA = cells[0], seedB = cells[0];
+  let minL = Infinity, maxL = -Infinity;
+  for (const i of cells) {
+    const l = pixelsLab[i][0];
+    if (l < minL) { minL = l; seedA = i; }
+    if (l > maxL) { maxL = l; seedB = i; }
+  }
+  if (seedA === seedB) return null; // perfectly uniform blob, nothing hidden to find
+
+  let centerA = pixelsLab[seedA];
+  let centerB = pixelsLab[seedB];
+  let groupA: number[] = [];
+  let groupB: number[] = [];
+  for (let iter = 0; iter < 6; iter++) {
+    groupA = [];
+    groupB = [];
+    for (const i of cells) {
+      const p = pixelsLab[i];
+      if (dist(p, centerA) <= dist(p, centerB)) groupA.push(i); else groupB.push(i);
+    }
+    if (groupA.length === 0 || groupB.length === 0) break;
+    centerA = avgLab(groupA, pixelsLab);
+    centerB = avgLab(groupB, pixelsLab);
+  }
+  if (groupA.length === 0 || groupB.length === 0) return null;
+
+  const minor = groupA.length <= groupB.length ? groupA : groupB;
+  if (minor.length < minSize) return null;
+  if (largestConnectedComponentSize(minor, w, h) < minor.length * LARGE_REGION_COHERENCE_FRACTION) return null;
+  return minor;
+}
+
+function splitLargeMergedRegions(
+  pixelDmc: number[],
+  pixelsLab: Lab[],
+  transparent: Uint8Array,
+  w: number,
+  h: number,
+  dist: (a: Lab, b: Lab) => number,
+): void {
+  const n = w * h;
+  let nonTransparent = 0;
+  for (let i = 0; i < n; i++) if (!transparent[i]) nonTransparent++;
+  const minSize = Math.max(LARGE_REGION_MIN_ABSOLUTE, Math.round(nonTransparent * LARGE_REGION_MIN_FRACTION));
+
+  const byDmc = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    if (transparent[i]) continue;
+    const dmc = pixelDmc[i];
+    let arr = byDmc.get(dmc);
+    if (!arr) { arr = []; byDmc.set(dmc, arr); }
+    arr.push(i);
+  }
+
+  for (const [dmc, cells] of byDmc) {
+    if (cells.length < minSize * 2) continue;
+
+    // A real gap (e.g. a drawn outline stroke) may already separate two
+    // or more large regions sharing this color — give every component
+    // past the largest its own true-average color right away, since real
+    // spatial separation is itself sufficient evidence they're different.
+    const comps = connectedComponents(cells, w, h);
+    comps.sort((a, b) => b.length - a.length);
+    for (let ci = 1; ci < comps.length; ci++) {
+      const comp = comps[ci];
+      if (comp.length < minSize) continue;
+      const newDmc = nearestDmcLab(avgLab(comp, pixelsLab), dist);
+      if (newDmc === dmc) continue;
+      for (const i of comp) pixelDmc[i] = newDmc;
+    }
+
+    // The largest component is never split by the pass above — but being
+    // largest doesn't mean it's genuinely one region: a ghost whose body
+    // touches the background directly (no outline, no gap at all) forms
+    // ONE component that IS the false merge. Always also check it for
+    // hidden color variation.
+    const largest = comps[0];
+    if (largest.length < minSize * 2) continue;
+    const minor = findHiddenColorSplit(largest, pixelsLab, w, h, dist, minSize);
+    if (!minor) continue;
+    const minorAvg = avgLab(minor, pixelsLab);
+    let newDmc = nearestDmcLab(minorAvg, dist);
+    if (newDmc === dmc) newDmc = nearestDmcLabExcluding(minorAvg, dist, dmc);
+    for (const i of minor) pixelDmc[i] = newDmc;
+  }
+}
+
 // 2026-08-09 (Olga's ask, real live case): line-art source images
 // (AI-generated or otherwise) commonly have anti-aliased grey pixels
 // along the stroke's edges — a real saved draft ended up with 7 distinct
@@ -807,6 +1037,10 @@ export async function convertImage(
 
   // Map each pixel to its final DMC color (guaranteed ≤ maxColors distinct values)
   const pixelDmc: number[] = Array.from(assignments, j => centroidFinal[j]);
+
+  if (mode === 'illustration' || mode === 'line-art') {
+    splitLargeMergedRegions(pixelDmc, pixelsLab, transparent, w, h, finalDist);
+  }
 
   // Now that clustering has settled every cell's color, decide which edge
   // candidates are genuine strokes (resolveOutlineComponents) and force the

@@ -363,7 +363,20 @@ async function main() {
   // needed more than a few units of slack — while the mouse's erased
   // count drops sharply once tolerance passes below 26, confirming this
   // was purely the belly bridge, not genuine anti-aliasing variance.
-  const tolerance = mode === 'line-art' ? 0 : 20;
+  // 2026-08-10: tolerance 20 had a third real bug — a ghost illustration
+  // with NO drawn outline at all between its body and the page background
+  // (a cute-flat-art style relying purely on the two being different
+  // shades, 16 raw LAB units apart). pattern-converter.ts's
+  // splitLargeMergedRegions() now recovers the body as its own DMC even
+  // with zero drawn separation, but the two real DMC threads nearest
+  // those two very-near-white source colors (blanc 248/248/248 vs 3865
+  // 252/251/246) are themselves only 4 units apart — well inside the old
+  // 20 tolerance, so erasure re-merged them right back. Lowered to 3:
+  // re-verified empirically against all 5 reference images (ghost, mouse,
+  // kitten, puppy, Lady of Perpetual Love, elephant) — erased-cell count
+  // is unchanged (±7 cells on one image, noise) on every one except the
+  // ghost, where the body now survives intact.
+  const tolerance = mode === 'line-art' ? 0 : 3;
   const bgMask = detectBackgroundByFloodFill(cleanedGrid, converted.palette, tolerance);
   const erasedGrid = eraseBackground(cleanedGrid, bgMask);
   const erasedCount = bgMask.flat().filter(Boolean).length;
