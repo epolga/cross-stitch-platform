@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { loadPattern, updatePattern } from '@/lib/pattern-storage';
+import { loadPattern, updatePattern, deletePattern } from '@/lib/pattern-storage';
 import { getSession } from '@/lib/session';
 import { getGeneration } from '@/lib/ai-design-generations';
 
@@ -86,6 +86,32 @@ export async function PUT(
   } catch (e) {
     console.error('[converter/patterns] PUT error:', e);
     const msg = e instanceof Error ? e.message : 'Failed to update pattern';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    if (!id || !/^[0-9a-f-]{36}$/.test(id))
+      return NextResponse.json({ error: 'Invalid pattern ID' }, { status: 400 });
+
+    const session = await getSession(request);
+    if (!session) return NextResponse.json({ error: 'Login required' }, { status: 401 });
+
+    const existing = await loadPattern(id);
+    if (!existing) return NextResponse.json({ error: 'Pattern not found' }, { status: 404 });
+    if (existing.ownerID && existing.ownerID !== session.userId)
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+
+    await deletePattern(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('[converter/patterns] DELETE error:', e);
+    const msg = e instanceof Error ? e.message : 'Failed to delete pattern';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

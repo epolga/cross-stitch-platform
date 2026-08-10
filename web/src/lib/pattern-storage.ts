@@ -3,6 +3,7 @@ import {
   GetItemCommand,
   PutItemCommand,
   UpdateItemCommand,
+  DeleteItemCommand,
   QueryCommand,
   CreateTableCommand,
   DescribeTableCommand,
@@ -276,4 +277,12 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     cellSize:     Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
     sourceGenerationId: Item.sourceGenerationId?.S,
   };
+}
+
+export async function deletePattern(id: string): Promise<void> {
+  await ensureTable();
+  await client.send(new DeleteItemCommand({
+    TableName: TABLE,
+    Key: { patternId: { S: id } },
+  }));
 }
