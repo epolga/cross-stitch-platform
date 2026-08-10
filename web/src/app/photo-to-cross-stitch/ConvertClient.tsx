@@ -27,6 +27,10 @@ import { rleEncode, rleDecode } from '@/lib/rle';
 import { trackEvent, postEditorEvent, checkReturnPatternGeneration } from '@/lib/track-event';
 
 const DRAFT_KEY = 'converterDraft';
+// sessionStorage mirror of the quality-feedback timer's due time — see
+// armQualityFeedback() for why a plain in-memory setTimeout alone isn't
+// enough (doesn't survive a reload/navigation within the 4s window).
+const QUALITY_FEEDBACK_DUE_KEY = 'qualityFeedbackDueAt';
 
 // Track 2 (Opportunity 9) — preset reason list from
 // docs/genai-growth/DESIGN_FEEDBACK_LOOP.md's "Reason tags" section.
@@ -262,6 +266,30 @@ export default function ConvertPage() {
     return () => {
       if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
     };
+  }, []);
+
+  // Resumes a quality-feedback check that was armed before a reload or
+  // navigation-away-and-back wiped the in-memory timer (see
+  // armQualityFeedback) — runs once on mount, after the pattern-load
+  // effects above have had a chance to set savedPatternId back from the
+  // ?pattern= URL param, so a resumed check still carries the right id.
+  useEffect(() => {
+    let dueAt: number | null = null;
+    try {
+      const raw = sessionStorage.getItem(QUALITY_FEEDBACK_DUE_KEY);
+      if (raw) dueAt = Number(raw);
+    } catch { /* ignore */ }
+    if (dueAt === null || Number.isNaN(dueAt)) return;
+
+    const remaining = dueAt - Date.now();
+    const fire = () => {
+      try { sessionStorage.removeItem(QUALITY_FEEDBACK_DUE_KEY); } catch { /* ignore */ }
+      postEditorEvent('quality_feedback_timer_fired', { patternId: savedPatternId, resumedAfterReload: true });
+      setShowQualityFeedback(true);
+    };
+    if (remaining <= 0) fire();
+    else qualityFeedbackTimerRef.current = setTimeout(fire, remaining);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -528,10 +556,24 @@ export default function ConvertPage() {
     if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
     setShowQualityFeedback(false);
     postEditorEvent('quality_feedback_armed', { patternId: savedPatternId });
+    // 2026-08-10: found live via quality_feedback_armed/timer_fired telemetry
+    // — a plain in-memory setTimeout doesn't survive a page reload or
+    // navigation-away-and-back within the 4s window, silently losing the
+    // pending "show the widget" intent with no trace (the JS heap is gone,
+    // so there's nothing left to log a cancellation from). Mirroring the
+    // due time into sessionStorage lets a fresh mount of this component
+    // (see the effect below) pick the check back up instead of losing it.
+    try { sessionStorage.setItem(QUALITY_FEEDBACK_DUE_KEY, String(Date.now() + 4000)); } catch { /* ignore */ }
     qualityFeedbackTimerRef.current = setTimeout(() => {
+      try { sessionStorage.removeItem(QUALITY_FEEDBACK_DUE_KEY); } catch { /* ignore */ }
       postEditorEvent('quality_feedback_timer_fired', { patternId: savedPatternId });
       setShowQualityFeedback(true);
     }, 4000);
+  }
+
+  function dismissQualityFeedback() {
+    try { sessionStorage.removeItem(QUALITY_FEEDBACK_DUE_KEY); } catch { /* ignore */ }
+    setShowQualityFeedback(false);
   }
 
   // Import from photo (called by ImportFromPhotoDialog on success)
@@ -3031,7 +3073,7 @@ export default function ConvertPage() {
           trackEvent('pattern_quality_feedback', { rating, reason });
           postEditorEvent('pattern_quality_feedback', { rating, qualityReason: reason });
         }}
-        onClose={() => setShowQualityFeedback(false)}
+        onClose={dismissQualityFeedback}
       />
 
       {showNamePrompt && (
