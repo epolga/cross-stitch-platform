@@ -556,6 +556,8 @@ function detectOutlineMask(data: Buffer, w: number, h: number): Uint8Array {
 // flagged, and carries the AVERAGE color of just those flagged source
 // pixels (not the whole block) — so the cell remembers the stroke's actual
 // color (white, black, or anything else) rather than an assumed color.
+// Illustration mode only — see detectLineArtCandidates for line-art's own,
+// much simpler detector (a direct threshold, not top-hat).
 function downsampleOutlineMask(mask: Uint8Array, data: Buffer, srcW: number, srcH: number, dstW: number, dstH: number): (Lab | null)[] {
   const out: (Lab | null)[] = new Array(dstW * dstH).fill(null);
   for (let ty = 0; ty < dstH; ty++) {
@@ -574,6 +576,48 @@ function downsampleOutlineMask(mask: Uint8Array, data: Buffer, srcW: number, src
         }
       }
       if (count > 0) out[ty * dstW + tx] = [sumL / count, sumA / count, sumB / count];
+    }
+  }
+  return out;
+}
+
+// 2026-08-10: line-art's real strokes get a completely different, much
+// simpler detector than illustration's top-hat/hysteresis machinery.
+// Top-hat exists to solve one specific problem: telling a deliberate
+// inserted stroke apart from an ordinary boundary between two flat color
+// regions, since a gradient/edge detector alone can't tell those apart —
+// both produce a similarly narrow band of high contrast. Pure line-art
+// content (a single ink stroke on a plain background, nothing else) never
+// has that ambiguity: there are no competing flat color regions the line
+// could be confused with, so the whole reason top-hat was chosen over a
+// direct threshold doesn't apply. Tried live on "two hands reaching" (a
+// thin single JPEG stroke that top-hat + hysteresis + strong-pixel
+// preference still fragmented into disconnected dashes at a normal catalog
+// size): a flat "darker than X" threshold on the full-resolution source,
+// downsampled by taking each block's single DARKEST pixel (not an average
+// of several, which is what caused the original dilution problem one
+// level up), reconstructed the entire stroke with no visible gaps — a
+// cleaner result than the top-hat path ever produced for this image.
+const LINE_ART_LUM_THRESHOLD = 200; // 0-255 luminance; darker counts as "the line"
+
+function detectLineArtCandidates(data: Buffer, srcW: number, srcH: number, dstW: number, dstH: number): (Lab | null)[] {
+  const out: (Lab | null)[] = new Array(dstW * dstH).fill(null);
+  for (let ty = 0; ty < dstH; ty++) {
+    const y0 = Math.floor((ty / dstH) * srcH);
+    const y1 = Math.max(y0 + 1, Math.floor(((ty + 1) / dstH) * srcH));
+    for (let tx = 0; tx < dstW; tx++) {
+      const x0 = Math.floor((tx / dstW) * srcW);
+      const x1 = Math.max(x0 + 1, Math.floor(((tx + 1) / dstW) * srcW));
+      let minLum = 256, minR = 0, minG = 0, minB = 0;
+      for (let sy = y0; sy < y1; sy++) {
+        for (let sx = x0; sx < x1; sx++) {
+          const si = sy * srcW + sx;
+          const r = data[si * 3], g = data[si * 3 + 1], b = data[si * 3 + 2];
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (lum < minLum) { minLum = lum; minR = r; minG = g; minB = b; }
+        }
+      }
+      if (minLum < LINE_ART_LUM_THRESHOLD) out[ty * dstW + tx] = rgbToLab(minR, minG, minB);
     }
   }
   return out;
@@ -618,8 +662,85 @@ function downsampleOutlineMask(mask: Uint8Array, data: Buffer, srcW: number, src
 // indistinct/noise candidate is still rejected either way.
 const OUTLINE_DISTINCT_MIN_DIST2 = 300; // squared LAB distance (CIE76), ~17 deltaE
 
-function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: number, h: number, dist: (a: Lab, b: Lab) => number, minComponentSize: number): (number | null)[] {
+// 2026-08-10 (real case: "two hands reaching", a thin single-stroke
+// line-art JPEG source): grouping candidates into 8-connected components
+// and judging/coloring the WHOLE group by its single averaged color works
+// for a short local keyline (a whisker, an eye) where every cell in the
+// group really does share close to the same true color. It breaks down
+// for a long, sprawling stroke that hysteresis-links into one huge
+// component spanning much of the image (found live: 2528 of 2528
+// candidate cells on one design merged into a SINGLE component) — the
+// average dilutes across strong dark-core pixels and much lighter
+// hysteresis-grown halo/anti-aliasing pixels along the way, landing on a
+// washed-out grey (measured: L=84, nowhere near the line's real near-black
+// color) that fails the distinctness check outright, silently discarding
+// almost the entire drawn line. perCellColor (line-art mode) judges and
+// colors every candidate cell independently against its OWN true local
+// border instead of the group's average — safe against the mutual-
+// suppression pitfall the grouped design was built to avoid (see the
+// OUTLINE_DISTINCT_MIN_DIST2 comment above) because "border" is always
+// computed from real non-candidate neighbors, never from other candidates,
+// whether judged per-cell or per-group.
+function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: number, h: number, dist: (a: Lab, b: Lab) => number, minComponentSize: number, perCellColor: boolean): (number | null)[] {
   const out: (number | null)[] = new Array(w * h).fill(null);
+
+  function localBorder(component: number[]): Set<number> {
+    const border = new Set<number>();
+    for (const i of component) {
+      const x = i % w, y = (i / w) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          const ni = ny * w + nx;
+          if (!cells[ni]) border.add(ni);
+        }
+      }
+    }
+    return border;
+  }
+
+  function tryApply(component: number[], avg: Lab) {
+    const border = localBorder(component);
+    let minDist = Infinity;
+    for (const ni of border) {
+      const d = labDist2(avg, DMC_LAB[pixelDmc[ni]]);
+      if (d < minDist) minDist = d;
+    }
+    if (minDist < OUTLINE_DISTINCT_MIN_DIST2) return;
+
+    const dmc = nearestDmcLab(avg, dist);
+
+    // 2026-08-09 (real case: a mouse's whiskers): only force this
+    // component to one uniform averaged color if plain per-cell
+    // clustering (pixelDmc, already computed independently of any
+    // outline candidate) genuinely never lands on this DMC anywhere in
+    // the component on its own — i.e. the detail is truly invisible
+    // without protection (a real low-contrast case, e.g. a white keyline
+    // on white/cream background). If plain clustering ALREADY picked
+    // this exact DMC for at least one cell here, the detail has enough
+    // natural contrast to survive unprotected — skip the override and
+    // let each cell's own independently-clustered answer stand. Verified
+    // live: four whiskers close together were getting forced into one
+    // dark blob by the override even though each cell's own plain
+    // clustering already resolved several of them correctly on its own;
+    // skipping the override there lets them render as the natural
+    // dashed/partial look a thin high-contrast stroke gets at this
+    // resolution, instead of one merged patch swallowing all four.
+    const naturallyPresent = component.some(i => pixelDmc[i] === dmc);
+    if (naturallyPresent) return;
+
+    for (const i of component) out[i] = dmc;
+  }
+
+  if (perCellColor) {
+    for (let i = 0; i < w * h; i++) {
+      if (cells[i]) tryApply([i], cells[i]!);
+    }
+    return out;
+  }
+
   const visited = new Uint8Array(w * h);
   const stack: number[] = [];
   for (let start = 0; start < w * h; start++) {
@@ -649,49 +770,7 @@ function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: 
       sumL += lab[0]; sumA += lab[1]; sumB += lab[2];
     }
     const avg: Lab = [sumL / component.length, sumA / component.length, sumB / component.length];
-
-    const border = new Set<number>();
-    for (const i of component) {
-      const x = i % w, y = (i / w) | 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-          const ni = ny * w + nx;
-          if (!cells[ni]) border.add(ni);
-        }
-      }
-    }
-    let minDist = Infinity;
-    for (const ni of border) {
-      const d = labDist2(avg, DMC_LAB[pixelDmc[ni]]);
-      if (d < minDist) minDist = d;
-    }
-    if (minDist < OUTLINE_DISTINCT_MIN_DIST2) continue;
-
-    const dmc = nearestDmcLab(avg, dist);
-
-    // 2026-08-09 (real case: a mouse's whiskers): only force this
-    // component to one uniform averaged color if plain per-cell
-    // clustering (pixelDmc, already computed independently of any
-    // outline candidate) genuinely never lands on this DMC anywhere in
-    // the component on its own — i.e. the detail is truly invisible
-    // without protection (a real low-contrast case, e.g. a white keyline
-    // on white/cream background). If plain clustering ALREADY picked
-    // this exact DMC for at least one cell here, the detail has enough
-    // natural contrast to survive unprotected — skip the override and
-    // let each cell's own independently-clustered answer stand. Verified
-    // live: four whiskers close together were getting forced into one
-    // dark blob by the override even though each cell's own plain
-    // clustering already resolved several of them correctly on its own;
-    // skipping the override there lets them render as the natural
-    // dashed/partial look a thin high-contrast stroke gets at this
-    // resolution, instead of one merged patch swallowing all four.
-    const naturallyPresent = component.some(i => pixelDmc[i] === dmc);
-    if (naturallyPresent) continue;
-
-    for (const i of component) out[i] = dmc;
+    tryApply(component, avg);
   }
   return out;
 }
@@ -976,7 +1055,13 @@ export async function convertImage(
   // real stroke/not-a-stroke decision happens after clustering below, via
   // resolveOutlineComponents.
   let outlineCandidates: (Lab | null)[] | null = null;
-  if (isFlatArtMode) {
+  if (mode === 'line-art') {
+    // Direct threshold, not top-hat — see detectLineArtCandidates for why
+    // pure line-art doesn't need (and is actively hurt by) the
+    // region-boundary-vs-stroke discrimination top-hat exists for.
+    const full = await decodeComposited(sharp(imageBuffer));
+    outlineCandidates = detectLineArtCandidates(full.data, full.width, full.height, w, h);
+  } else if (isFlatArtMode) {
     const full = await decodeComposited(sharp(imageBuffer));
     const fullN = full.width * full.height;
     const fullLab: Lab[] = new Array(fullN);
@@ -1070,7 +1155,7 @@ export async function convertImage(
   // minor exception to keep the illustration's separating strokes and fine
   // linework intact.
   if (outlineCandidates) {
-    const outlineDmc = resolveOutlineComponents(outlineCandidates, pixelDmc, w, h, finalDist, mode === 'line-art' ? 1 : 2);
+    const outlineDmc = resolveOutlineComponents(outlineCandidates, pixelDmc, w, h, finalDist, 2, mode === 'line-art');
     for (let i = 0; i < n; i++) {
       const dmc = outlineDmc[i];
       if (dmc !== null) pixelDmc[i] = dmc;
