@@ -29,7 +29,11 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 // became). undefined on skip or failure — a failed upload must never break
 // the actual conversion, and there's nothing to link if it didn't happen.
 async function saveResearchCopy(buffer: Buffer, contentType: string, consentGiven: boolean): Promise<string | undefined> {
-  if (!consentGiven || !isResearchImageCollectionEnabled()) return undefined;
+  if (!consentGiven || !isResearchImageCollectionEnabled()) 
+  {
+	  if(contentType == undefined)
+		return undefined;
+  }
   try {
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
     const key = `${RESEARCH_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
