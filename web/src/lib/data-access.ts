@@ -129,6 +129,32 @@ const albumCaptionCache: Map<number, string> = new Map();
 let cacheInitialized: boolean = false;
 let cacheInitializationPromise: Promise<void> | null = null;
 
+// 2026-08-10: cross-stitch-com-env-clone runs 2 EC2 instances behind an
+// ELB, and this cache is a plain in-process Map per instance — a write
+// made through one instance (publish, edit, or an admin delete) is
+// invisible to the other until something explicitly refreshes it there
+// too. getDesignById/getDesignPhotoUrlById already self-heal a MISSING
+// entry by falling through to DynamoDB (see fetchDesignFromDb), but that
+// doesn't help a STALE entry that's still present after being deleted or
+// changed elsewhere — found for real when a design was deleted directly
+// via script and kept appearing (broken) on whichever instance's cache
+// still held the old copy. A periodic full refresh — reusing the same
+// refreshCache() the admin "Refresh design cache" button already calls,
+// which clears every map before re-scanning — bounds how long any given
+// instance can stay wrong, without needing cross-instance coordination
+// (a message bus, a shared external cache) to solve properly. 5 minutes
+// balances staleness window against DynamoDB Scan cost for ~5300 designs.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let ttlTimer: ReturnType<typeof setInterval> | null = null;
+
+function startCacheTtlTimer(): void {
+  if (ttlTimer) return;
+  ttlTimer = setInterval(() => {
+    refreshCache().catch(err => console.error('[data-access] periodic cache refresh failed:', err));
+  }, CACHE_TTL_MS);
+  ttlTimer.unref?.();
+}
+
 function itemToDesign(item: Record<string, AttributeValue>): Design {
   const design: Design = {
     DesignID: item.DesignID?.N ? parseInt(item.DesignID.N) : 0,
@@ -313,6 +339,7 @@ async function initializeCache(): Promise<void> {
       } while (albumLastEvaluatedKey);
 
       cacheInitialized = true;
+      startCacheTtlTimer();
       devLog(`Cache initialized with ${totalDesigns} designs and ${totalAlbums} albums`);
     } catch (error) {
       console.error('Error initializing cache:', error);
