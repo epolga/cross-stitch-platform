@@ -321,7 +321,6 @@ function computeContrastAccentColor(palette: { r: number; g: number; b: number; 
 
   const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
   const d = max - min;
-  const l = (max + min) / 2;
   let h = 0;
   if (d !== 0) {
     switch (max) {
