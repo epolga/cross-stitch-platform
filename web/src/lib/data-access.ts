@@ -129,6 +129,96 @@ const albumCaptionCache: Map<number, string> = new Map();
 let cacheInitialized: boolean = false;
 let cacheInitializationPromise: Promise<void> | null = null;
 
+function itemToDesign(item: Record<string, AttributeValue>): Design {
+  const design: Design = {
+    DesignID: item.DesignID?.N ? parseInt(item.DesignID.N) : 0,
+    AlbumID: item.AlbumID?.N ? parseInt(item.AlbumID.N) : 0,
+    Caption: item.Caption?.S || "",
+    Description: item.Description?.S || "",
+    NDownloaded: item.NDownloaded?.N ? parseInt(item.NDownloaded.N) : 0,
+    NColors: item.NColors?.N ? parseInt(item.NColors.N) : 0,
+    Width: item.Width?.N ? parseInt(item.Width.N) : 0,
+    Height: item.Height?.N ? parseInt(item.Height.N) : 0,
+    Notes: item.Notes?.S || "",
+    Text: item.Text?.S || "",
+    NPage: item.NPage?.S ? parseInt(item.NPage.S) : 0,
+    ImageUrl: item.ImageUrl?.S || (item.AlbumID?.N && item.DesignID?.N
+      ? `https://d2o1uvvg91z7o4.cloudfront.net/photos/${item.AlbumID.N}/${item.DesignID.N}/4.jpg`
+      : null),
+    PdfUrl: getPDFUrl(item.AlbumID, item.DesignID),
+    PinterestPinId:
+      readOptionalAttributeString(item.PinterestPinId) ||
+      readOptionalAttributeString(item.PinterestPinID) ||
+      readOptionalAttributeString(item.PinterestID) ||
+      readOptionalAttributeString(item.PinterestId) ||
+      readOptionalAttributeString(item.PinID) ||
+      readOptionalAttributeString(item.PinId) ||
+      null,
+    PinterestPinUrl:
+      readOptionalAttributeString(item.PinterestPinUrl) ||
+      readOptionalAttributeString(item.PinterestPinURL) ||
+      readOptionalAttributeString(item.PinterestUrl) ||
+      readOptionalAttributeString(item.PinUrl) ||
+      readOptionalAttributeString(item.PinURL) ||
+      null,
+    NGlobalPage: item.NGlobalPage?.N ? parseInt(item.NGlobalPage.N) : 0,
+    SeoDescription: item.SeoDescription?.S || undefined,
+    SeoTitle: item.SeoTitle?.S || undefined,
+    CanonicalDesignId: item.CanonicalDesignId?.N ? parseInt(item.CanonicalDesignId.N) : undefined,
+    SeoSubjectBlurb: item.SeoSubjectBlurb?.S || undefined,
+    LastModifiedAt: item.LastModifiedAt?.S || undefined,
+    EditorPatternKey: item.EditorPatternKey?.S || undefined,
+  };
+  const w = design.Width;
+  const h = design.Height;
+  const n = design.NColors;
+  design.subject = albumSubject[design.AlbumID];
+  design.orientation = computeOrientation(w, h);
+  design.sizeCategory = computeSizeCategory(w, h);
+  design.colorBucket = computeColorBucket(n);
+  design.isBeginnerFriendly = n <= 5 && w <= 60 && h <= 60;
+  return design;
+}
+
+// Cache-miss fallback: cross-stitch-com-env-clone runs 2 EC2 instances, and
+// designCache is a plain in-process Map, so a design published on one
+// instance (which calls refreshCache() on itself only) is invisible to the
+// other until it restarts — found for real 2026-08-10 when a freshly
+// published design 404'd on roughly half of requests, flipping between
+// instances behind the ELB. Rather than trying to broadcast a cache update
+// to every instance, a cache miss now falls through to DynamoDB directly
+// and self-heals the local cache, same as a normal warm hit from then on.
+async function fetchDesignFromDb(designId: number): Promise<Design | null> {
+  const tableName = process.env.DYNAMODB_TABLE_NAME;
+  if (!tableName) {
+    throw new Error('DYNAMODB_TABLE_NAME environment variable is not set');
+  }
+
+  const { Items } = await dynamoDBClient.send(new QueryCommand({
+    TableName: tableName,
+    IndexName: 'DesignsByID-index',
+    KeyConditionExpression: 'EntityType = :entityType AND DesignID = :designId',
+    ExpressionAttributeValues: {
+      ':entityType': { S: 'DESIGN' },
+      ':designId': { N: designId.toString() },
+    },
+    Limit: 1,
+  }));
+  const item = Items?.[0];
+  if (!item) return null;
+
+  const design = itemToDesign(item);
+  if (design.DesignID <= 0) return null;
+
+  designCache.set(design.DesignID, design);
+  const rawId = item.ID?.S;
+  const rawNPage = item.NPage?.S;
+  if (rawId && rawNPage) {
+    designKeyCache.set(design.DesignID, { id: rawId, nPage: rawNPage });
+  }
+  return design;
+}
+
 // Initialize the cache by fetching all designs and albums from DynamoDB
 async function initializeCache(): Promise<void> {
   if (cacheInitialized) {
@@ -167,53 +257,7 @@ async function initializeCache(): Promise<void> {
 
         if (Items && Items.length > 0) {
           Items.forEach((item) => {
-            const design: Design = {
-              DesignID: item.DesignID?.N ? parseInt(item.DesignID.N) : 0,
-              AlbumID: item.AlbumID?.N ? parseInt(item.AlbumID.N) : 0,
-              Caption: item.Caption?.S || "",
-              Description: item.Description?.S || "",
-              NDownloaded: item.NDownloaded?.N ? parseInt(item.NDownloaded.N) : 0,
-              NColors: item.NColors?.N ? parseInt(item.NColors.N) : 0,
-              Width: item.Width?.N ? parseInt(item.Width.N) : 0,
-              Height: item.Height?.N ? parseInt(item.Height.N) : 0,
-              Notes: item.Notes?.S || "",
-              Text: item.Text?.S || "",
-              NPage: item.NPage?.S ? parseInt(item.NPage.S) : 0,
-              ImageUrl: item.ImageUrl?.S || (item.AlbumID?.N && item.DesignID?.N
-                ? `https://d2o1uvvg91z7o4.cloudfront.net/photos/${item.AlbumID.N}/${item.DesignID.N}/4.jpg`
-                : null),
-              PdfUrl: getPDFUrl(item.AlbumID, item.DesignID),
-              PinterestPinId:
-                readOptionalAttributeString(item.PinterestPinId) ||
-                readOptionalAttributeString(item.PinterestPinID) ||
-                readOptionalAttributeString(item.PinterestID) ||
-                readOptionalAttributeString(item.PinterestId) ||
-                readOptionalAttributeString(item.PinID) ||
-                readOptionalAttributeString(item.PinId) ||
-                null,
-              PinterestPinUrl:
-                readOptionalAttributeString(item.PinterestPinUrl) ||
-                readOptionalAttributeString(item.PinterestPinURL) ||
-                readOptionalAttributeString(item.PinterestUrl) ||
-                readOptionalAttributeString(item.PinUrl) ||
-                readOptionalAttributeString(item.PinURL) ||
-                null,
-              NGlobalPage: item.NGlobalPage?.N ? parseInt(item.NGlobalPage.N) : 0,
-              SeoDescription: item.SeoDescription?.S || undefined,
-              SeoTitle: item.SeoTitle?.S || undefined,
-              CanonicalDesignId: item.CanonicalDesignId?.N ? parseInt(item.CanonicalDesignId.N) : undefined,
-              SeoSubjectBlurb: item.SeoSubjectBlurb?.S || undefined,
-              LastModifiedAt: item.LastModifiedAt?.S || undefined,
-              EditorPatternKey: item.EditorPatternKey?.S || undefined,
-            };
-            const w = design.Width;
-            const h = design.Height;
-            const n = design.NColors;
-            design.subject = albumSubject[design.AlbumID];
-            design.orientation = computeOrientation(w, h);
-            design.sizeCategory = computeSizeCategory(w, h);
-            design.colorBucket = computeColorBucket(n);
-            design.isBeginnerFriendly = n <= 5 && w <= 60 && h <= 60;
+            const design = itemToDesign(item);
             if (design.DesignID > 0) {
               designCache.set(design.DesignID, design);
               const rawId = item.ID?.S;
@@ -416,9 +460,9 @@ function getPDFUrl(albumId: AttributeValue, designId: AttributeValue): string | 
 export async function getDesignById(designId: number): Promise<Design | undefined> {
   return withCache(async () => {
     try {
-      const design = designCache.get(designId);
+      const design = designCache.get(designId) ?? await fetchDesignFromDb(designId) ?? undefined;
       if (!design) {
-        console.warn(`No design found for DesignID ${designId} in cache`);
+        console.warn(`No design found for DesignID ${designId} in cache or DB`);
         return undefined;
       }
       return design;
@@ -432,9 +476,9 @@ export async function getDesignById(designId: number): Promise<Design | undefine
 export async function getDesignPhotoUrlById(designId: number): Promise<string | undefined | null> {
   return withCache(async () => {
     try {
-      const design = designCache.get(designId);
+      const design = designCache.get(designId) ?? await fetchDesignFromDb(designId) ?? undefined;
       if (!design) {
-        console.warn(`No design found for DesignID ${designId} in cache`);
+        console.warn(`No design found for DesignID ${designId} in cache or DB`);
         return null;
       }
       return design.ImageUrl;
