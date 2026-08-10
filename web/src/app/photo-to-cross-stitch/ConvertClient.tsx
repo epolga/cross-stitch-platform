@@ -527,7 +527,11 @@ export default function ConvertPage() {
   function armQualityFeedback() {
     if (qualityFeedbackTimerRef.current) clearTimeout(qualityFeedbackTimerRef.current);
     setShowQualityFeedback(false);
-    qualityFeedbackTimerRef.current = setTimeout(() => setShowQualityFeedback(true), 4000);
+    postEditorEvent('quality_feedback_armed', { patternId: savedPatternId });
+    qualityFeedbackTimerRef.current = setTimeout(() => {
+      postEditorEvent('quality_feedback_timer_fired', { patternId: savedPatternId });
+      setShowQualityFeedback(true);
+    }, 4000);
   }
 
   // Import from photo (called by ImportFromPhotoDialog on success)

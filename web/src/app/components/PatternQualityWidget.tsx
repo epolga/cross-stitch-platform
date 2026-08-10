@@ -25,6 +25,15 @@ const RATINGS: { value: Rating; label: string; emoji: string }[] = [
 
 // Non-blocking corner card (no backdrop) so it never interrupts editing —
 // distinct from FeatureRequestDialog, which is an intentional full modal.
+//
+// 2026-08-10: z-50, not z-40. ConvertClient's fullscreen editor section is
+// `fixed inset-0 z-40` — the exact same z-index this widget used to have —
+// so if the widget ever armed while fullscreen was on, it would render but
+// sit visually buried under the opaque fullscreen panel. This is a real
+// latent bug, fixed here regardless. NOT confirmed as the cause of the
+// 2026-08-10 Sparrow incident specifically — she was not in fullscreen
+// mode that time — so that report is still open; don't treat this fix as
+// having closed it.
 export default function PatternQualityWidget({ open, onSubmit, onClose }: Props) {
   const [rating, setRating] = useState<Rating | null>(null);
   const [reason, setReason] = useState('');
@@ -48,7 +57,7 @@ export default function PatternQualityWidget({ open, onSubmit, onClose }: Props)
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 w-72 rounded-xl bg-white border border-gray-200 shadow-xl p-4">
+    <div className="fixed bottom-6 right-6 z-50 w-72 rounded-xl bg-white border border-gray-200 shadow-xl p-4">
       <button
         type="button"
         onClick={onClose}

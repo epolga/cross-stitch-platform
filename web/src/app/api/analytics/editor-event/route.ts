@@ -13,6 +13,21 @@ const SERVER_SIDE_EVENTS = new Set([
   'editor_error',
   'pattern_quality_feedback',
   'pattern_generated_return_visit',
+  'quality_feedback_armed',
+  'quality_feedback_timer_fired',
+]);
+
+// Diagnostic-only events that must still be logged for the admin account —
+// added 2026-08-10 while chasing a real bug where the quality-feedback
+// widget doesn't appear after Olga (the only ADMIN_EMAILS entry) saves an
+// edited pattern. The admin-suppression below exists to keep her own
+// testing traffic out of real-user analytics, but that same suppression
+// would silently swallow the one signal needed to diagnose a bug that only
+// reproduces on her account. Remove this set (and its check below) once
+// the bug is found and fixed.
+const ADMIN_EXEMPT_EVENTS = new Set([
+  'quality_feedback_armed',
+  'quality_feedback_timer_fired',
 ]);
 
 // Rate limit: one write per sessionId+eventType per minute
@@ -50,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await getSession(req);
-    if (session) {
+    if (session && !ADMIN_EXEMPT_EVENTS.has(eventType)) {
       const adminEmails = (process.env.ADMIN_EMAILS || '')
         .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
       if (adminEmails.includes(session.email.toLowerCase())) {
