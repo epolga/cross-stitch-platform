@@ -2894,6 +2894,7 @@ export default function ConvertPage() {
           } else {
             showToast('Saved ✓');
           }
+          armQualityFeedback();
         }}
         onClose={() => { setSaveDialogOpen(false); setAfterSaveAction(null); }}
       />
