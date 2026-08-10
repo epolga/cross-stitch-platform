@@ -595,11 +595,30 @@ function downsampleOutlineMask(mask: Uint8Array, data: Buffer, srcW: number, src
 // true (non-candidate) surroundings avoids that, while a dense scatter of
 // unrelated single-pixel noise still gets judged against its real
 // neighbors and filtered out same as before. A group of exactly 1 cell is
-// always dropped — this app never allows isolated single-stitch "confetti"
-// (see removeConfetti on the client, same 8-neighbor connectivity rule).
+// dropped for illustration mode — this app never allows isolated
+// single-stitch "confetti" there (see removeConfetti on the client, same
+// 8-neighbor connectivity rule), and illustration content always has
+// adjacent flat-color regions an isolated candidate could plausibly be
+// anti-aliasing noise from.
+//
+// 2026-08-10: found live — a genuinely thin single-stroke line-art source
+// (two hands reaching toward each other, minimalist one-line style, no
+// flat color regions at all) came out almost entirely gone at a normal
+// catalog stitch-grid size. The downsampled candidate mask for a stroke
+// this thin is naturally sparse: consecutive target cells along the
+// stroke's own path routinely fail to BOTH get flagged, so nearly every
+// candidate ends up as its own isolated 1-cell "component" and got
+// dropped by the >=2 rule below — the rule built for illustration keylines
+// was silently deleting most of a real line-art design's actual content.
+// Unlike illustration mode, pure line-art has no adjacent-flat-region
+// anti-aliasing to guard against — every top-hat candidate on a line-art
+// source really is part of the drawn line — so line-art mode now allows
+// component size 1. The OUTLINE_DISTINCT_MIN_DIST2 check right below still
+// applies to size-1 groups exactly as it does to larger ones, so a truly
+// indistinct/noise candidate is still rejected either way.
 const OUTLINE_DISTINCT_MIN_DIST2 = 300; // squared LAB distance (CIE76), ~17 deltaE
 
-function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: number, h: number, dist: (a: Lab, b: Lab) => number): (number | null)[] {
+function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: number, h: number, dist: (a: Lab, b: Lab) => number, minComponentSize: number): (number | null)[] {
   const out: (number | null)[] = new Array(w * h).fill(null);
   const visited = new Uint8Array(w * h);
   const stack: number[] = [];
@@ -622,7 +641,7 @@ function resolveOutlineComponents(cells: (Lab | null)[], pixelDmc: number[], w: 
         }
       }
     }
-    if (component.length < 2) continue;
+    if (component.length < minComponentSize) continue;
 
     let sumL = 0, sumA = 0, sumB = 0;
     for (const i of component) {
@@ -1051,7 +1070,7 @@ export async function convertImage(
   // minor exception to keep the illustration's separating strokes and fine
   // linework intact.
   if (outlineCandidates) {
-    const outlineDmc = resolveOutlineComponents(outlineCandidates, pixelDmc, w, h, finalDist);
+    const outlineDmc = resolveOutlineComponents(outlineCandidates, pixelDmc, w, h, finalDist, mode === 'line-art' ? 1 : 2);
     for (let i = 0; i < n; i++) {
       const dmc = outlineDmc[i];
       if (dmc !== null) pixelDmc[i] = dmc;
