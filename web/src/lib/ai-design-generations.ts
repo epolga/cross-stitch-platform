@@ -75,6 +75,13 @@ export interface AiDesignGeneration {
   createdAt: string;
   patternId?: string;
   designId?: number;
+  // Added 2026-08-11 (Olga's ask): S3 key for the raw AI-generated source
+  // image itself, uploaded by whichever script calls createGeneration()
+  // (see save-ai-draft.ts) — mirrors researchImageKey's role for
+  // user-uploaded photos (pattern-storage.ts). Without this the prompt/
+  // theme/reasoning survive but the actual generated picture doesn't;
+  // optional since older generations predate this field.
+  generatedImageKey?: string;
   initialGrid?: number[][];
   initialPalette?: PatternPalette[];
   // Added 2026-08-08 — detectTrend()'s researched popular size (stitches)
@@ -112,6 +119,12 @@ export async function createGeneration(params: {
   targetWidth?: number;
   targetHeight?: number;
   colorPalette?: string;
+  // Set when the caller already has the generated image in hand (e.g.
+  // save-ai-draft.ts, which only ever runs against an already-generated
+  // IMAGE_PATH) — see generatedImageKey on AiDesignGeneration above. Absent
+  // in the "before image generation even runs" case this function's own
+  // docstring describes; nothing currently backfills it after the fact.
+  generatedImageKey?: string;
 }): Promise<string> {
   await ensureTable();
   const generationId = randomUUID();
@@ -132,6 +145,7 @@ export async function createGeneration(params: {
   if (params.targetWidth !== undefined) item.targetWidth = { N: String(params.targetWidth) };
   if (params.targetHeight !== undefined) item.targetHeight = { N: String(params.targetHeight) };
   if (params.colorPalette !== undefined) item.colorPalette = { S: params.colorPalette };
+  if (params.generatedImageKey !== undefined) item.generatedImageKey = { S: params.generatedImageKey };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
 
@@ -256,6 +270,7 @@ function itemToRecord(item: Record<string, AttributeValue>): AiDesignGeneration 
     createdAt: item.createdAt?.S ?? '',
     patternId: item.patternId?.S,
     designId: item.designId?.N ? parseInt(item.designId.N, 10) : undefined,
+    generatedImageKey: item.generatedImageKey?.S,
     initialGrid: item.initialGrid?.S && width && height ? rleDecode(item.initialGrid.S, width, height) : undefined,
     initialPalette: item.initialPalette?.S ? JSON.parse(item.initialPalette.S) : undefined,
     targetWidth: item.targetWidth?.N ? parseInt(item.targetWidth.N, 10) : undefined,

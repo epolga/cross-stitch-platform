@@ -44,6 +44,9 @@
 // content that's mostly-background-by-design and specifically vulnerable
 // to this gradient-tunneling failure mode.
 import { readFileSync } from 'fs';
+import { extname } from 'path';
+import { randomUUID } from 'crypto';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { convertImage } from '../src/lib/pattern-converter';
 import { savePattern, updatePattern } from '../src/lib/pattern-storage';
@@ -108,6 +111,33 @@ interface GenerationMeta {
 // given — was previously a hardcoded constant used unconditionally.
 const DEFAULT_TARGET_WIDTH = 80;
 const MAX_COLORS = 25;
+
+// 2026-08-11 (Olga's ask): before this, the AI-generated source image
+// itself was never kept anywhere durable — only its text prompt and the
+// post-conversion grid survived in AiDesignGenerations. Mirrors
+// convert/route.ts's saveResearchCopy(): same bucket, sibling prefix.
+// Best-effort, same as that function — a failed upload must not block
+// saving the pattern the run was actually launched to produce.
+const GENERATED_IMAGE_BUCKET = 'cross-stitch-designs';
+const GENERATED_IMAGE_PREFIX = 'ai-generations';
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+
+async function uploadGeneratedImage(buffer: Buffer, sourcePath: string): Promise<string | undefined> {
+  try {
+    const ext = extname(sourcePath).replace('.', '') || 'png';
+    const key = `${GENERATED_IMAGE_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
+    await s3.send(new PutObjectCommand({
+      Bucket: GENERATED_IMAGE_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+    }));
+    return key;
+  } catch (e) {
+    console.error('[save-ai-draft] generated-image upload failed:', e);
+    return undefined;
+  }
+}
 
 // Ported verbatim from ConvertClient.tsx's removeConfetti().
 function removeConfetti(grid: number[][]): number[][] {
@@ -259,10 +289,15 @@ function removeUnusedColors<P>(grid: number[][], palette: P[]): { grid: number[]
 }
 
 async function main() {
+  // Read once, up front, so a generation record (if any) can carry the S3
+  // key of the exact bytes being converted below rather than a re-read.
+  const rawBuffer = readFileSync(IMAGE_PATH);
+
   let generationId: string | undefined;
   let generationMeta: GenerationMeta | undefined;
   if (GENERATION_META_PATH) {
     generationMeta = JSON.parse(readFileSync(GENERATION_META_PATH, 'utf-8')) as GenerationMeta;
+    const generatedImageKey = await uploadGeneratedImage(rawBuffer, IMAGE_PATH);
     generationId = await createGeneration({
       theme: generationMeta.theme,
       imagePrompt: generationMeta.imagePrompt,
@@ -273,8 +308,10 @@ async function main() {
       targetWidth: generationMeta.targetWidth,
       targetHeight: generationMeta.targetHeight,
       colorPalette: generationMeta.colorPalette,
+      generatedImageKey,
     });
     console.log(`Generation tracked: ${generationId} (theme: "${generationMeta.theme}", grounding passesGate: ${generationMeta.grounding.passesGate})`);
+    console.log(generatedImageKey ? `Source image archived: ${generatedImageKey}` : 'Source image archive FAILED (see error above) — generation record has no generatedImageKey');
   }
 
   // Researched targetWidth sets the conversion scale when available (small
@@ -292,7 +329,6 @@ async function main() {
   // fit:'fill' resize.
   const targetWidth = TARGET_WIDTH_OVERRIDE ?? generationMeta?.targetWidth ?? DEFAULT_TARGET_WIDTH;
 
-  const rawBuffer = readFileSync(IMAGE_PATH);
   const imageMeta = await sharp(rawBuffer).metadata();
   const targetHeight = Math.round(targetWidth * ((imageMeta.height ?? 1) / (imageMeta.width ?? 1)));
 
