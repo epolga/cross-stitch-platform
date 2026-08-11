@@ -90,6 +90,7 @@ export interface SavedPattern {
   cellSize?: number;
   sourceGenerationId?: string;
   researchImageKey?: string;
+  sourceImageKey?: string;
 }
 
 export async function savePattern(
@@ -103,6 +104,7 @@ export async function savePattern(
   hiddenColors?: number[],
   sourceGenerationId?: string,
   researchImageKey?: string,
+  sourceImageKey?: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -133,6 +135,14 @@ export async function savePattern(
   // to the original uploaded photo, so a later edit-resave (updatePattern)
   // must never touch or clear it.
   if (researchImageKey) item.researchImageKey = { S: researchImageKey };
+  // 2026-08-11 (Olga's ask): the owner's own copy of what they uploaded, so
+  // they can re-run the converter later without re-picking the file from
+  // their device. Deliberately separate from researchImageKey — that one is
+  // gated on research consent (paused pending GDPR review) and used for
+  // research purposes; this is just returning the owner their own upload,
+  // unconditional on any consent, never used for anything but serving it
+  // back to that same owner (source-image/route.ts).
+  if (sourceImageKey) item.sourceImageKey = { S: sourceImageKey };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
@@ -149,6 +159,7 @@ export async function updatePattern(
   thumbnail?: string,
   hiddenColors?: number[],
   researchImageKey?: string,
+  sourceImageKey?: string,
 ): Promise<void> {
   await ensureTable();
   const rle = rleEncode(grid);
@@ -184,6 +195,8 @@ export async function updatePattern(
   // when Olga's real test resaved an already-open pattern via PUT and the
   // link silently never got recorded (savePattern-only had covered POST).
   if (researchImageKey) { values[':rk'] = { S: researchImageKey }; setParts.push('researchImageKey = :rk'); }
+  // Same "only set, never remove" rule as researchImageKey above, same reason.
+  if (sourceImageKey) { values[':sk'] = { S: sourceImageKey }; setParts.push('sourceImageKey = :sk'); }
 
   let updateExpression = `SET ${setParts.join(', ')}`;
   if (removeParts.length > 0) updateExpression += ` REMOVE ${removeParts.join(', ')}`;
@@ -293,6 +306,7 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     cellSize:     Item.cellSize?.N ? parseInt(Item.cellSize.N, 10) : undefined,
     sourceGenerationId: Item.sourceGenerationId?.S,
     researchImageKey: Item.researchImageKey?.S,
+    sourceImageKey: Item.sourceImageKey?.S,
   };
 }
 

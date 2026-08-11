@@ -465,12 +465,18 @@ export default function ConvertPage() {
   const [savedPatternId, setSavedPatternId] = useState<string | null>(null);
   // S3 key of the research-consent photo copy for the current design's
   // source image (see research-consent.ts) — set from handleImport() when
-  // the visitor opted in, sent along on the first save so the two stay
-  // linked (Olga's ask, 2026-08-10). Only relevant for a brand-new save
-  // (POST); once a pattern has a savedPatternId this is already persisted
-  // server-side and re-sending it on every edit-resave (PUT) would be inert
-  // anyway since updatePattern() never touches this field.
+  // the visitor opted in, sent along on save so the two stay linked (Olga's
+  // ask, 2026-08-10). Also set from loadPatternById() when reopening an
+  // existing pattern — found missing 2026-08-11 (the comment here used to
+  // wrongly claim updatePattern() never touches this field on PUT; it does,
+  // see pattern-storage.ts — the real gap was just that this state never
+  // got populated from a plain pattern load, only from an in-session import).
   const [researchImageKey, setResearchImageKey] = useState<string | undefined>(undefined);
+  // 2026-08-11 (Olga's ask): separate from researchImageKey — this is the
+  // owner's own copy of their upload (see convert/route.ts's
+  // saveSourceCopy()), unconditional on research consent. Same set-on-import
+  // / set-on-load shape as researchImageKey above.
+  const [sourceImageKey, setSourceImageKey] = useState<string | undefined>(undefined);
   // Track 2 (Opportunity 9) — set from the pattern-load response when this
   // pattern has AI-draft provenance. needsAiReview specifically means the
   // Approve/Approve-with-changes step (docs/genai-growth/DESIGN_FEEDBACK_LOOP.md)
@@ -590,6 +596,7 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     setResearchImageKey(data.researchImageKey);
+    setSourceImageKey(data.sourceImageKey);
     updatePalette(data.palette);
     const confettiResult = removeConfetti(paddedGrid);
     updateGrid(confettiResult.grid);
@@ -622,6 +629,29 @@ export default function ConvertPage() {
     }
 
     armQualityFeedback();
+  }
+
+  // "Redo from Photo…" on a freshly (re)loaded pattern — the original file
+  // only ever lived in browser memory (ImportFromPhotoDialog's
+  // selectedFile ref), so after a reload/reopen there's nothing to redo
+  // with unless the pattern also has a sourceImageKey (the owner opted into
+  // "keep my photo for reuse" at import time — separate from
+  // researchImageKey/research consent). Olga's ask 2026-08-11. Fetches it
+  // once via source-image/route.ts and hands it to the dialog exactly like
+  // any other pre-picked file (its own initialFile effect takes it from
+  // there) — no separate reconversion code path needed.
+  function openImportDialog() {
+    if (!importInitialFile && sourceImageKey && savedPatternId) {
+      fetch(`/api/converter/patterns/${savedPatternId}/source-image`)
+        .then(res => { if (!res.ok) throw new Error('fetch failed'); return res.blob(); })
+        .then(blob => {
+          setImportInitialFile(new File([blob], 'source-photo.jpg', { type: blob.type || 'image/jpeg' }));
+          setShowImportDialog(true);
+        })
+        .catch(() => showToast("Couldn't load the saved photo — try Load New instead"));
+      return;
+    }
+    setShowImportDialog(true);
   }
 
   // Download PDF from current (edited) grid
@@ -828,6 +858,12 @@ export default function ConvertPage() {
           : new Set<number>());
         setPatternName(data.name ?? '');
         setSavedPatternId(id);
+        // 2026-08-11: found missing — a plain pattern load never populated
+        // these, only handleImport() did (a fresh in-session import), so
+        // "Redo from Photo…" on a just-reopened pattern had no way to know
+        // a source photo even existed to fetch back.
+        setResearchImageKey(typeof data.researchImageKey === 'string' ? data.researchImageKey : undefined);
+        setSourceImageKey(typeof data.sourceImageKey === 'string' ? data.sourceImageKey : undefined);
         setIsAiDraft(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0);
         setSourceGenerationId(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0 ? data.sourceGenerationId : null);
         setNeedsAiReview(data.needsAiReview === true);
@@ -1108,7 +1144,11 @@ export default function ConvertPage() {
     const body = JSON.stringify({
       name, width: g[0]?.length ?? 0, height: g.length, palette: pal, grid: g, thumbnail,
       hiddenColors: hiddenColorsArr,
-      researchImageKey, // no-op on PUT (updatePattern doesn't accept it) — only takes effect on the first save
+      // Both accepted on PUT too (updatePattern only ever sets, never
+      // clears, so a routine resave with no new photo just leaves whatever
+      // was already stored untouched — see pattern-storage.ts).
+      researchImageKey,
+      sourceImageKey,
     });
     const resp = await fetch(
       existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',
@@ -2352,7 +2392,7 @@ export default function ConvertPage() {
               {
                 label: 'Import',
                 items: [
-                  { type: 'item', label: hasDesign ? 'Redo from Photo…' : 'From Photo…', onClick: () => setShowImportDialog(true) },
+                  { type: 'item', label: hasDesign ? 'Redo from Photo…' : 'From Photo…', onClick: openImportDialog },
                 ],
               },
               {

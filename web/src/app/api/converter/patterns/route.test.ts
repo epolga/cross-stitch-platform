@@ -62,7 +62,7 @@ describe('POST /api/converter/patterns', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ id: 'new-pattern-id' });
     expect(mocks.savePattern).toHaveBeenCalledWith(
-      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined, undefined, undefined, undefined,
+      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -73,7 +73,7 @@ describe('POST /api/converter/patterns', () => {
 
     await POST(makeRequest(VALID_BODY, thumb));
     expect(mocks.savePattern).toHaveBeenCalledWith(
-      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', thumb, undefined, undefined, undefined,
+      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', thumb, undefined, undefined, undefined, undefined,
     );
   });
 
@@ -84,7 +84,18 @@ describe('POST /api/converter/patterns', () => {
     await POST(makeRequest({ ...VALID_BODY, researchImageKey: 'research-uploads/2026-08-10/abc.jpg' }));
     expect(mocks.savePattern).toHaveBeenCalledWith(
       'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined, undefined, undefined,
-      'research-uploads/2026-08-10/abc.jpg',
+      'research-uploads/2026-08-10/abc.jpg', undefined,
+    );
+  });
+
+  it('passes sourceImageKey to savePattern when provided', async () => {
+    mocks.getSession.mockResolvedValueOnce({ userId: 'u1', email: 'a@b.com' });
+    mocks.savePattern.mockResolvedValueOnce('new-pattern-id');
+
+    await POST(makeRequest({ ...VALID_BODY, sourceImageKey: 'pattern-source-images/2026-08-11/abc.jpg' }));
+    expect(mocks.savePattern).toHaveBeenCalledWith(
+      'Horse', 2, 1, VALID_BODY.palette, VALID_BODY.grid, 'u1', undefined, undefined, undefined,
+      undefined, 'pattern-source-images/2026-08-11/abc.jpg',
     );
   });
 });

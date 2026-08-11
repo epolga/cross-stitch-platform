@@ -63,6 +63,12 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
   // the consent wording is GDPR-compliant — see research-consent.ts.
   const [researchCollectionEnabled, setResearchCollectionEnabled] = useState(false);
   const [researchConsent, setResearchConsent] = useState(false);
+  // 2026-08-11 (Olga's ask): a separate, honest checkbox from the research
+  // one above — this one is "keep my own photo so I can redo this later,"
+  // not research use, and isn't gated by isResearchImageCollectionEnabled()
+  // or its pending GDPR review (that review is about the research case
+  // specifically). Defaults on — Olga's call: most people want this.
+  const [keepForReuse, setKeepForReuse] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
 
@@ -211,6 +217,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       form.append('mode', mode);
       form.append('colorDistanceMode', colorDistanceMode);
       form.append('researchConsent', String(researchCollectionEnabled && researchConsent));
+      form.append('keepForReuse', String(keepForReuse));
       trackEvent('pattern_generation_started', {
         width: innerW,
         height: innerH,
@@ -254,13 +261,13 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={handleCancel}>
-      <div className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl p-5 w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
 
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-0.5">
           <h3 className="text-base font-semibold text-gray-900">Import from Photo</h3>
           <button type="button" onClick={handleCancel} className="text-gray-400 hover:text-gray-600 text-xl leading-none px-1">×</button>
         </div>
-        <p className="text-xs text-gray-500 mb-4">Upload any photo and I&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
+        <p className="text-xs text-gray-500 mb-2">Upload any photo and I&apos;ll convert it into a stitchable cross-stitch pattern using real DMC thread colors.</p>
 
         {/* Drop zone */}
         <div
@@ -268,18 +275,18 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
-          className={`relative flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors p-6 mb-2
+          className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed cursor-pointer transition-colors p-3 mb-2
             ${dragOver ? 'border-rose-400 bg-rose-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}
         >
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           {previewUrl ? (
-            <div className="relative w-36 h-36">
+            <div className="relative w-20 h-20">
               <Image src={previewUrl} alt="Selected" fill className="object-contain rounded" unoptimized />
             </div>
           ) : (
             <>
-              <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -348,22 +355,16 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
         </div>
 
         <p className="text-xs text-gray-400 mb-1">
-          A good beginner size is 50–80 stitches wide. Larger = more detail, but more stitches to complete.
-          The <span className="font-medium">🔗</span> button locks width and height together so the photo isn&apos;t stretched.
+          50–80 stitches wide is a good beginner size. 🔗 locks the aspect ratio.
         </p>
 
         {sizeWarning && (
-          <p className="text-xs text-amber-700 mb-3">⚠ {sizeWarning}</p>
+          <p className="text-xs text-amber-700 mb-2">⚠ {sizeWarning}</p>
         )}
 
         {/* Colors */}
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-0.5">How many thread colors?</label>
-          <p className="text-xs text-gray-400 mb-2">
-            {effectiveMode() === 'line-art'
-              ? 'Line art works well with 2–5 colors. More colors add shading but may blur edges.'
-              : 'Fewer colors = easier to stitch. Start with 10 if you\'re new to cross-stitch.'}
-          </p>
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-600 mb-1">How many thread colors?</label>
           <div className="flex flex-wrap gap-2">
             {(effectiveMode() === 'line-art' ? COLOR_OPTIONS_LINEART : COLOR_OPTIONS_PHOTO).map(n => (
               <button key={n} type="button" onClick={() => setNumColors(n as typeof numColors)}
@@ -376,8 +377,8 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
         </div>
 
         {/* Processing mode */}
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Processing mode</label>
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Processing mode</label>
           <div className="flex gap-2">
             {(['auto', 'photo', 'illustration', 'line-art'] as UserMode[]).map(m => {
               const labels: Record<UserMode, string> = {
@@ -406,18 +407,9 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               );
             })}
           </div>
-          <p className="text-xs text-gray-400 mt-1">
-            {userMode === 'auto'
-              ? 'The editor will choose based on the detected image type.'
-              : userMode === 'photo'
-              ? 'Best for photographs and images with smooth colour gradients.'
-              : userMode === 'illustration'
-              ? 'Best for cartoons, clipart, and flat-colour art — preserves distinct shades without blending.'
-              : 'Best for drawings, sketches, quotes, and images with sharp outlines.'}
-          </p>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-2">
           <label className="block text-xs font-medium text-gray-600 mb-0.5">Thread color accuracy</label>
           <select
             value={colorDistanceMode}
@@ -428,17 +420,22 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               <option key={m} value={m}>{DISTANCE_MODE_LABELS[m]}</option>
             ))}
           </select>
-          <p className="text-xs text-gray-400 mt-1">
-            {colorDistanceMode === 'cie76'
-              ? 'Quick color matching — the default.'
-              : colorDistanceMode === 'final-only'
-              ? 'Picks slightly truer-to-photo thread colors, same conversion speed.'
-              : 'The closest possible thread-color match — takes noticeably longer to generate.'}
-          </p>
         </div>
 
+        <label className="flex items-start gap-2 mb-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={keepForReuse}
+            onChange={e => setKeepForReuse(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span className="text-xs text-gray-500">
+            Keep my photo so I can redo this conversion later without re-uploading.
+          </span>
+        </label>
+
         {researchCollectionEnabled && (
-          <label className="flex items-start gap-2 mb-4 cursor-pointer">
+          <label className="flex items-start gap-2 mb-2 cursor-pointer">
             <input
               type="checkbox"
               checked={researchConsent}
@@ -446,8 +443,7 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
               className="mt-0.5"
             />
             <span className="text-xs text-gray-500">
-              Allow us to save a copy of this photo for research purposes, to help improve the converter.
-              Optional — the pattern still generates either way. See our{' '}
+              Also allow us to use this photo for research, to help improve the converter. See{' '}
               <a href="/privacy-policy" target="_blank" rel="noreferrer" className="text-rose-600 underline hover:text-rose-700">
                 Privacy Policy
               </a>.

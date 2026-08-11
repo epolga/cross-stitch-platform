@@ -25,6 +25,10 @@ export interface ConvertedPattern {
   // research-consent.ts), when the visitor opted in and the feature is
   // enabled. Threaded through to the saved pattern so the two stay linked.
   researchImageKey?: string;
+  // S3 key of the owner's own copy of their source photo (convert/route.ts's
+  // saveSourceCopy()), when they opted into "keep my photo so I can redo
+  // this later" — separate from researchImageKey and its consent/flag.
+  sourceImageKey?: string;
 }
 
 const DMC: DmcColor[] = dmcColors;

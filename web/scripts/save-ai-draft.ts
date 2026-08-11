@@ -47,6 +47,7 @@ import { readFileSync } from 'fs';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import sharp from 'sharp';
 import { convertImage } from '../src/lib/pattern-converter';
 import { savePattern, updatePattern } from '../src/lib/pattern-storage';
@@ -136,6 +137,52 @@ async function uploadGeneratedImage(buffer: Buffer, sourcePath: string): Promise
   } catch (e) {
     console.error('[save-ai-draft] generated-image upload failed:', e);
     return undefined;
+  }
+}
+
+// 2026-08-11 (Olga's ask): a re-run against EXISTING_PATTERN_ID still
+// creates a fresh AiDesignGenerations row + a fresh S3 upload each time
+// (see Focus.md Open item #24's "known minor side effect" note) — this is
+// the notification for that, so it doesn't rely on Claude remembering to
+// mention it. Same sendAlertEmail() shape as editor-events.ts. Best-effort:
+// a failed alert must never fail the actual save this run was launched for.
+const sesClient = new SESClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+async function alertExistingPatternRerun(params: {
+  patternId: string;
+  name: string;
+  ownerID: string;
+  generationId: string;
+  generatedImageKey: string | undefined;
+}): Promise<void> {
+  const sender = process.env.SES_SENDER || 'ann@cross-stitch.com';
+  const recipient = process.env.SES_RECIPIENT || 'olga.epstein@gmail.com';
+  const text = [
+    `save-ai-draft.ts was run against an EXISTING pattern (update, not first save).`,
+    ``,
+    `patternId: ${params.patternId}`,
+    `name: ${params.name}`,
+    `ownerID: ${params.ownerID}`,
+    ``,
+    `This run still created a new AiDesignGenerations row (not attached to`,
+    `the pattern — attachDraft() only fires on first save) and re-uploaded`,
+    `the source image to S3:`,
+    `  generationId: ${params.generationId} (orphaned)`,
+    `  generatedImageKey: ${params.generatedImageKey ?? '(upload failed, see script output)'}`,
+    ``,
+    `time: ${new Date().toISOString()}`,
+  ].join('\n');
+  try {
+    await sesClient.send(new SendEmailCommand({
+      Source: sender,
+      Destination: { ToAddresses: [recipient] },
+      Message: {
+        Subject: { Data: `[cross-stitch] save-ai-draft.ts re-run: ${params.name}`, Charset: 'UTF-8' },
+        Body: { Text: { Data: text, Charset: 'UTF-8' } },
+      },
+    }));
+  } catch (e) {
+    console.error('[save-ai-draft] existing-pattern-rerun alert email failed:', e);
   }
 }
 
@@ -289,30 +336,41 @@ function removeUnusedColors<P>(grid: number[][], palette: P[]): { grid: number[]
 }
 
 async function main() {
-  // Read once, up front, so a generation record (if any) can carry the S3
-  // key of the exact bytes being converted below rather than a re-read.
+  // Read once, up front, so the generation record below can carry the S3
+  // key of the exact bytes being converted rather than a re-read.
   const rawBuffer = readFileSync(IMAGE_PATH);
 
-  let generationId: string | undefined;
   let generationMeta: GenerationMeta | undefined;
   if (GENERATION_META_PATH) {
     generationMeta = JSON.parse(readFileSync(GENERATION_META_PATH, 'utf-8')) as GenerationMeta;
-    const generatedImageKey = await uploadGeneratedImage(rawBuffer, IMAGE_PATH);
-    generationId = await createGeneration({
-      theme: generationMeta.theme,
-      imagePrompt: generationMeta.imagePrompt,
-      signalSource: generationMeta.signalSource,
-      reasoning: generationMeta.reasoning,
-      grounding: generationMeta.grounding,
-      imageProvider: generationMeta.imageProvider,
-      targetWidth: generationMeta.targetWidth,
-      targetHeight: generationMeta.targetHeight,
-      colorPalette: generationMeta.colorPalette,
-      generatedImageKey,
-    });
-    console.log(`Generation tracked: ${generationId} (theme: "${generationMeta.theme}", grounding passesGate: ${generationMeta.grounding.passesGate})`);
-    console.log(generatedImageKey ? `Source image archived: ${generatedImageKey}` : 'Source image archive FAILED (see error above) — generation record has no generatedImageKey');
   }
+
+  // 2026-08-11 (Olga's ask, in effect at least through end of Sept 2026 —
+  // see Focus.md Open items for the revisit date): archive the source
+  // image and create a generation record for every run of this script, not
+  // only ones launched with a real GenerationMeta file — ties the
+  // resulting design (and whatever gets edited into it later) back to the
+  // actual picture it came from, whether that picture went through the
+  // AI-trend pipeline or was handed over directly. Fields with no real
+  // value (no GenerationMeta) are simply omitted from createGeneration(),
+  // never filled with an invented placeholder.
+  const generatedImageKey = await uploadGeneratedImage(rawBuffer, IMAGE_PATH);
+  const generationId = await createGeneration({
+    theme: generationMeta?.theme,
+    imagePrompt: generationMeta?.imagePrompt,
+    signalSource: generationMeta?.signalSource,
+    reasoning: generationMeta?.reasoning,
+    grounding: generationMeta?.grounding,
+    imageProvider: generationMeta?.imageProvider,
+    targetWidth: generationMeta?.targetWidth,
+    targetHeight: generationMeta?.targetHeight,
+    colorPalette: generationMeta?.colorPalette,
+    generatedImageKey,
+  });
+  console.log(generationMeta
+    ? `Generation tracked: ${generationId} (theme: "${generationMeta.theme}", grounding passesGate: ${generationMeta.grounding.passesGate})`
+    : `Generation tracked: ${generationId} (no GenerationMeta — direct/manual image save)`);
+  console.log(generatedImageKey ? `Source image archived: ${generatedImageKey}` : 'Source image archive FAILED (see error above) — generation record has no generatedImageKey');
 
   // Researched targetWidth sets the conversion scale when available (small
   // quick-stitch motif vs. large detailed piece). Height is still derived
@@ -440,6 +498,7 @@ async function main() {
     await updatePattern(EXISTING_PATTERN_ID, NAME, finalWidth, finalHeight, prunedPalette, prunedGrid, OWNER_ID, thumbnail);
     patternId = EXISTING_PATTERN_ID;
     console.log(`Updated pattern id: ${EXISTING_PATTERN_ID} (owner ${OWNER_ID})`);
+    await alertExistingPatternRerun({ patternId, name: NAME, ownerID: OWNER_ID, generationId, generatedImageKey });
   } else {
     patternId = await savePattern(NAME, finalWidth, finalHeight, prunedPalette, prunedGrid, OWNER_ID, thumbnail, undefined, generationId);
     console.log(`Saved pattern id: ${patternId} (owner ${OWNER_ID})`);

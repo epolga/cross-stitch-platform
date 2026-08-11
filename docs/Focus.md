@@ -511,6 +511,25 @@ didn't log the user in).
       never qualifies. Re-verified against puppy and "Lady of Perpetual
       Love" (both still intact, no regression) before/after.
 
+24. **`save-ai-draft.ts` now always archives the source image to S3 and
+    creates an `AiDesignGenerations` row (`generatedImageKey` +
+    `sourceGenerationId`), not only when a real `GenerationMeta` file is
+    passed.** Olga's ask 2026-08-11: link every picture-based design (and
+    its edit history) back to the actual source picture, whether it came
+    from the AI-trend pipeline or was handed over directly — admin-only,
+    since the review widget this enables (`ConvertClient.tsx`'s "What did
+    you fix?") is already gated on `isAdmin`. Explicitly in effect at least
+    through **2026-09-30** — revisit then whether to keep this
+    unconditional or scope the S3 archiving back to only real
+    trend-pipeline runs. Known minor side effect, now surfaced rather than
+    silent: a re-run against an existing pattern (`EXISTING_PATTERN_ID`
+    given) still creates a new orphaned `AiDesignGenerations` row each time
+    (pre-existing behavior, just now happens on every re-run instead of
+    only `GenerationMeta` ones — `attachDraft()` is correctly skipped for
+    these, only fires on first save) — an SES email alert
+    (`alertExistingPatternRerun()`) fires on every such re-run so this
+    doesn't depend on Claude remembering to mention it.
+
 ## Done when
 
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
@@ -525,6 +544,7 @@ didn't log the user in).
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
 - [x] Photo converter's DMC color matching: public "Thread color accuracy" picker shipped 08-03, `cie76` stays the default
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
+- [ ] Revisit unconditional S3 archiving in `save-ai-draft.ts` by 2026-09-30 (see Open item #24) — keep as-is or scope back to `GenerationMeta`-only runs
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
 - [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
 - [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)

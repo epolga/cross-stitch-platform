@@ -108,14 +108,22 @@ export interface AiDesignGeneration {
  * Step 1: called right after detectTrend() returns, before image
  * generation even runs — so the prompt/theme/grounding data survives even
  * if a later pipeline step (image gen, conversion) fails.
+ *
+ * 2026-08-11 (Olga's ask): theme/imagePrompt/signalSource/reasoning/
+ * grounding/imageProvider are now all optional — save-ai-draft.ts calls
+ * this unconditionally (even with no real trend-detection metadata behind
+ * a run) so generatedImageKey and the initialGrid/initialPalette snapshot
+ * (attachDraft(), below) get recorded for every picture that goes through
+ * it, not only ones with a full GenerationMeta file. A field with no real
+ * value is left unset here, never filled with a fabricated placeholder.
  */
 export async function createGeneration(params: {
-  theme: string;
-  imagePrompt: string;
-  signalSource: string;
-  reasoning: string;
-  grounding: GroundingAssessment;
-  imageProvider: string;
+  theme?: string;
+  imagePrompt?: string;
+  signalSource?: string;
+  reasoning?: string;
+  grounding?: GroundingAssessment;
+  imageProvider?: string;
   targetWidth?: number;
   targetHeight?: number;
   colorPalette?: string;
@@ -132,16 +140,18 @@ export async function createGeneration(params: {
 
   const item: Record<string, AttributeValue> = {
     generationId: { S: generationId },
-    theme: { S: params.theme },
-    imagePrompt: { S: params.imagePrompt },
-    signalSource: { S: params.signalSource },
-    reasoning: { S: params.reasoning },
-    groundingPassesGate: { BOOL: params.grounding.passesGate },
-    groundingCitedDomains: { S: JSON.stringify(params.grounding.citedDomains) },
-    imageProvider: { S: params.imageProvider },
     status: { S: 'generated' satisfies GenerationStatus },
     createdAt: { S: now },
   };
+  if (params.theme !== undefined) item.theme = { S: params.theme };
+  if (params.imagePrompt !== undefined) item.imagePrompt = { S: params.imagePrompt };
+  if (params.signalSource !== undefined) item.signalSource = { S: params.signalSource };
+  if (params.reasoning !== undefined) item.reasoning = { S: params.reasoning };
+  if (params.grounding !== undefined) {
+    item.groundingPassesGate = { BOOL: params.grounding.passesGate };
+    item.groundingCitedDomains = { S: JSON.stringify(params.grounding.citedDomains) };
+  }
+  if (params.imageProvider !== undefined) item.imageProvider = { S: params.imageProvider };
   if (params.targetWidth !== undefined) item.targetWidth = { N: String(params.targetWidth) };
   if (params.targetHeight !== undefined) item.targetHeight = { N: String(params.targetHeight) };
   if (params.colorPalette !== undefined) item.colorPalette = { S: params.colorPalette };

@@ -15,7 +15,7 @@ const MIN_DIM = 10;
 const MAX_DIM = 500;
 const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
 
-const RESEARCH_BUCKET = 'cross-stitch-designs';
+const DESIGNS_BUCKET = 'cross-stitch-designs'; // shared by both copies below, different prefixes
 const RESEARCH_PREFIX = 'research-uploads';
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -29,18 +29,42 @@ const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 // became). undefined on skip or failure — a failed upload must never break
 // the actual conversion, and there's nothing to link if it didn't happen.
 async function saveResearchCopy(buffer: Buffer, contentType: string, consentGiven: boolean): Promise<string | undefined> {
-  if (!consentGiven || !isResearchImageCollectionEnabled()) 
-  {
-	  if(contentType == undefined)
-		return undefined;
-  }
+  // 2026-08-11: this gate had degenerated into `if (contentType == undefined) return`
+  // nested inside the real condition — contentType is always a validated
+  // non-empty string by the time this runs, so that inner check could never
+  // fire and the function uploaded to S3 unconditionally, consent and flag
+  // both ignored. Confirmed live: research-uploads/ had files from after
+  // this reached production. Restored to the one condition that matters.
+  if (!consentGiven || !isResearchImageCollectionEnabled()) return undefined;
   try {
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
     const key = `${RESEARCH_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
-    await s3.send(new PutObjectCommand({ Bucket: RESEARCH_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
     return key;
   } catch (e) {
     console.error('[convert] research copy upload failed:', e);
+    return undefined;
+  }
+}
+
+const SOURCE_PREFIX = 'pattern-source-images';
+
+// 2026-08-11 (Olga's ask): a separate, honestly-labeled offer from the
+// research one above — "keep my photo so I can redo this conversion
+// later" is the visitor getting their own upload back, not us using it for
+// anything. Not gated by isResearchImageCollectionEnabled() or any GDPR
+// review — that flag/review is specifically about the *research* use case.
+// Same best-effort shape as saveResearchCopy(): a failed upload must never
+// break the conversion itself.
+async function saveSourceCopy(buffer: Buffer, contentType: string, keepConsent: boolean): Promise<string | undefined> {
+  if (!keepConsent) return undefined;
+  try {
+    const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+    const key = `${SOURCE_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
+    await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    return key;
+  } catch (e) {
+    console.error('[convert] source copy upload failed:', e);
     return undefined;
   }
 }
@@ -61,6 +85,7 @@ export async function POST(request: NextRequest) {
     const modeParam = (formData.get('mode') as string | null) ?? 'auto';
     const distanceModeParam = (formData.get('colorDistanceMode') as string | null) ?? 'cie76';
     const researchConsent = (formData.get('researchConsent') as string | null) === 'true';
+    const keepForReuse = (formData.get('keepForReuse') as string | null) === 'true';
 
     if (!file) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
     if (!VALID_TYPES.has(file.type)) return NextResponse.json({ error: 'Unsupported image type' }, { status: 400 });
@@ -91,8 +116,9 @@ export async function POST(request: NextRequest) {
     const pattern = await convertImage(buffer, width, height, colors, resolvedMode, colorDistanceMode);
 
     const researchImageKey = await saveResearchCopy(buffer, file.type, researchConsent);
+    const sourceImageKey = await saveSourceCopy(buffer, file.type, keepForReuse);
 
-    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode, researchImageKey });
+    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode, researchImageKey, sourceImageKey });
   } catch (e) {
     console.error('[convert] error:', e);
     return NextResponse.json({ error: 'Conversion failed' }, { status: 500 });
