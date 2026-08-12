@@ -37,7 +37,10 @@ export async function syncBlockedIpsToWaf(): Promise<WafIpSyncResult> {
   // instantly, so a just-expired row can still show up in the query for a
   // while. Filtering here means expiry takes effect on the very next sync.
   const active = rows.filter((r) => r.ttl > now);
-  const addresses = active.map((r) => `${r.ip}/32`);
+  // A row's ip is normally a bare IPv4 (gets /32 appended here). It may also
+  // already be a CIDR block (e.g. "43.119.100.0/24") for whole-subnet blocks
+  // (rotating-proxy scrapers) — in that case leave it as-is.
+  const addresses = active.map((r) => (r.ip.includes("/") ? r.ip : `${r.ip}/32`));
 
   const current = await waf.send(
     new GetIPSetCommand({ Name: IP_SET_NAME, Scope: "REGIONAL", Id: IP_SET_ID })

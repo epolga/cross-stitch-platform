@@ -442,7 +442,7 @@ export async function batchPutPinAttribution(inputs: PinAttributionInput[]): Pro
 }
 
 export interface BlockedIpInput {
-  ip: string; // IPv4 address, no CIDR suffix (the /32 is added at WAF-sync time)
+  ip: string; // IPv4 address (the /32 is added at WAF-sync time), or a full CIDR block (e.g. "1.2.3.0/24") for whole-subnet blocks
   reason: string;
   blockedAt?: string; // defaults to now
   ttlDays?: number; // defaults to 30; DDB expires the row after this, which
