@@ -1,23 +1,19 @@
 [Subject]
-The tin I still haven't finished sorting
+Ten new patterns went up while nobody was looking
 
 [Greeting]
 Hi [FName],
 
 [Body1]
-I want to tell you about a tin of thread I still haven't fully sorted — the one my grandmother Milena left me, with not a single label on any of it.
+I've been heads-down finishing a batch of new patterns, and I only just looked up to realize there are ten of them now, sitting quietly on the site with nobody but me looking at them. That felt like a waste, so here they all are.
 
-She's the one who taught me to stitch, back when I was seven, and about as sentimental as a brick about it the whole time. To this day I still hunt through that tin for the right shade of green, holding skeins up to the window like it's an interrogation — and somehow, at exactly the wrong moment, Nitka always finds her way onto whatever I need most.
+A kawaii frog and a pink axolotl, for anyone who likes things a little too cute. A luna moth and a sparrow, for the nature lovers. A minimalist line-art face if you want something modern and quick. And a small menagerie I made mostly for myself — a mouse, a kitten, an elephant, a ghost with a basket of mushrooms, and a labrador that looks exactly like every labrador I've ever met.
 
 [EditorLink]
-<p>
-👉 <a href="<changelog_url>">Read the whole story on the site</a>
-</p>
+<design_gallery>
 
 [Body2]
-I wrote the whole thing out — the tin, Milena, the cat sabotage — over on the blog. If you've got an unlabeled stash of your own, handed down from someone, I'd genuinely love to hear about it.
-
-Keep telling me what's on your mind — reply to this email, or leave a reaction on the post itself. I read every one.
+They're all free, all printable, and all just a click away above. If one of them sends you thread-hunting through your own stash, tell me about it — reply to this email, I read every one.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:

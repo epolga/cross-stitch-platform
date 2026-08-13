@@ -7,8 +7,8 @@ changed, when). Longer-term ideas with no urgency live in
 `web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`. Big-picture roadmap
 lives in `web/plan/Pinterest AI Agent — Milestones and Roadmap.md` and
 `web/plan/Cross-Stitch.com — Site Technology Milestones.md`. Split into
-these four files on 2026-07-26; archived again on 2026-08-03 after
-growing back to ~510 lines.
+these four files on 2026-07-26; archived again on 2026-08-03 (~510 lines)
+and 2026-08-12 (~554 lines) to stay lean.
 
 ## Session-start check — GSC growth (do this every session)
 
@@ -30,166 +30,137 @@ Build out Ann as a recurring blog persona: flesh out her backstory/life
 (building on `web/plan/Ann_Persona_and_Newsletter_Content.md`), start writing
 blog posts in her voice, use the existing reactions feature
 (`CrossStitchBlogReactions`, shipped 2026-07-08) for engagement. Full public
-comments deliberately deferred (see Nice-to-Have Ideas). The `why-i-built-this`
-blog teaser email has already gone out as a full send (confirmed by Olga
-2026-08-05, exact date not recorded — see `Email_Content_Plan.md`); no email
-currently queued for this persona work.
+comments deliberately deferred (see Nice-to-Have Ideas).
 
 ## Active work
 
-Three mass sends so far: the design-spotlight newsletter ("Lady of
-Perpetual Love") on 2026-07-24 (841/841, one complaint handled, SES
-suppression + message-id logging added; follow-up checked 2026-07-27,
-healthy — see Open item #8), the Announcement email ("You spoke, I
-listened") confirmed sent 2026-07-25 (real send was actually ~2 weeks
-before that; exact original send date not recorded, follow-up
-unverifiable), and a new Announcement send 2026-07-27 — "Every pattern in
-the catalog can now open right in the editor" (announces the Step 2 work
-above), sent to 723/723 eligible recipients, 0 errors, via a new
-`UploaderCli send-announcement` CLI command (the GUI's mass-send button
-had no headless equivalent). One address bounced via the SES account
-suppression list (`benoit_stb@yahoo.com`, pre-existing complaint from the
-07-24 newsletter, not a new complaint). Found+fixed a real bug while
-reviewing that bounce notice: a literal `<br/>` tag in the Announcement
-HTML template's Unsubscribe section was rendering as visible text instead
-of a line break (`HtmlEncode` runs before newline→`<br/>` conversion, so a
-raw tag in the template leaks through escaped) — fixed for future sends,
-already-sent copies can't be recalled. Per-campaign send/entry tracking
-(`EmailEntryEvents` + `EmailSendLog`, built 2026-07-26) now exists for
-future sends to answer "who did we send X to, who clicked" precisely; the
-07-27 Announcement send is the first real exercise of `EmailSendLog` via
-this new CLI path (see Open item #9).
+Three mass sends 2026-07-24 through 2026-08-06 (newsletter + 2
+Announcements), new per-campaign tracking (`EmailEntryEvents` +
+`EmailSendLog`) built and exercised for real, one real template bug found
+and fixed along the way. Full detail: `docs/session-log/2026-08.md`
+("Email/Announcement campaigns" section). No email currently queued.
 
 ## Next session — pick up here first
 
-~~2026-08-09: discuss embeddings/vectors with Olga, for Track 2's
-avoid-list dedup problem.~~ — **discussed and built same day.** Walked
-through embeddings/vector similarity in detail (contrasted against
-`GetHashCode()`/exact-match search), then Olga's own reasoning converged
-on the session's "second idea" (a custom `search_catalog` tool instead of
-a static dump) — built the same session: `findNearestTextMatch()`
-(`semantic-search.ts`) + `search_catalog` tool wired into `detectTrend()`'s
-tool-use loop (`trend-detection.ts`), the old text avoid-list removed
-entirely. No hardcoded similarity threshold (no real score data exists
-yet — model judges the raw score itself). Full detail: `DECISIONS.md`
-ADR-009, `PROGRESS.md` 2026-08-09 entry, `OPPORTUNITIES.md` Opportunity 9.
-Verified via `tsc`/`eslint`/Vitest only — **not yet exercised by a real
-`detectTrend()` API call**; next session should run it for real and check
-whether `search_catalog` actually fires (Open item, add below if not
-picked up same-session).
+**Fix the pattern-save DynamoDB item-size bug (see Open item #25) —
+detailed write-up, real repro, real users exposed too, not just a
+script.** Found 2026-08-12 saving a real design ("Black Cat with Magic
+Cauldron") to Olga's own account; she explicitly asked this be written up
+in full detail for tomorrow.
 
-**2026-08-08 (tomorrow): walk through `search-service/app/evaluation.py`
-line by line with Olga.** Requested 2026-08-07 explicitly for tomorrow —
-the goal is the real Phase 1 milestone per `ROADMAP.md` ("Olga can
-independently read, modify, and debug this Python code herself"), not
-just that the code exists. Cover `evaluation.py` and its dependency
-`app/metrics.py` (both pure, no I/O — good for a first walkthrough).
-Explain in detail, not tersely — this is the GenAI learning track (see
-`feedback_genai_track_explain_in_detail` memory).
+~~Revisit the AWS WAF Bot Control decision (see Open item #2).~~ — **done
+2026-08-13.** Real morning-after evidence made the case on its own: 08-12
+(the bot-heavy day) had the highest AdSense impressions of the whole
+month (2893) but the *lowest* RPM ($5.04 vs. a normal $6.55-$12.73 range)
+— real, measured invalid-traffic dilution, not just annoying dashboard
+noise. Checked real AWS costs via Cost Explorer before deciding (current
+`CrossStitchBotProtection` WAF: ~$8-9/mo measured, not estimated; Bot
+Control Common adds ~$10/mo + likely $0 more since normal traffic stays
+under the 10M/mo free tier — Olga confirmed "давай попробуем" with real
+numbers in hand). **Added `AWSManagedRulesBotControlRuleSet` (Common
+inspection level) to `CrossStitchBotProtection` as rule priority 3,
+`OverrideAction: Count` (observe-only, blocks nothing yet)** — Capacity
+went 2→52 WCU, nowhere near the 1500 limit. **Next: let it run a few days,
+review `BotControlCommonCount` CloudWatch metrics + sampled requests,
+then decide whether to flip it to actually blocking.** Not yet done.
+
+**Track 2 embeddings/`search_catalog` dedup tool** (discussed and built
+2026-08-09, confirmed against a real live run same day — see Open item
+#20) — resolved, no further action needed here. Full detail: `DECISIONS.md`
+ADR-009, `docs/genai-growth/PROGRESS.md` 2026-08-09 entry.
+
+**Walk through `search-service/app/evaluation.py` line by line with
+Olga** — requested 2026-08-07 for "tomorrow" (08-08) as the real Phase 1
+milestone per `ROADMAP.md` ("Olga can independently read, modify, and
+debug this Python code herself"). Status unclear — an 08-08 PROGRESS.md
+entry exists but is about questioning the pipeline's usefulness, not
+confirmed as this specific walkthrough. Worth confirming with Olga
+whether this still needs to happen. Explain in detail, not tersely — GenAI
+learning track (`feedback_genai_track_explain_in_detail`).
 
 **Real catalog gap found 2026-08-08, via a live customer email (Linda):**
 no Fawn design lands close to the common 5x7"/8x10" print sizes (all
-existing Fawn designs are square ~10"x10" or too tall/narrow, e.g.
-108x187, 97x171 stitches — see reply draft
-`web/plan/_draft_email_linda_2026-08-08.md` for the full sizing
-analysis). This is a real, customer-driven candidate theme for Track 2's
-design-generation pipeline (`detectTrend()` currently auto-picks a
-trending theme via web_search — a Fawn sized to ~70x98 or ~112x140
-stitches would be a good manual-override test case, bypassing trend
-detection for once since the demand signal is already real and specific).
+existing Fawn designs are square ~10"x10" or too tall/narrow — see reply
+draft `web/plan/_draft_email_linda_2026-08-08.md` for the full sizing
+analysis). Real, customer-driven candidate theme for Track 2's
+design-generation pipeline — a manually-sized Fawn (~70x98 or ~112x140
+stitches) would be a good manual-override test case. Not yet started.
 
-~~Send the "milenas-tin" Announcement mass-send.~~ — **done 2026-08-06**,
-733 recipients, `eid=260806`, sent 13:09 UTC (16:09 Israel time, on
-schedule). Logged in `web/plan/Email_Content_Plan.md`'s Sent table. Not
-yet checked: GA4/SES follow-up metrics (same pattern as Open item #13 for
-the 07-27 send) — add as a new Open item if picking this up.
+**GenAI Phase 0** — done 2026-08-06, Track 1 (Python `search-service/`)
+deployed as a real Lambda (`https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`,
+see ADR-008). Current next-actions live in `docs/genai-growth/PROGRESS.md`
+itself now — check there rather than here. Olga has no prior Python
+experience (C#/.NET background) — teach Python as a contrast to C#/.NET
+(`Learning.md` § Python Background).
 
-~~Start GenAI Phase 0~~ — **done 2026-08-06** (`ARCHITECTURE_SUMMARY.md`),
-plus real progress on both parallel tracks the same day: Track 1 (Python
-`search-service/`) built AND deployed as a real Lambda behind API Gateway
-(live at `https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`, see
-`ADR-008`); Track 2 (Opportunity 9, design generation) scoped, not yet
-started. Full detail: `docs/genai-growth/PROGRESS.md`. **Next session, pick
-up from `PROGRESS.md`'s Next Actions:** Track 1 Step 3 (retrieval
-evaluation needs a logged post-search engagement signal — currently
-missing, see `ARCHITECTURE_SUMMARY.md` §1) or Track 2 (start with trend
-detection, reusing `aiToolsScan.ts`'s pattern). Olga's call which track to
-pick up first. Reminder: Olga has **no prior Python experience** (C#/.NET
-background) — teach Python as a contrast to C#/.NET, not basic programming
-concepts (`Learning.md` § Python Background).
-
-"Publish to Catalog" (see 2026-08-04/05 Shipped entry below) shipped and
-verified live (DesignID 5461 "Giraffes") — no known open follow-up on it.
-Otherwise: S6's next step (prefetch/`content-visibility` work,
+"Publish to Catalog" (shipped 2026-08-04/05) verified live, no known open
+follow-up. Otherwise: S6's next step (prefetch/`content-visibility` work,
 `web/plan/Cross-Stitch.com — Site Technology Milestones.md`) or Open items
 below.
 
-**Shipped 2026-08-04/05** (full detail: `docs/session-log/2026-08.md`,
-new contract doc: `docs/integration/publish-to-catalog-web.md`):
-- [x] Editor fullscreen mode added; two real layout bugs found+fixed (menu/
-  toolbar row compression, canvas overflow past the screen) — both from a
-  `flex flex-col` + `overflow-x-auto` interaction removing flex items'
-  automatic min-height protection.
-- [x] Palette panel width-clipping bug found+fixed (missing `flex-none`,
-  stale `minWidth` from before the stitch-count column existed).
-- [x] Simulation-mode cross stitch thickness increased per Olga's request.
-- [x] **New admin feature: "Publish to Catalog"** — full new-design-
-  onboarding pipeline (NPage/DesignID allocation, kit PDFs, S3 upload, real
-  Pinterest pin, AI SEO description, DynamoDB insert, editor-pattern stamp,
-  cache refresh) now available as a button in the web editor itself, no
-  desktop Uploader app or `.scc` file needed. First live design (5461
-  "Giraffes") published and verified; found+fixed a `Description`-field
-  bug from that first run. Required a real production IAM fix (EB role was
-  missing `CrossStitchBusinessHistory` access for the Pinterest token).
-- [x] **Outline/stroke preservation reworked** (illustration/line-art mode,
-  commits `38e1cea`/`c7a73fb`) — two real bugs fixed (forced-white strokes,
-  any sharp edge misread as an outline) via a brightness-agnostic
-  morphological top-hat detector + per-stroke DMC coloring; a follow-up
-  pass added a k-means quantization pre-pass to fix a stray-noise
-  regression found on the puppy test image. Verified against 3 test
-  illustrations (puppy, "Lady of Perpetual Love", bull/Style3), 61/61
-  Vitest passing. Full narrative: `docs/session-log/2026-08.md`.
+**Shipped 2026-08-04/05** — editor fullscreen mode (+ 2 layout bugs found
+and fixed), palette panel width-clipping bug, simulation-mode cross
+thickness, "Publish to Catalog" admin feature (incl. a production IAM
+fix), outline/stroke preservation reworked (hysteresis threshold +
+k-means quantization pre-pass). Full detail: `docs/session-log/2026-08.md`.
 
-**Shipped 2026-08-03** (full detail: `docs/session-log/2026-08.md`):
-- [x] Editor defaults to "Whole Chart" zoom on every load path (commit `3fdf9e6`).
-- [x] Open item #11 (CIE76 → CIEDE2000) shipped as a public "Thread color
-  accuracy" picker on `/photo-to-cross-stitch`, plus matching SEO content
-  (FAQ, structured data, `/compare/*` table rows) — commits `a93f1b5`, `3c9011c`.
-- [x] Editor mobile scroll affordances (canvas + palette panel) — found via
-  Olga's live phone testing; also fixed a landscape-viewport edge case —
-  commits `b6fa808`, `79d9cd1`.
-- [x] Milestone S5 — differentiated homepage personalization tags (commit `f47ede8`).
-- [x] Milestone S6 first step — real navigation-performance baseline measured (no urgent issues found).
-- [x] Password-reset end-to-end confirmed working; found+fixed a UX bug (no post-success redirect) — commit `93855f3`.
-- [x] Ann persona — confirmed Nitka already introduced (no new writing needed).
-- [x] Design-vote "Previous vote: none" — first clean recurrence check (no recurrence in ~2 days), re-check in a week or two.
-- Also found: CloudWatch log streaming for `cross-stitch-com-env-clone` appears stalled — see Open item #15.
+**Shipped 2026-08-03** — editor "Whole Chart" zoom default, CIE76→CIEDE2000
+public picker, editor mobile scroll affordances, Milestone S5, S6 first
+step (nav-performance baseline), password-reset fix, Ann/Nitka check,
+design-vote first clean recurrence check. Full detail:
+`docs/session-log/2026-08.md`.
 
-**Shipped 2026-07-27/07-28** (full detail: `docs/session-log/2026-07.md`):
-catalog PDF-to-editable conversion end to end (PDF-quality signoff, S3
-batch extraction of all 5271 designs, "Open in editor" button on design
-pages), three parser bugs found and fixed along the way (symbol overflow,
-backstitch-marker miscount, Zebra chart-page miscount), and 6 quick-wins
-from a ChatGPT-doc review (pattern-quality feedback widget, return-visit
-analytics, Ann story-timeline doc, PDF fingerprint on every page, catalog
-metadata consistency fix across 32 designs, homepage editor banner, new
-SEO blog post) plus a real live-user bug fix (Christa — verify-email
-didn't log the user in).
+**Shipped 2026-07-27/07-28** — catalog PDF-to-editable conversion end to
+end, 3 parser bugs fixed, 6 quick-wins from a ChatGPT-doc review, a real
+live-user bug fix (Christa — verify-email login). Full detail:
+`docs/session-log/2026-07.md`.
 
 ## Open items
 
 1. ~~Blog teaser email for `why-i-built-this`~~ — **already sent** (full
    send, confirmed by Olga 2026-08-05; exact date not recorded, see
    `web/plan/Email_Content_Plan.md`).
-2. **Distributed scraping mitigation** — keep monitoring via `/review-ip`
-   (decision 2026-07-10, status confirmed 2026-07-24: 0 watched, 25
-   blocked). Revisit the "keep monitoring vs. build WAF Bot Control" call
-   if volume keeps growing — several current blocks are download-counter
-   inflation bots exploiting the no-auth email-in-body pattern (see
-   Nice-to-Have Ideas).
+2. **Distributed scraping mitigation** — escalated 2026-08-12: found and
+   blocked a large Alibaba Cloud Singapore scraper (4 rotating `/24`
+   subnets — `43.119.100.0/24`, `43.119.104.0/24`, `47.82.201.0/24`,
+   `47.82.202.0/24` — 459+ IPs, 50k+ req/day, breadth-first content scrape,
+   no exploit-probe pattern). All 4 confirmed 100% blocked (403) via WAF
+   after manual sync. Same day, GA4 realtime showed a second wave — much
+   more diffuse (hundreds of low-count IPs across many countries/hosting
+   providers, no single dominant subnet) — discussed AWS WAF Bot Control
+   (Common tier, Count-mode first) as the real next step since manual
+   CIDR blocking doesn't scale against this shape of traffic. **Decided:
+   wait a couple of days (confirmed not dangerous — no server strain, no
+   exploit patterns, just extra bandwidth/analytics noise) and revisit.**
+   **Explicit next-session ask (2026-08-12): come back to the WAF Bot
+   Control decision tomorrow — don't let it drop.** Later same day: the
+   diffuse wave kept growing (GA4 realtime up to 128 active, Singapore
+   35), and a large NEW cluster was found (`57.141.0.0/24`, 70 IPs,
+   935 req/hr) — but that one turned out to be legitimate:
+   `meta-externalagent/1.1` (Meta's documented crawler, real Facebook
+   Inc. IPs, used for link-preview + Meta AI training data collection per
+   `developers.facebook.com/docs/sharing/webmasters/crawler`). Doesn't
+   run JS so it's invisible in GA4 — not the cause of the elevated
+   numbers, not something to block as abuse (though blocking it via
+   `robots.txt` for AI-training reasons would be a legitimate separate
+   policy question if Olga wants to raise it). The already-blocked
+   4 Alibaba subnets stayed 100% blocked all day (9561/9561 req = 403
+   in one later hourly check) — confirmed still solid.
+   **2026-08-13 morning: AWS WAF Bot Control (Common, Count mode) enabled**
+   — see the "Next session" entry above for the full real-cost justification
+   (08-12's AdSense RPM dropped to the month's lowest, $5.04, on its
+   highest-impression day, 2893) and the technical detail (rule
+   `BotControlCommonCount`, priority 3, `OverrideAction: Count`, WebACL
+   `CrossStitchBotProtection`, capacity 2→52 WCU). **Observe-only for now
+   — not yet switched to actually blocking.** Next: review
+   CloudWatch/sampled-requests after a few days, then decide.
+   Older context: distinct scraping (download-counter inflation bots
+   exploiting the no-auth email-in-body pattern) still monitored via
+   `/review-ip`, status 2026-07-24: 0 watched, 25 blocked.
 3. **Singapore/bot-traffic GA4 anomaly** — confirmed bot traffic
    2026-07-10 (0.7% engagement, 99% direct/none, same signature as ALB
-   scrapers). Not yet done: add a session-quality filter to the Milestone 9
+   scrapers; see Open item #2 for the much larger 2026-08-12 recurrence).
+   Not yet done: add a session-quality filter to the Milestone 9
    pin-attribution pipeline (or re-run recent numbers excluding
    Singapore/China/Russia) to see how much this understates real traffic's
    revenue attribution.
@@ -208,337 +179,268 @@ didn't log the user in).
    07-26). Also worth directly confirming in the GSC UI whether the
    original 2026-07-09 "Crawled – currently not indexed" Validate Fix
    actually passed (checkpoint was due 07-23, never explicitly confirmed).
-7. ~~GSC average position monitoring~~ — **resolved, confirmed 2026-08-07**.
-   Softening was transient: peaked at 14.8 on 07-23, recovered to 10.9-11.6
-   by 07-25/26, and has stayed in the healthy 9.9-14.4 range through 08-05
-   (latest finalized day; 08-06/07 not yet processed by GSC). Impressions
-   and clicks both trended up over the same window (1531→2590 impr.,
-   80→117 clicks), confirming no real degradation. Reusable tools from this
-   investigation: `gsc-explore.ts`, `gsc-compare.ts`, `ga4-explore.ts` in
-   `automation/pinterest-agent/scripts/`.
+7. **GSC average position — new decline found 2026-08-12, watching.**
+   Previous softening (peaked 14.8 on 07-23) had fully resolved by
+   08-07 (recovered to 9.9-14.4 range through 08-05). But a fresh,
+   real 3-day worsening trend: 08-09 (11.0) → 08-10 (13.3) → 08-11
+   (16.3) — a new 3+ week high, clicks/impressions also dipped on 08-11.
+   Checked and ruled out on our side: server 5xx rate (stayed low all
+   week, 0.08-0.32%), Googlebot-specific error rate (also low), response
+   latency (no degradation, fastest on 08-12), recent deploys (none
+   touched redirects/canonical/sitemap/middleware). Page-level pattern is
+   broad/mixed, not isolated to one template (homepage 11.6→13.6, several
+   category pages worse, a few better). Cross-checked against external
+   reports: real, unconfirmed industry-wide Google ranking volatility
+   ("Google dance") reported since ~2026-08-01, no official update
+   confirmed by Google, possibly a delayed-effect tail of the June 2026
+   spam update. Same-day follow-up: sliced by country=USA specifically —
+   real (non-bot) GSC click data shows the decline is sharper there than
+   site-wide (pos 11.9 on 08-09 → 16.5 on 08-10 → 20.1 on 08-11, clicks
+   45→29), and this is what's actually behind Olga's "no live US
+   visitors" observation the same day — real people seeing the site
+   lower in US search results, not a traffic-tracking mystery. Olga
+   checked the GSC UI directly for Manual Actions and Security Issues —
+   **both clean**, ruling out a penalty/policy flag as the cause. **Decided:
+   not urgent (likely industry-wide noise, not a site problem, and not a
+   policy violation), re-check position in a couple of days.**
 8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
-   Perpetual Love", 07-24) checked 2026-07-27 and looks healthy: ~47 GA4
-   sessions with `src=newsletter&medium=email` landing on the design page
-   over 07-24→07-26 (+~16 more newsletter-sourced sessions on other pages),
-   83 `LastEmailEntry` updates since the send, SES complaint rate ~0.12%
-   (1 complaint / 848 delivery attempts, `benoit_stb@yahoo.com` suppressed
-   2026-07-24), 0 bounces from this batch. Matches the previously logged
-   downloads figure (41 downloads / 34 distinct users since 07-24).
-   **Announcement email ("You spoke, I listened") remains unverifiable** —
-   GA4 shows no detectable spike on the changelog page in the plausible
-   send window, and SES `get-send-statistics` only covers a 14-day trailing
-   window (07-13→07-27), too late to catch a ~07-11/13 send. Root cause:
-   exact send date was never recorded and the new EmailSendLog tracking
-   postdates it. Not worth further digging unless the exact send date
-   surfaces some other way.
+   Perpetual Love", 07-24) confirmed healthy 2026-07-27. **Announcement
+   email ("You spoke, I listened") remains unverifiable** — exact send
+   date was never recorded and predates `EmailSendLog`; not worth further
+   digging unless the date surfaces some other way. Full detail:
+   `docs/session-log/2026-08.md`.
 9. **`EmailSendLog` real-send verification** — built 2026-07-26, first
-   exercised for real by the 2026-07-27 Announcement send (723 rows via the
-   new `send-announcement` CLI path). Not yet verified end-to-end — run
-   `check-email-campaign.ts`/`check-email-recipient.ts` against that send's
-   `eid` to confirm the rows look right, still also pending for an actual
-   newsletter send.
+   exercised for real by the 2026-07-27 Announcement send (723 rows via
+   `send-announcement`). Not yet verified end-to-end — run
+   `check-email-campaign.ts`/`check-email-recipient.ts` against that
+   send's `eid`.
 10. **AI-tools-scan first real trigger** — built and deployed 2026-07-26
     to the daily Lambda pipeline, gated on day-of-month === 26. Verified
     via manual local test runs only so far; first real scheduled trigger is
     **2026-08-26**.
 11. ~~Switch photo converter's DMC matching from CIE76 to CIEDE2000~~ —
-    **done 2026-08-03**, see Shipped block above / `docs/session-log/2026-08.md`.
+    **done 2026-08-03**, public picker shipped, `cie76` stays the default.
+    Full detail: `docs/session-log/2026-08.md`.
 12. **Adopt DINOHash for near-duplicate catalog image detection** — found
-    via the 2026-07-26 AI-tools-scan. Current pipeline
-    (`automation/pinterest-agent/scripts/find-duplicate-designs.ts` +
-    `verify-duplicate-designs-visual.ts`) does a metadata-candidate pass
-    then verifies with SHA-256 (exact-byte matches only, zero false
-    positives) + a 64-bit dHash (Hamming distance) — and dHash has a
-    **confirmed false-positive mode**: the "99 Names of Allah" series (8
-    designs, same border/font/layout, different Arabic text each time)
-    landed at the same Hamming distance (4-8) as true duplicates, because
-    dHash compares raw pixel differences, not semantic content. DINOHash
-    (built on DINOv2 self-supervised features, adversarially trained —
-    https://github.com/proteus-photos/dinohash-perceptual-hash) compares
-    learned visual features instead of pixel deltas, which should
-    distinguish "same template, different content" from "actually the same
-    image" — directly targets this known failure mode. Also much cheaper/
-    faster than a Claude-vision call per candidate pair (20x smaller than
-    CLIP, 100x shorter hash, per its own benchmarks). Next step: prototype
-    it against the known confirmed/false-positive pairs already on file in
-    `reports/duplicate-designs-visual.json` before rewiring the real
-    pipeline on it.
-13. **2026-07-27 Announcement send follow-up** — sent to 723/723, 0 errors
-    (see Active work above). Not yet checked: GA4 traffic to
-    `/XStitch-Charts.aspx` and `catalog_pattern_opens` in the daily editor
-    summary for a post-send bump; SES complaint/bounce rate for this batch
-    specifically (only the one pre-existing suppression seen so far).
-14. **Design-vote "Previous vote: none" mystery — check for recurrence.**
-    Olga forwarded 3 separate real "New design vote" admin-email incidents
-    (designs 5460/4987/3592, different users/IPs/dates) all showing the
-    identical signature: a user's rapid up/down/up toggle (0.8-3.3s apart)
-    where every single request reports `Previous vote: none`, even though
-    the prior request in the same burst had just written a real vote.
-    Confirmed NOT explained by: multiple EB instances (this environment
-    runs exactly one EC2 instance), an app-level cache (none exists on this
-    path), or a duplicate/mismatched DynamoDB key (only one item exists per
-    voter+design, with the correct final value). Also confirmed the
-    `setDesignVote` "switch" branch (`design-likes.ts`) never actually fires
-    in these incidents — every request takes the "no prior vote" branch,
-    meaning `getUserDesignVote`'s read is what's failing to see a write from
-    1-3+ seconds earlier, longer than normal DynamoDB eventual-consistency
-    lag. **Fix applied 2026-08-01**, checked 2026-08-03 (via Olga's own
-    Gmail — CloudWatch couldn't be used, see infra item below): "New design
-    vote" emails since 08-01 look normal, no "Previous vote: none" seen in a
-    suspicious rapid-toggle context. **No recurrence in the ~2 days since
-    the fix** — promising, but that's a short window against 3 prior
-    incidents spread out over longer, so keep the temporary diagnostic
-    `console.log`s in `getUserDesignVote`/`putDesignVote` in place for now
-    rather than removing them yet. Re-check again in another week or two of
-    silence before calling this resolved and pulling the logging.
-    Separately (not a bug, a product question for Olga): `DesignLikeButton.tsx`
-    and the backend both currently treat clicking the *opposite* arrow while
-    already voted as "clear my vote," not "switch my vote" — this is
-    internally consistent between client and server, so left as-is pending
-    an explicit decision on whether the wanted behavior is a direct switch
-    instead.
-15. **CloudWatch log streaming for `cross-stitch-com-env-clone` appears
-    stalled.** Found 2026-08-03 while investigating the password-reset and
-    design-vote items above: the environment's live EC2 instance
-    (`i-0ba24e0fa016ebe9f`, running since 2026-08-01) has a
-    `/aws/elasticbeanstalk/.../var/log/web.stdout.log` log stream whose
-    *last* event is ~7.5 hours stale despite substantial real traffic since
-    (manual test requests, a real user's password-reset attempts, a full
-    `eb deploy`). An even older, already-terminated instance
-    (`i-03f413f56baca37c2`) has a separate stream that's similarly stuck
-    (~2+ hours stale at time of check). Effectively no one can currently use
-    `eb logs`/CloudWatch to debug anything happening on this environment in
-    close to real time — this blocked confirming the password-reset root
-    cause today and blocks tracing any future `[design-likes]` recurrence
-    (Open item #14) via logs, leaving Gmail-forwarding as the only working
-    signal. Not yet investigated: whether the CloudWatch agent
-    (`amazon-cloudwatch-agent.service`, seen in `eb-engine.log`) is actually
-    running on the current instance, or needs a restart/reconfig.
-16. ~~Outline-preservation: stray small-patch noise in visually-flat
-    regions~~ — **done 2026-08-04** (second pass), see
-    `docs/session-log/2026-08.md`. K-means quantization pre-pass
-    (`OUTLINE_QUANTIZE_COLORS = 30`) fixed the puppy ear/leg noise;
-    verified against all 3 test images with no regression.
-17. ~~Track 2 grounding-gate fix — needs a real `detectTrend()` run to
-    confirm.~~ — **actually fixed 2026-08-09**, after the 2026-08-08
-    "cited paragraph" prompt fix was confirmed NOT to work (`distinctCitedUrls:
-    0` recurred on 2026-08-09's "luna moth" run despite it). Real cause,
-    found via researching Anthropic's own docs rather than guessing
-    further: `web_search_20260209`'s `allowed_callers` defaults to
-    `['code_execution_20260120']` — searches were routing through a
-    code-execution intermediary instead of the model calling the tool
-    directly (this is also almost certainly *why* the `container_id` 400
-    error existed at all — same underlying code-execution routing).
-    Explicitly forced `allowed_callers: ['direct']` on the tool
-    (`web/src/lib/trend-detection.ts`) — next live run ("praying mantis")
-    passed the gate cleanly: `distinctCitedUrls: 2`, real Etsy/Alibris
-    citations with actual cited text, `passesGate: true`. First real pass
-    in 3+ live attempts. Full detail: `docs/genai-growth/PROGRESS.md`.
-18. ~~Real product bug: `pattern-converter.ts`'s `convertImage()` gave
-    transparent-PNG uploads a BLACK background instead of white~~ —
-    **fixed and deployed 2026-08-08.** Found while investigating the
-    Track 2 image pipeline (Open item #17's context): `.removeAlpha()`
-    doesn't composite onto any background, it just drops the alpha channel
-    and keeps whatever RGB was stored under transparent pixels (often
-    black). `convertImage()` is called directly from the public
-    `/api/convert` route ("Import from Photo") with no pre-flatten step —
-    any real user who ever uploaded a PNG with real transparency (clipart,
-    sticker, screenshot) got this. Fixed: alpha now composited onto white
-    properly, transparent cells become empty stitches instead of a
-    background color. Verified against a real transparent image and a
-    real opaque image (zero regression), then a real end-to-end save (the
-    "Kawaii Cottagecore Frog" draft, pattern
-    `039afa9b-4bef-4b15-9db7-c884b232733a`) with a visually-confirmed clean
-    thumbnail. **Deployed to `cross-stitch-com-env-clone`, Health: Green,
-    live site verified (`/`, `/photo-to-cross-stitch`, `/albums`,
-    `/designs/4217` all 200).** Full detail: `docs/genai-growth/PROGRESS.md`,
-    `docs/genai-growth/OPPORTUNITIES.md` Opportunity 9 "Cause A".
-19. ~~Real production incident, same day: every AI-draft pattern became
-    unloadable (500 "Failed to load pattern") right after the admin
-    review UI deployed~~ — **found and fixed 2026-08-08, live within the
-    hour.** Root cause: `aws-elasticbeanstalk-ec2-role`'s inline
-    `CrossStitchDynamoDBAccessPolicy` is a manual per-table allowlist (not
-    a wildcard) — `AiDesignGenerations`/`AiDesignCorrections` were never
-    added to it when those tables were built earlier today. Same failure
-    category as the 2026-08-04/05 `CrossStitchBusinessHistory` incident —
-    **worth remembering as a standing pattern: any new self-provisioning
-    DynamoDB table needs an explicit IAM grant added to this policy
-    before its first production deploy, `ensureTable()` alone does not
-    grant the EB role access.** Olga hit this directly: resized the frog
-    pattern, Save produced no visible feedback at all (a second real bug
-    — `ConvertClient.tsx`'s save-error handler silently swallowed
-    non-401 failures), then a page reload showed "Failed to load
-    Pattern." Confirmed via a real authenticated request against the live
-    API (500, `{"error":"Failed to load pattern"}`), root-caused to the
-    IAM policy (confirmed via `aws iam get-role-policy`, `AiDesignGenerations`/
-    `AiDesignCorrections` absent), fixed with Olga's explicit go-ahead
-    (`aws iam put-role-policy`) since IAM edits always need confirmation
-    first. Also hardened the code so this failure mode can't recur the
-    same way: `GET .../patterns/[id]` now isolates the `getGeneration()`
-    call in its own try/catch (a failure there defaults `needsAiReview`
-    to `false` and logs, instead of 500ing the whole pattern load), and
-    `ConvertClient.tsx`'s save-error handler now shows a "Save failed: …"
-    toast for any non-silent error instead of showing nothing. Verified
-    live against the real pattern after both the IAM fix and the code
-    fix. Full detail: `docs/genai-growth/PROGRESS.md`.
-20. ~~Track 2 catalog-dedup `search_catalog` tool — needs a real
-    `detectTrend()` run to confirm.~~ — **confirmed live 2026-08-09**,
-    after fixing 3 real bugs the first live attempts surfaced (see
-    `docs/genai-growth/PROGRESS.md` for full detail):
-    - **400 error, `container_id is required...`** — a client tool
-      (`search_catalog`) coexisting with `web_search`'s `pause_turn`
-      continuations needs the server's `container` id echoed back on every
-      follow-up request. Fixed.
-    - **`extractJson()` rejected a valid response** — model returned
-      `targetWidth`/`targetHeight` as quoted numeric strings (`"70"`), not
-      numbers; strict `typeof` check discarded an otherwise-complete,
-      well-grounded answer. Now coerces either shape.
-    - **Real embedding-staleness gap found (not a `search_catalog` logic
-      bug)**: `vectors.json` had 5260/5276 designs — 16 published designs
-      (including a real "Capybara", DesignID 5462) had no embedding at
-      all, so `search_catalog` couldn't have found them regardless of
-      similarity logic. Backfilled the 16 (`generate-embeddings.ts` now
-      seeds from the existing S3 file instead of redoing all 5276 when the
-      local checkpoint is missing), and — Olga's ask — this is no longer a
-      one-off manual fix: `detectTrend()` now calls a new
-      `backfillMissingEmbeddings()` (`semantic-search.ts`) itself before
-      every run, so this gap can't silently reopen.
-    - **First real successful result**: theme "luna moth", 150x130 (first
-      non-square researched size), real cited Etsy/Pinterest sources, and
-      the model's own `reasoning` referenced an actual existing catalog
-      design ("unlike the existing generic Butterfly entry") — verified
-      real, not hallucinated (59 real "Butterfly*"-captioned designs
-      exist). Strong indirect evidence `search_catalog`/catalog-awareness
-      is working, though no direct per-tool-call log exists yet to prove
-      the tool itself fired vs. general model knowledge.
-    - **Grounding gate failed again** (`distinctCitedUrls: 0` despite 15
-      real queries) — same still-open, separate issue as Open item #17;
-      not addressed by this work.
-21. ~~Investigate: "Luna Moth" keeps surfacing as the nearest-neighbor
-    DESIGN match for completely unrelated candidate themes~~ — **found and
-    fixed 2026-08-09, same session.** Confirmed real via a direct test:
-    "Luna Moth" topped the match even for "vintage teapot" (0.536),
-    "mountain landscape" (0.563), "geometric mandala pattern" (0.517),
-    "birthday cake" (0.533) — nothing animal/nature-cluster-specific about
-    it, a genuine bug. Root cause: `backfillMissingEmbeddings()`
-    (`semantic-search.ts`) embedded `design.Caption` ALONE ("Luna Moth",
-    9 chars) instead of caption+`SeoDescription` together (~1200 chars),
-    unlike the original batch tool
-    (`automation/pinterest-agent/scripts/generate-embeddings.ts`), which
-    already did this correctly. A/B-tested directly on the same design:
-    the short-text embedding scored 0.53-0.60 against totally unrelated
-    queries; the same design re-embedded with the long text scored a sane
-    0.19-0.22 against those same queries — Titan's text embeddings for
-    very short inputs land in a less discriminative region of the space.
-    Only one design was affected (Luna Moth itself — the only one so far
-    backfilled via this code path rather than the batch tool). Fixed the
-    function to match the batch tool's `[caption, seoDescription].join(".
-    ")` convention, and re-embedded Luna Moth's vector directly in S3.
-    Verified: "vintage teapot" → "Teapot" (0.406), "mountain landscape" →
-    "Mountain" (0.432), "red fox" → "Red Fox" (0.461), "capybara" →
-    "Capybara" (0.520) — all now correct, on-topic matches.
-22. ~~Real production bug: "Minimalist Line Art Face" AI-draft saved
-    almost entirely empty~~ — **found (Olga's live catch) and fixed for
-    real 2026-08-09, three rounds before it was actually right.**
-    `save-ai-draft.ts` hardcoded conversion `mode` to `'illustration'`,
-    never called the existing `analyzeImage()` classifier.
-    - **Round 1**: traced the missing outline to
-      `detectBackgroundByFloodFill()`'s "harmless no-op for real-alpha
-      sources" fallback actually running for real on this no-alpha OpenAI
-      output — tolerance-30 flood fill tunneled through anti-aliased grey
-      edge pixels along the thin line, erasing 97.65%. Fixed by wiring in
-      `analyzeImage()` for real mode selection and skipping the
-      background-erasure fallback entirely for line-art/typography.
-    - **Round 2 (Olga caught it)**: the "skip entirely" fix traded one
-      bug for another — checked the actual saved palette directly and
-      found "blanc White" occupying 9175/10404 cells (88%) as a real
-      color to stitch, not blank canvas. Olga's proposed real fix: merge
-      anti-aliased grey edge pixels into pure black/white first
-      (`mergeGrayscaleTowardBlackWhite()`, new, `pattern-converter.ts`,
-      gated to `mode === 'line-art'`), then run the background-erasure
-      with EXACT match (tolerance 0) instead of skipping it — a uniform
-      background can't gradient-tunnel since there's no intermediate
-      shade left.
-    - **Round 3**: tolerance-0 erasure still ate the line — traced
-      step-by-step again and found a real, previously-hidden bug
-      independent of tolerance: the border-seeding loop marked EVERY
-      border cell as a background seed with NO color check at all. The
-      portrait's hairline/neck touch the frame edge, so a BLACK border
-      cell got seeded — the walk then correctly chained through
-      color-matching neighbors, but since it started ON the black
-      stroke, it consumed the entire connected outline (557 of 653 black
-      cells erased, confirmed directly). Fixed: a border cell only seeds
-      the fill if its own color is close to white first.
-    - Final verified result: 80x102, 4 real colors (black + 3 accents),
-      full outline intact, no spurious background color. Full detail:
-      `docs/genai-growth/PROGRESS.md`.
-23. **Converter improvements from a real kitten test image (Olga's own
-    source, `TestImages/Kitten.png`), same session.** Three real, separate
-    findings:
-    - `save-ai-draft.ts` had a `mode === 'photo' ? 'illustration' : mode`
-      override (added earlier the same day, reasonable when this script
-      only ever saw AI-generated illustration content) that unconditionally
-      forced every real 'photo' classification into illustration-mode
-      processing — risky now that this script also handles Olga's own
-      arbitrary image imports, where a genuine photo could get force-run
-      through outline-detection tuned for flat-color keylines. **Removed**
-      (Olga's call) — the classifier's real verdict is now trusted
-      everywhere, including real 'photo'.
-    - `analyzeImage()` misclassified the kitten (a genuine flat cel-shaded
-      illustration) as `typography` — root cause: colored regions (pink
-      ears, green eyes) are a small fraction of total area next to a huge
-      white background + grey fur stripes, pulling mean saturation below
-      the illustration threshold, while the dense white-keyline edge
-      structure reads as text-like to the heuristic. Not yet fixed (a
-      classifier retune is separate, deferred) — new `MODE_OVERRIDE` CLI
-      arg (8th positional) added to `save-ai-draft.ts` so a mode can be
-      forced manually when the classifier gets it wrong.
-    - **Real bug in the outline-detection system itself** (`pattern-converter.ts`,
-      built 2026-08-04): a single continuous keyline can have wildly
-      different top-hat contrast along its own length depending on what it
-      borders (huge contrast against dark grey fur, almost none against
-      pale cream fur) — a single global `OUTLINE_TOPHAT_THRESHOLD` (50)
-      necessarily fragments the stroke wherever it crosses a low-contrast
-      section. Confirmed directly by rendering the raw top-hat magnitude as
-      a heatmap — the whole outline is visible as one continuous signal,
-      just with large brightness swings. Fixed with hysteresis thresholding
-      (same two-threshold edge-linking technique as Canny edge detection):
-      the existing threshold (50) still gates which pixels can SEED a
-      stroke (no new false positives on flat regions), but a new lower
-      threshold (`OUTLINE_TOPHAT_LOW_THRESHOLD = 15`) can now extend an
-      already-seeded stroke through low-contrast stretches via 8-connected
-      flood — isolated low-contrast noise with no strong seed nearby still
-      never qualifies. Re-verified against puppy and "Lady of Perpetual
-      Love" (both still intact, no regression) before/after.
+    via the 2026-07-26 AI-tools-scan. Current pipeline (SHA-256 exact-match
+    + 64-bit dHash) has a confirmed false-positive mode: the "99 Names of
+    Allah" series (8 designs, same border/font/layout, different Arabic
+    text) landed at the same Hamming distance as true duplicates, because
+    dHash compares raw pixels, not semantic content. DINOHash (DINOv2
+    features, https://github.com/proteus-photos/dinohash-perceptual-hash)
+    should distinguish "same template, different content" from "actually
+    the same image." Next step: prototype against known confirmed/
+    false-positive pairs in `reports/duplicate-designs-visual.json` before
+    rewiring the real pipeline.
+13. **2026-07-27 Announcement send follow-up** — sent to 723/723, 0 errors.
+    Not yet checked: GA4 traffic to `/XStitch-Charts.aspx` and
+    `catalog_pattern_opens` for a post-send bump; SES complaint/bounce
+    rate for this batch specifically.
+14. **Design-vote "Previous vote: none" mystery — still not confirmed
+    resolved, checked (imperfectly) 2026-08-12.** First attempt at a bulk
+    log scan claimed "743 log lines, zero recurrence since 08-01" — this
+    was **wrong**, caught by Olga ("откуда сотни голосов, их не было
+    столько") — `console.log`'s multi-line object output gets ingested
+    by CloudWatch as one event *per physical line*, so 743 lines was
+    really only 96 `getUserDesignVote` calls fragmented across ~7-8 lines
+    each, and the naive same-line substring search never matched
+    anything. Redone correctly (reassembling multi-line blocks): 96 real
+    reads, but **zero `putDesignVote` (actual vote-write) calls** turned
+    up in that scan window — meaning it couldn't have exercised the bug
+    either way. Directly traced one real example Olga forwarded (2026-08-08
+    18:15:46, DesignID 5433, `annelinevanschie@hotmail.com`) — clean:
+    write immediately followed by a correctly-`found:true` read, no bug.
+    A second real example Olga forwarded (2026-08-12 15:59:09, DesignID
+    5463 "Kawaii Cottagecore Frog", `dd46@btinternet.com`,
+    `86.182.135.45`) **could not be checked** — see Open item #15, the
+    CloudWatch log group has no data at all past ~11:17 UTC today.
+    Bottom line: one clean real example, no broad statistical confirmation
+    yet, and a second example currently unreachable. Do **not** remove
+    the temporary diagnostic `console.log`s yet. Separately (not a bug,
+    still an open product question): clicking the *opposite* arrow while
+    already voted currently "clears" the vote rather than "switching" it,
+    consistent client+server — left as-is pending an explicit decision on
+    the wanted behavior.
+15. **CloudWatch log streaming for `cross-stitch-com-env-clone` — more
+    precisely diagnosed 2026-08-12, still unfixed.** Root cause is
+    narrower than "logs are stale": the **`FilterLogEvents` API returns
+    empty results for this log group even with no filter pattern at all**
+    (confirmed: 0 events, 0 streams searched, across multiple time
+    windows), while `DescribeLogStreams` and `GetLogEvents` on a specific
+    known stream both work fine and return real, near-real-time data. So
+    `eb logs`/CloudWatch console search (which use `FilterLogEvents`
+    under the hood) looks broken/empty, but the data is actually there —
+    it just has to be fetched stream-by-stream via `GetLogEvents`
+    instead. Separately noticed: log streams here are unusually
+    short-lived (many span only minutes), meaning EC2 instances are
+    cycling much more often than expected — not yet investigated why.
+    Not yet fixed: whether `FilterLogEvents` can be restored (IAM scope?
+    indexing issue?) or this is just how this log group has to be queried
+    going forward.
+    **Worse than that, found same day (later): actual log ingestion
+    appears to have stopped entirely around 11:17 UTC on 2026-08-12.**
+    Checked ~5 hours later (16:22 UTC): scanned all 87 log streams that
+    currently exist in the group via `GetLogEvents` (the workaround above)
+    and the newest content-timestamp found anywhere was `11:17:44Z` — no
+    trace of anything since, despite the site clearly being up and serving
+    real traffic the whole time (the 748-recipient Announcement send
+    completed fine at ~16:05 UTC). This blocked verifying a real
+    design-vote example from 15:59 UTC (Open item #14). Not yet
+    investigated: whether the CloudWatch agent process died on the
+    current instance, disk/buffer issue, or something related to the
+    unusually high instance churn noted above (maybe worse under today's
+    heavy bot load). Worth checking first thing next session — if it's
+    still not flowing, this is now blocking more than just occasional
+    debugging.
+16. ~~Outline-preservation: stray small-patch noise~~ — **done
+    2026-08-04**, k-means quantization pre-pass fixed it. Full detail:
+    `docs/session-log/2026-08.md`.
+17. ~~Track 2 grounding-gate fix~~ — **fixed 2026-08-09**
+    (`allowed_callers: ['direct']` — `web_search` was routing through a
+    code-execution intermediary). Full detail: `docs/genai-growth/PROGRESS.md`.
+18. ~~Transparent-PNG black-background bug~~ (`pattern-converter.ts`) —
+    **fixed and deployed 2026-08-08**, live and verified (Health Green).
+    Full detail: `docs/genai-growth/PROGRESS.md`, `OPPORTUNITIES.md`
+    Opportunity 9 "Cause A".
+19. ~~AI-draft patterns unloadable after admin-review-UI deploy~~ — **found
+    and fixed 2026-08-08, live within the hour.** Root cause: EB role's
+    DynamoDB policy is a manual per-table allowlist, new tables weren't
+    added. **Standing pattern worth remembering: any new self-provisioning
+    DynamoDB table needs an explicit IAM grant before its first production
+    deploy** — `ensureTable()` alone doesn't grant EB role access. Full
+    detail: `docs/genai-growth/PROGRESS.md`.
+20. ~~Track 2 catalog-dedup `search_catalog` tool~~ — **confirmed live
+    2026-08-09**, after fixing 3 real bugs (a `container_id` 400 error, a
+    strict-typeof JSON parsing bug, and an embedding-staleness gap now
+    self-healed via `backfillMissingEmbeddings()`). First real successful
+    result: theme "luna moth", grounded in real citations and genuine
+    catalog awareness. Full detail: `docs/genai-growth/PROGRESS.md`.
+21. ~~"Luna Moth" wrongly matching unrelated themes~~ — **found and fixed
+    2026-08-09.** Root cause: `backfillMissingEmbeddings()` embedded the
+    caption alone (9 chars) instead of caption+description (~1200 chars);
+    short text lands in a less discriminative embedding region. Fixed to
+    match the batch tool's convention; verified correct matches after.
+    Full detail: `docs/genai-growth/PROGRESS.md`.
+22. ~~"Minimalist Line Art Face" AI-draft saved almost entirely empty~~ —
+    **fixed 2026-08-09, three rounds before it was actually right**
+    (background-erasure fallback tunneling through anti-aliased edges,
+    then a "blanc White" background-as-real-color bug, then a border-seed
+    color-check bug). Final result: full outline intact, no spurious
+    background color. Full detail: `docs/genai-growth/PROGRESS.md`.
+23. **Converter improvements from a real kitten test image** (2026-08-09) —
+    three findings: removed an unconditional photo→illustration mode
+    override in `save-ai-draft.ts` (Olga's call — trust the classifier's
+    real verdict everywhere); `analyzeImage()` misclassifies some flat
+    cel-shaded illustrations as typography (not yet fixed — new
+    `MODE_OVERRIDE` CLI arg added as a manual workaround); fixed a real
+    outline-detection bug via hysteresis thresholding (single global
+    threshold fragmented strokes crossing low-contrast fur/background).
+    Full detail: `docs/genai-growth/PROGRESS.md`.
+24. **`save-ai-draft.ts` now always archives the source image to S3**
+    (`generatedImageKey` + `AiDesignGenerations` row), not only when a real
+    `GenerationMeta` file is passed. Olga's ask 2026-08-11: link every
+    picture-based design back to its source picture, admin-only. **In
+    effect at least through 2026-09-30** — revisit then whether to keep
+    unconditional or scope back to `GenerationMeta`-only runs. Known minor
+    side effect (extra orphaned `AiDesignGenerations` row on a re-run) is
+    now surfaced via an SES alert (`alertExistingPatternRerun()`) rather
+    than silent.
+25. **Real bug found 2026-08-12: saving a detailed/colorful pattern can
+    fail outright with a raw DynamoDB `ValidationException` ("Item size to
+    update has exceeded the maximum allowed size") — affects real users
+    too, not just scripts.**
 
-24. **`save-ai-draft.ts` now always archives the source image to S3 and
-    creates an `AiDesignGenerations` row (`generatedImageKey` +
-    `sourceGenerationId`), not only when a real `GenerationMeta` file is
-    passed.** Olga's ask 2026-08-11: link every picture-based design (and
-    its edit history) back to the actual source picture, whether it came
-    from the AI-trend pipeline or was handed over directly — admin-only,
-    since the review widget this enables (`ConvertClient.tsx`'s "What did
-    you fix?") is already gated on `isAdmin`. Explicitly in effect at least
-    through **2026-09-30** — revisit then whether to keep this
-    unconditional or scope the S3 archiving back to only real
-    trend-pipeline runs. Known minor side effect, now surfaced rather than
-    silent: a re-run against an existing pattern (`EXISTING_PATTERN_ID`
-    given) still creates a new orphaned `AiDesignGenerations` row each time
-    (pre-existing behavior, just now happens on every re-run instead of
-    only `GenerationMeta` ones — `attachDraft()` is correctly skipped for
-    these, only fires on first save) — an SES email alert
-    (`alertExistingPatternRerun()`) fires on every such re-run so this
-    doesn't depend on Claude remembering to mention it.
+    **Root cause:** `updatePattern()`/`savePattern()`
+    (`web/src/lib/pattern-storage.ts`) only guard the *grid* field size
+    (`rle.length > 350_000` throws a friendly custom error) before writing
+    to DynamoDB. They never check the size of the **`thumbnail`** field,
+    or the total item size — but `thumbnail` is a full base64 PNG data URI
+    and is by far the biggest field in the item. DynamoDB's real hard
+    limit is 400 KB (409,600 bytes) per item, so a pattern with a small
+    grid can still blow the limit purely because of its thumbnail, and the
+    failure surfaces as a raw unhandled AWS SDK exception with a stack
+    trace — not a friendly message a real user would ever understand.
+
+    **Concrete measured evidence** (pattern `c72e3387-6892-455e-870f-6f8304cbcfca`,
+    "Black Cat with Magic Cauldron", saved from `TestImages/BlackCat.png`
+    via `save-ai-draft.ts` into Olga's own account,
+    ownerID/cid `0419f4ba-8c84-4bfe-a318-4cc90f7fd934`):
+    - First save (68×71 stitches, 40 colors, line-art mode — a
+      misclassification, see below) succeeded: **348,187 bytes total**,
+      of which **`thumbnail` alone was 341,162 bytes (98%)**. `grid` was
+      only 2,921 bytes, `palette` 3,831 bytes — nowhere near the 350 KB
+      grid guard.
+    - Re-save at the same ~68×71 scale but in (correct) illustration mode
+      (67×69, 31→31 colors) **failed** — item size exceeded DynamoDB's
+      real limit even though grid size was fine.
+    - Re-save at 56×57 (31→30 colors) **also failed**, same error.
+    - Re-save at 52×54 (31→29 colors) succeeded.
+    - Re-save at 48×49 (27→25 colors) succeeded.
+    So the real ceiling for this specific image's color complexity sits
+    somewhere around 55-56 stitches wide — found only by manual trial and
+    error shrinking `TARGET_WIDTH_OVERRIDE`, which is not a real fix and
+    isn't available to a real user in the actual editor UI anyway. Olga
+    noticed and flagged the resulting design as "too small"
+    (`Уж больно маленький получился дизайн`) — that's a direct, real,
+    user-visible symptom of this bug, not a separate complaint.
+
+    **Why the thumbnail is so large:** `renderCoverThumbnailPng()`
+    (`web/src/lib/server-cover-thumbnail.ts`) renders a full simulated-
+    fabric preview — real Aida weave texture tiled under every cell, a
+    drop shadow per stitch (alpha scaled by thread lightness, tuned
+    2026-08-10), and fabric holes at every grid intersection, at up to
+    ~1200px on the long side. All of that fine per-cell texture/shadow
+    noise is exactly what makes a PNG compress badly — flat, simple
+    illustrations still produce reasonably small files, but a busy,
+    many-colored, detailed pattern (like this cat) does not, regardless of
+    the underlying design's actual stitch count.
+
+    **This is not just a script problem — real users are exposed too.**
+    Confirmed by reading the real save API routes
+    (`web/src/app/api/converter/patterns/route.ts` and
+    `.../patterns/[id]/route.ts`): both accept `thumbnail` directly from
+    the client request body and pass it straight into the same
+    `savePattern()`/`updatePattern()` functions with the same inadequate
+    guard. The client-side thumbnail is generated by
+    `canvasHandle.current.capturePreview()` in `ConvertClient.tsx` — per
+    `server-cover-thumbnail.ts`'s own file header, this server-side
+    renderer was deliberately built "to produce the same look, not an
+    approximation" as that exact client capture, meaning a real user
+    saving a big, detailed, colorful pattern through the actual editor UI
+    is likely at risk of hitting this exact same raw, confusing
+    `ValidationException` failure, with no useful error message and no
+    way for them to know why.
+
+    **Not yet fixed — needs a considered fix, not a rushed one**, since
+    `server-cover-thumbnail.ts` has a lot of deliberately-tuned visual
+    behavior Olga cares about (shadow alpha per thread lightness, hole
+    visibility — see that file's inline history comments) and is shared
+    between this script's fallback path and (in spirit, via
+    `capturePreview()`) the live editor's real save path. Real directions
+    worth considering next session, not yet decided:
+    - Add a real total-item-size guard (not just grid) that fails with a
+      clear, friendly message *before* attempting the DynamoDB write, on
+      both the client and server save paths.
+    - Store the thumbnail in S3 (like source images already are) instead
+      of inline in DynamoDB, and keep only a short S3 key/URL in the item
+      — this sidesteps the 400 KB item limit entirely rather than fighting
+      it, and 300+ KB of binary image data arguably doesn't belong inline
+      in a DynamoDB item regardless of the size limit.
+    - Separately, compressing the PNG harder or capping its resolution
+      lower would help but doesn't fully solve it for a big enough/
+      colorful enough design — likely worth doing anyway, but not a
+      substitute for the item-size guard.
 
 ## Done when
 
+- [ ] Pattern-save DynamoDB item-size bug fixed (thumbnail not size-guarded, real users exposed — see Open item #25)
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
-- [ ] Distributed scraping mitigation — decide + implement if volume keeps growing (see Open item #2)
+- [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see Open item #2) — [ ] switch to actually blocking once reviewed
 - [ ] Thank-you reply sent to Leisa — waiting on her email address
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
-- [x] GSC position softening check-back — resolved 2026-08-07, transient dip, recovered
+- [ ] GSC average position — re-check in a couple of days (see Open item #7, new 2026-08-12 decline)
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
@@ -546,8 +448,8 @@ didn't log the user in).
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] Revisit unconditional S3 archiving in `save-ai-draft.ts` by 2026-09-30 (see Open item #24) — keep as-is or scope back to `GenerationMeta`-only runs
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
-- [ ] Design-vote "Previous vote: none" recurrence checked after the `ConsistentRead` fix (see Open item #14) — first check 08-03 clean (no recurrence in ~2 days), re-check in another week or two before removing temp diagnostic logging
-- [ ] CloudWatch log streaming for `cross-stitch-com-env-clone` fixed/confirmed live again (see Open item #15)
-- [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17) — fixed 2026-08-09 via `allowed_callers: ['direct']`, not the original 08-08 prompt fix
-- [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20) — confirmed 2026-08-09, 3 real bugs found+fixed along the way
-- [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18) — deployed 2026-08-08, Health Green, verified
+- [ ] Design-vote "Previous vote: none" — one real example (08-08) checked clean, but no broad statistical confirmation yet and a second example (08-12) is currently unreachable due to the CloudWatch gap (see Open item #14) — keep diagnostic logging in place
+- [ ] CloudWatch log ingestion for `cross-stitch-com-env-clone` fixed/confirmed working again — both the `FilterLogEvents` issue AND a total gap since ~11:17 UTC 2026-08-12 (see Open item #15)
+- [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17)
+- [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
+- [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)

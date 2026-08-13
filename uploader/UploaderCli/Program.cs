@@ -872,10 +872,12 @@ static async Task SendAnnouncementTestAsync()
     string changelogUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/short-stories#milenas-tin", "admin", eid, "announcement");
     string siteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid, "announcement");
     string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
+    string designGalleryHtml = BuildDesignGalleryHtml(linkHelper, "admin", eid);
+    string designGalleryText = BuildDesignGalleryText(linkHelper, "admin", eid);
 
     var htmlTemplate = LoadAnnouncementHtmlTemplate();
     var textTemplate = LoadAnnouncementTextTemplate();
-    var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, "Ann", editorUrl, siteUrl, unsubscribeUrl, changelogUrl);
+    var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, "Ann", editorUrl, siteUrl, unsubscribeUrl, changelogUrl, designGalleryHtml, designGalleryText);
 
     await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, content.Subject, content.TextBody, content.HtmlBody, configurationSetName: sesConfigurationSetName);
 
@@ -946,14 +948,21 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
         string changelogUrlWithTracking = AppendTrackingParameters(changelogUrl, cid, eid, "announcement");
         string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, recipient.UnsubscribeToken!);
         var unsubscribeHeaders = BuildUnsubscribeHeaders(unsubscribeUrl, sender);
+        string designGalleryHtml = BuildDesignGalleryHtml(linkHelper, cid, eid);
+        string designGalleryText = BuildDesignGalleryText(linkHelper, cid, eid);
 
-        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrlWithTracking, siteUrlWithTracking, unsubscribeUrl, changelogUrlWithTracking);
+        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrlWithTracking, siteUrlWithTracking, unsubscribeUrl, changelogUrlWithTracking, designGalleryHtml, designGalleryText);
         string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
         await LogSendAsync(dynamoDbClient, sendLogTable, logPath, recipient.Email, recipient.Cid ?? string.Empty, messageId, "user", 0, eid);
 
         sent++;
-        if (sent % 25 == 0 || sent == eligibleRecipients.Count)
-            Console.WriteLine($"Sent {sent}/{eligibleRecipients.Count} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss}");
+        if (sent % 50 == 0 || sent == eligibleRecipients.Count)
+        {
+            int remaining = eligibleRecipients.Count - sent;
+            TimeSpan avgPerItem = stopwatch.Elapsed / sent;
+            TimeSpan eta = avgPerItem * remaining;
+            Console.WriteLine($"Sent {sent}/{eligibleRecipients.Count} | Remaining {remaining} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss} | ETA {eta:hh\\:mm\\:ss}");
+        }
     }
 
     Console.WriteLine($"Done. Sent {sent}/{eligibleRecipients.Count} in {stopwatch.Elapsed:hh\\:mm\\:ss}.");
@@ -982,6 +991,65 @@ static EmailTemplateDefinition LoadAnnouncementTemplate(string configKey, string
     return new EmailTemplateDefinition(resolvedPath, sections);
 }
 
+// ---------------- 2026-08-12 "ten new patterns" announcement gallery ----------------
+// One-off design list for this specific send (designs published after
+// Capybara, DesignID 5462). Bespoke per-announcement, same as editorUrl/
+// changelogUrl above being hardcoded per-send rather than generic.
+static (int DesignId, int AlbumId, string NPage, string Caption)[] GetAnnouncementDesigns() => new[]
+{
+    (5463, 54, "00450", "Kawaii Cottagecore Frog"),
+    (5464, 54, "00451", "Kawaii Pink Axolotl"),
+    (5465, 59, "00074", "Luna Moth"),
+    (5466, 58, "00078", "Minimalist Line Art Face"),
+    (5467, 37, "00316", "Mouse"),
+    (5468, 15, "00212", "Kitten"),
+    (5469, 32, "00072", "Elephant"),
+    (5470, 34, "00033", "Cute Ghost with Mushroom Basket"),
+    (5471, 9, "00295", "Sparrow"),
+    (5472, 18, "00171", "Labrador"),
+};
+
+static string BuildDesignGalleryHtml(PatternLinkHelper linkHelper, string? cid, string eid)
+{
+    var designs = GetAnnouncementDesigns();
+    var sb = new System.Text.StringBuilder();
+    sb.Append("<div style=\"text-align:center;\">\n");
+    sb.Append("<!--[if mso]>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr>\n<![endif]-->\n");
+    for (int i = 0; i < designs.Length; i++)
+    {
+        var d = designs[i];
+        string url = AppendTrackingParameters(
+            linkHelper.BuildPatternUrl(new PinPatternInfo { AlbumId = d.AlbumId, DesignId = d.DesignId, NPage = d.NPage, Title = d.Caption }),
+            cid, eid, "announcement");
+        string imageUrl = linkHelper.BuildImageUrl(d.DesignId, d.AlbumId);
+        bool startOfRow = i % 2 == 0;
+        bool endOfRow = i % 2 == 1 || i == designs.Length - 1;
+        if (startOfRow) sb.Append("<!--[if mso]>\n<td width=\"50%\" valign=\"top\" style=\"padding:12px;\">\n<![endif]-->\n");
+        sb.Append("<div style=\"display:inline-block; width:46%; min-width:150px; max-width:240px; vertical-align:top; margin:0 1.5% 24px; text-align:center;\">\n");
+        sb.Append($"<a href=\"{WebUtility.HtmlEncode(url)}\"><img src=\"{WebUtility.HtmlEncode(imageUrl)}\" alt=\"{WebUtility.HtmlEncode(d.Caption)}\" width=\"220\" style=\"width:100%; max-width:220px; border-radius:8px; display:block; margin:0 auto;\"></a>\n");
+        sb.Append($"<p style=\"margin:8px 0 0; font-size:14px;\"><a href=\"{WebUtility.HtmlEncode(url)}\">{WebUtility.HtmlEncode(d.Caption)}</a></p>\n");
+        sb.Append("</div>\n");
+        if (startOfRow && !endOfRow) sb.Append("<!--[if mso]>\n</td>\n<td width=\"50%\" valign=\"top\" style=\"padding:12px;\">\n<![endif]-->\n");
+        else if (endOfRow) sb.Append("<!--[if mso]>\n</td></tr>\n<![endif]-->\n");
+    }
+    sb.Append("<!--[if mso]>\n</table>\n<![endif]-->\n");
+    sb.Append("</div>");
+    return sb.ToString();
+}
+
+static string BuildDesignGalleryText(PatternLinkHelper linkHelper, string? cid, string eid)
+{
+    var sb = new System.Text.StringBuilder();
+    foreach (var d in GetAnnouncementDesigns())
+    {
+        string url = AppendTrackingParameters(
+            linkHelper.BuildPatternUrl(new PinPatternInfo { AlbumId = d.AlbumId, DesignId = d.DesignId, NPage = d.NPage, Title = d.Caption }),
+            cid, eid, "announcement");
+        sb.Append($"{d.Caption}: {url}\n");
+    }
+    return sb.ToString().TrimEnd();
+}
+
 static RenderedEmailContent RenderAnnouncementEmailContent(
     EmailTemplateDefinition htmlTemplate,
     EmailTemplateDefinition textTemplate,
@@ -989,12 +1057,15 @@ static RenderedEmailContent RenderAnnouncementEmailContent(
     string editorUrl,
     string? siteUrl,
     string? unsubscribeUrl,
-    string? changelogUrl = null)
+    string? changelogUrl = null,
+    string designGalleryHtml = "",
+    string designGalleryText = "")
 {
     Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
     replacements["<editor_url>"] = editorUrl;
     replacements["<changelog_url>"] = changelogUrl ?? string.Empty;
     replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+    replacements["<design_gallery>"] = designGalleryHtml;
 
     string subject = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Subject"), replacements);
     string greeting = ReplaceTemplateTokens(htmlTemplate.GetRequiredSection("Greeting"), replacements);
@@ -1016,6 +1087,7 @@ static RenderedEmailContent RenderAnnouncementEmailContent(
     textReplacements["<editor_url>"] = editorUrl;
     textReplacements["<changelog_url>"] = changelogUrl ?? string.Empty;
     textReplacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+    textReplacements["<design_gallery>"] = designGalleryText;
 
     string tGreeting = ReplaceTemplateTokens(textTemplate.GetRequiredSection("Greeting"), textReplacements);
     string tBody1 = textTemplate.GetRequiredSection("Body1");
