@@ -39,6 +39,75 @@ All commands below run from the `automation/pinterest-agent/` directory.
 
 6. **Remind about timing.** A fresh block only takes effect in AWS WAF on the next daily Lambda pipeline run (the `[init]` WAF sync step in `lambda/handler.ts`), not immediately. A watch entry doesn't block anything at all — it's purely a marker for a follow-up review after `ttlDays`.
 
+## AWS WAF Bot Control (behavioral layer, separate from IP review above)
+
+Everything above (`BLOCKED_IP`/`WATCHED_IP`, `analyze-ip.ts`, `block-ip`/`watch-ip`) targets **specific known IPs**. It has a structural blind spot: an actor that rotates through many IPs (a botnet, a residential-proxy pool, a datacenter renting fresh addresses) never accumulates enough volume on any single IP to get caught by that workflow — it took 246+ distinct IPs from two Alibaba Cloud `/24` ranges before the pattern became visible on 2026-08-12 (see `BLOCKED_IP` entries for `43.119.100.0/24` etc.).
+
+**AWS WAF Bot Control** (`AWSManagedRulesBotControlRuleSet`, an AWS-managed rule group) is the second, complementary layer for this — it classifies traffic by *signature/behavior* (user-agent, TLS/HTTP fingerprint, known bot categories) regardless of which IP it's coming from. It's wired into the same Web ACL as the IP blocklist:
+
+- **Web ACL:** `CrossStitchBotProtection` (`arn:aws:wafv2:us-east-1:358174257684:regional/webacl/CrossStitchBotProtection/b6dd185d-3dac-4537-aa2f-abfd6c258676`), same ACL the `AutoBlockedIPs`/`TencentCloud-Singapore-Bots` IP-set rules attach to (priorities 1–2). Bot Control is priority 3, evaluated after the IP rules.
+- **Rule name:** `BotControlCommonCount` (name is now slightly stale — it does more than count, see below — kept as-is to avoid an unnecessary rename).
+- **Inspection level:** `COMMON` (the cheaper tier — signature/UA-based; `TARGETED` also exists, adds session/challenge-based ML detection at extra per-request cost, not enabled here).
+- Added 2026-08-12 in pure observe mode (`OverrideAction: Count` — logged everything, blocked nothing). On 2026-08-13, after reviewing what it was actually seeing, switched to **selective enforcement**.
+
+### Current configuration (as of 2026-08-13)
+
+`OverrideAction: None` (each sub-rule uses its own native action) **plus** `RuleActionOverrides` forcing every sub-rule to `Count` **except** three, which are left at their native `Block`:
+
+- `CategorySeo` — third-party SEO crawlers (Semrush, MJ12bot/Majestic, DotBot/Moz, SE Ranking's backlink crawler, Sogou, etc.) — no benefit to the site, same reasoning as blocking `5.9.120.8` (SE Ranking) via the IP workflow above.
+- `CategoryAdvertising`
+- `CategoryScrapingFramework`
+
+Everything else is deliberately left in `Count` (observed, not blocked) because it contains traffic that must not be blanket-blocked — confirmed via a 3-hour sample (`GetSampledRequests`, see below) that `SignalNonBrowserUserAgent` alone (the single largest bucket, ~58% of matches) is a grab-bag including Facebook's link-preview crawler (`meta-externalagent`, needed for social share previews to render) and AI crawlers (`ClaudeBot`, `OAI-SearchBot`) — the same "don't block a legitimate traffic source" principle as never blocking Googlebot in the IP workflow above, just applied to a signature instead of an IP range.
+
+Full list of the 24 `AWSManagedRulesBotControlRuleSet` COMMON-level sub-rules and which side of the line each landed on:
+
+| Sub-rule | Native default | Current override |
+|---|---|---|
+| `CategorySeo` | Block | *(kept — native Block)* |
+| `CategoryAdvertising` | Block | *(kept — native Block)* |
+| `CategoryScrapingFramework` | Block | *(kept — native Block)* |
+| `CategoryArchiver` | Block | → Count |
+| `CategoryContentFetcher` | Block | → Count |
+| `CategoryEmailClient` | Block | → Count |
+| `CategoryHttpLibrary` | Block | → Count |
+| `CategoryLinkChecker` | Block | → Count |
+| `CategoryMiscellaneous` | Block | → Count |
+| `CategoryMonitoring` | Block | → Count |
+| `CategorySearchEngine` | Block | → Count |
+| `CategorySecurity` | Block | → Count |
+| `CategorySocialMedia` | Block | → Count (Facebook preview crawler lives here) |
+| `CategoryAI` | Block | → Count (ClaudeBot, OAI-SearchBot live here) |
+| `SignalAutomatedBrowser` | Block | → Count |
+| `SignalKnownBotDataCenter` | Block | → Count |
+| `SignalNonBrowserUserAgent` | Block | → Count (largest bucket, mixed — see above) |
+| `TGT_VolumetricIpTokenAbsent` | Challenge | → Count |
+| `TGT_VolumetricSession` | Captcha | → Count |
+| `TGT_SignalAutomatedBrowser` | Captcha | → Count |
+| `TGT_SignalBrowserInconsistency` | Captcha | → Count |
+| `TGT_TokenReuseIp` | Count | Count (unchanged) |
+| `TGT_ML_CoordinatedActivityMedium` | Count | Count (unchanged) |
+| `TGT_ML_CoordinatedActivityHigh` | Count | Count (unchanged) |
+
+The seven `TGT_*` rules only actually fire under `TARGETED` inspection level, which isn't enabled here (`COMMON` only) — they're inert either way, but explicitly forced to `Count` too as a safety margin in case AWS ever changes that behavior, since their native actions (`Challenge`/`Captcha`) would otherwise interrupt real visitors.
+
+### How to check on it later
+
+Current live config:
+```
+aws wafv2 get-web-acl --scope REGIONAL --region us-east-1 \
+  --name CrossStitchBotProtection --id b6dd185d-3dac-4537-aa2f-abfd6c258676 \
+  --query "WebACL.Rules[?Name=='BotControlCommonCount']"
+```
+
+Daily volume (how much it's matching, `CountedRequests` + `BlockedRequests` metrics, namespace `AWS/WAFV2`, dimensions `WebACL=CrossStitchBotProtection`, `Rule=BotControlCommonCount`, `Region=us-east-1`) via `aws cloudwatch get-metric-statistics`.
+
+Breakdown of *what* it's matching (which sub-rule, real request detail — path, UA, client IP) via `aws wafv2 get-sampled-requests` with `--rule-metric-name BotControlCommonCount` — **the time window must be within the last 3 hours**, that's a hard AWS limit on sampled-request retention, so this can't be used to retroactively inspect an older day. The per-request field to group by is `RuleNameWithinRuleGroup` (e.g. `AWS#AWSManagedRulesBotControlRuleSet#CategorySeo`), not a `Labels` array (that field is present in the schema but comes back empty here).
+
+### Cost note
+
+`AWSManagedRulesBotControlRuleSet` is a paid AWS managed rule group (a monthly base fee plus a small per-request charge on top of ordinary WAF request pricing) — flagging since it was silently free-tier-adjacent while in Count-only mode and is now the actively-enforcing config.
+
 ## What not to do
 
 - Don't auto-block or auto-watch without the user confirming the specific IP and action — this command is decision *support*, the human still decides.
