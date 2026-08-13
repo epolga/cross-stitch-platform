@@ -83,6 +83,7 @@ export interface SavedPattern {
   palette: PatternPalette[];
   grid: number[][];
   hiddenColors?: number[];
+  thumbnail?: string;
   createdAt: string;
   modifiedAt: string;
   ownerID?: string;
@@ -307,6 +308,7 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     palette:      JSON.parse(Item.palette.S!) as PatternPalette[],
     grid:         rleDecode(Item.grid.S!, width, height),
     hiddenColors: Item.hiddenColors?.S ? JSON.parse(Item.hiddenColors.S) as number[] : undefined,
+    thumbnail:    Item.thumbnail?.S,
     createdAt,
     modifiedAt:   Item.modifiedAt?.S ?? createdAt,
     ownerID:      Item.ownerID?.S,
