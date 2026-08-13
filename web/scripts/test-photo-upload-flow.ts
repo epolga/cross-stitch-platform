@@ -36,29 +36,32 @@ import type { ConvertedPattern, PatternPalette } from '../src/lib/pattern-conver
 interface Args {
   imagePath: string;
   ownerID: string;
-  name: string;
+  name?: string; // undefined + existingPatternId => keep the pattern's current name (a real Redo never renames)
   width: number;
   height: number;
   colors: number;
   mode: string;
   site: string;
+  existingPatternId?: string; // if given, PUT (Redo/resave in place) instead of POST (first save)
 }
 
 function parseArgs(): Args {
-  const [imagePath, ownerID, name] = process.argv.slice(2);
+  const [imagePath, ownerID, nameArg] = process.argv.slice(2);
   if (!imagePath || !ownerID) {
-    console.error('Usage: npx tsx scripts/test-photo-upload-flow.ts <image> <ownerID> [name] [width=100] [height=100] [colors=30] [mode=auto] [site=http://cross-stitch-com-clone.us-east-1.elasticbeanstalk.com]');
+    console.error('Usage: npx tsx scripts/test-photo-upload-flow.ts <image> <ownerID> [name|-] [width=100] [height=100] [colors=30] [mode=auto] [site=http://cross-stitch-com-clone.us-east-1.elasticbeanstalk.com] [existingPatternId]');
+    console.error('  name: pass "-" to keep the existing pattern\'s current name (only meaningful with existingPatternId)');
     process.exit(1);
   }
   return {
     imagePath,
     ownerID,
-    name: name || 'Upload-flow test',
+    name: nameArg && nameArg !== '-' ? nameArg : undefined,
     width: Number(process.argv[5] ?? 100),
     height: Number(process.argv[6] ?? 100),
     colors: Number(process.argv[7] ?? 30),
     mode: process.argv[8] ?? 'auto',
     site: process.argv[9] ?? 'http://cross-stitch-com-clone.us-east-1.elasticbeanstalk.com',
+    existingPatternId: process.argv[10],
   };
 }
 
@@ -182,15 +185,29 @@ async function main() {
   const thumbnail = await generateThumbnail(confettiResult.grid, data.palette);
   console.log(`Thumbnail: ${thumbnail.length} bytes (data URL)`);
 
-  // Step 5 — Save, same as clicking Save (POST, since this is always a
-  // first save in this script — no existing-pattern-id support needed for
-  // a flow test).
+  // Step 5 — Save. Same as clicking Save: POST for a first save, or PUT
+  // (same patternId) for a Redo/resave, exactly matching
+  // ConvertClient.tsx's handleSavePattern() (existingId ? PUT : POST).
   const token = await createSessionToken({ userId: args.ownerID, email: 'upload-flow-test@example.com' });
-  const saveResp = await fetch(`${args.site}/api/converter/patterns`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: `${SESSION_COOKIE}=${token}` },
+  const cookie = { Cookie: `${SESSION_COOKIE}=${token}` };
+
+  let name = args.name;
+  if (!name && args.existingPatternId) {
+    // A real Redo never renames the pattern — keep whatever it's already called.
+    const existingResp = await fetch(`${args.site}/api/converter/patterns/${args.existingPatternId}`, { headers: cookie });
+    if (!existingResp.ok) throw new Error(`fetch existing pattern failed: ${existingResp.status} ${await existingResp.text()}`);
+    name = ((await existingResp.json()) as { name: string }).name;
+  }
+  name ??= 'Upload-flow test';
+
+  const url = args.existingPatternId
+    ? `${args.site}/api/converter/patterns/${args.existingPatternId}`
+    : `${args.site}/api/converter/patterns`;
+  const saveResp = await fetch(url, {
+    method: args.existingPatternId ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json', ...cookie },
     body: JSON.stringify({
-      name: args.name,
+      name,
       width: args.width, height: args.height,
       palette: data.palette, grid: confettiResult.grid,
       thumbnail,
@@ -200,7 +217,7 @@ async function main() {
   });
   if (!saveResp.ok) throw new Error(`save failed: ${saveResp.status} ${await saveResp.text()}`);
   const { id } = await saveResp.json() as { id: string };
-  console.log(`Saved pattern id: ${id} (owner ${args.ownerID})`);
+  console.log(`${args.existingPatternId ? 'Updated' : 'Saved'} pattern id: ${id} (owner ${args.ownerID}, name "${name}")`);
 }
 
 main().catch((e) => { console.error('FAILED -', e instanceof Error ? e.stack : e); process.exit(1); });

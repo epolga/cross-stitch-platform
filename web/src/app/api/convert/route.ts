@@ -4,7 +4,6 @@ import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s
 import { convertImage, type ColorDistanceMode } from '@/lib/pattern-converter';
 import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-analysis';
 import { isResearchImageCollectionEnabled } from '@/lib/research-consent';
-import { splitPngForStorage } from '@/lib/png-jpg-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -87,6 +86,22 @@ const SOURCE_PREFIX = 'pattern-source-images';
 // review — that flag/review is specifically about the *research* use case.
 // Same best-effort shape as saveResearchCopy(): a failed upload must never
 // break the conversion itself.
+//
+// 2026-08-13: briefly stored PNGs as JPG+lossless-alpha-mask here (see git
+// history / png-jpg-mask.ts) to save S3 space. Reverted the same day (Olga:
+// "у нас же нет проблем с местом" — storage isn't actually a real
+// constraint) once real testing showed the cost: JPEG's lossy compression
+// visibly shifts the DMC palette a later "Redo from Photo…" picks,
+// especially on a stark bimodal image (confirmed on a real photo — only
+// 20/40 DMC colors survived unchanged after one JPG round-trip at quality
+// 92). Storing the source unchanged means every Redo reconverts from the
+// exact original bytes again, not a lossy copy of them.
+// splitPngForStorage() (png-jpg-mask.ts) and its CLI
+// (scripts/png-to-jpg-with-mask.ts) are left in place, unused here — still
+// available for a deliberate one-off manual conversion, just not run
+// automatically on every PNG upload anymore. sourceImageMaskKey is still
+// read back by source-image/route.ts for any pattern saved while this was
+// active, so those keep working.
 async function saveSourceCopy(
   buffer: Buffer,
   contentType: string,
@@ -95,23 +110,6 @@ async function saveSourceCopy(
   if (!keepConsent) return {};
   try {
     const hash = contentKey(buffer);
-
-    if (contentType === 'image/png') {
-      const { rgbJpeg, maskPng } = await splitPngForStorage(buffer);
-      const key = `${SOURCE_PREFIX}/${hash}.jpg`;
-      if (!(await objectExists(key))) {
-        await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: rgbJpeg, ContentType: 'image/jpeg' }));
-      }
-      let maskKey: string | undefined;
-      if (maskPng) {
-        maskKey = `${SOURCE_PREFIX}/${hash}.mask.png`;
-        if (!(await objectExists(maskKey))) {
-          await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: maskKey, Body: maskPng, ContentType: 'image/png' }));
-        }
-      }
-      return { key, maskKey };
-    }
-
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
     const key = `${SOURCE_PREFIX}/${hash}.${ext}`;
     if (!(await objectExists(key))) {
