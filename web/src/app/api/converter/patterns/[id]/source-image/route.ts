@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { loadPattern } from '@/lib/pattern-storage';
 import { getSession } from '@/lib/session';
@@ -46,8 +47,30 @@ export async function GET(
     if (!obj.Body)
       return NextResponse.json({ error: 'Source photo missing in storage' }, { status: 500 });
 
-    const bytes = await obj.Body.transformToByteArray();
-    return new NextResponse(Buffer.from(bytes), {
+    const rgbBytes = Buffer.from(await obj.Body.transformToByteArray());
+
+    // PNG uploads with real transparency were split into a JPG (RGB) +
+    // separate lossless mask on save (convert/route.ts's splitPngForStorage)
+    // — recombine them here so "Redo from Photo…" gets back a faithful
+    // stand-in for the original PNG (same transparent pixels, so
+    // convertImage() classifies them as empty stitches the same way it did
+    // the first time), not just the flattened RGB.
+    if (pattern.sourceImageMaskKey) {
+      const maskObj = await s3Client.send(new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: pattern.sourceImageMaskKey,
+      }));
+      if (!maskObj.Body)
+        return NextResponse.json({ error: 'Source photo mask missing in storage' }, { status: 500 });
+      const maskBytes = Buffer.from(await maskObj.Body.transformToByteArray());
+
+      const reconstructed = await sharp(rgbBytes).joinChannel(maskBytes).png().toBuffer();
+      return new NextResponse(reconstructed, {
+        headers: { 'Content-Type': 'image/png' },
+      });
+    }
+
+    return new NextResponse(rgbBytes, {
       headers: { 'Content-Type': obj.ContentType || 'image/jpeg' },
     });
   } catch (e) {

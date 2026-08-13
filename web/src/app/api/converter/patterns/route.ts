@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     if (!session) return NextResponse.json({ error: 'Login required' }, { status: 401 });
 
     const body = await request.json();
-    const { name, width, height, palette, grid, thumbnail, hiddenColors, researchImageKey, sourceImageKey } = body;
+    const { name, width, height, palette, grid, thumbnail, hiddenColors, researchImageKey, sourceImageKey, sourceImageMaskKey } = body;
 
     if (!Array.isArray(grid) || !Array.isArray(palette))
       return NextResponse.json({ error: 'Invalid pattern data' }, { status: 400 });
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       undefined, // sourceGenerationId — not set from this general-purpose save route
       typeof researchImageKey === 'string' ? researchImageKey : undefined,
       typeof sourceImageKey === 'string' ? sourceImageKey : undefined,
+      typeof sourceImageMaskKey === 'string' ? sourceImageMaskKey : undefined,
     );
 
     return NextResponse.json({ id });

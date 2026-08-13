@@ -477,6 +477,10 @@ export default function ConvertPage() {
   // saveSourceCopy()), unconditional on research consent. Same set-on-import
   // / set-on-load shape as researchImageKey above.
   const [sourceImageKey, setSourceImageKey] = useState<string | undefined>(undefined);
+  // Only set when the imported PNG had real transparency — see
+  // splitPngForStorage() in convert/route.ts. Same set-on-import/set-on-load
+  // shape as sourceImageKey above.
+  const [sourceImageMaskKey, setSourceImageMaskKey] = useState<string | undefined>(undefined);
   // Track 2 (Opportunity 9) — set from the pattern-load response when this
   // pattern has AI-draft provenance. needsAiReview specifically means the
   // Approve/Approve-with-changes step (docs/genai-growth/DESIGN_FEEDBACK_LOOP.md)
@@ -597,6 +601,7 @@ export default function ConvertPage() {
     setEditingName(true);
     setResearchImageKey(data.researchImageKey);
     setSourceImageKey(data.sourceImageKey);
+    setSourceImageMaskKey(data.sourceImageMaskKey);
     updatePalette(data.palette);
     const confettiResult = removeConfetti(paddedGrid);
     updateGrid(confettiResult.grid);
@@ -864,6 +869,7 @@ export default function ConvertPage() {
         // a source photo even existed to fetch back.
         setResearchImageKey(typeof data.researchImageKey === 'string' ? data.researchImageKey : undefined);
         setSourceImageKey(typeof data.sourceImageKey === 'string' ? data.sourceImageKey : undefined);
+        setSourceImageMaskKey(typeof data.sourceImageMaskKey === 'string' ? data.sourceImageMaskKey : undefined);
         setIsAiDraft(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0);
         setSourceGenerationId(typeof data.sourceGenerationId === 'string' && data.sourceGenerationId.length > 0 ? data.sourceGenerationId : null);
         setNeedsAiReview(data.needsAiReview === true);
@@ -1149,6 +1155,7 @@ export default function ConvertPage() {
       // was already stored untouched — see pattern-storage.ts).
       researchImageKey,
       sourceImageKey,
+      sourceImageMaskKey,
     });
     const resp = await fetch(
       existingId ? `/api/converter/patterns/${existingId}` : '/api/converter/patterns',

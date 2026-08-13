@@ -104,6 +104,17 @@ describe('savePattern', () => {
     const call = mockSend.mock.calls.findLast((c) => c[0] instanceof PutItemCommand);
     expect((call![0] as PutItemCommand).input.Item!.name.S).toBe('Untitled');
   });
+
+  it('includes sourceImageMaskKey only when provided', async () => {
+    await savePattern(
+      'Masked', 1, 1, [RED], [[0]], 'user-abc',
+      undefined, undefined, undefined, undefined,
+      'pattern-source-images/2026-08-13/x.jpg', 'pattern-source-images/2026-08-13/x.mask.png',
+    );
+
+    const call = mockSend.mock.calls.findLast((c) => c[0] instanceof PutItemCommand);
+    expect((call![0] as PutItemCommand).input.Item!.sourceImageMaskKey?.S).toBe('pattern-source-images/2026-08-13/x.mask.png');
+  });
 });
 
 // ── updatePattern ─────────────────────────────────────────────────────────────
@@ -137,6 +148,20 @@ describe('updatePattern', () => {
     expect(input.UpdateExpression).toContain('thumbnail = :t');
     expect(input.UpdateExpression).toContain('hiddenColors = :hc');
     expect(input.ExpressionAttributeValues![':t'].S).toBe('data:image/jpeg;base64,abc');
+  });
+
+  it('SETs sourceImageMaskKey when provided, and never REMOVEs it (only-set rule)', async () => {
+    await updatePattern(
+      'fixed-id', 'Masked', 1, 1, [RED], [[0]], 'user-abc',
+      undefined, undefined, undefined,
+      'pattern-source-images/2026-08-13/x.jpg', 'pattern-source-images/2026-08-13/x.mask.png',
+    );
+
+    const call = mockSend.mock.calls.findLast((c) => c[0] instanceof UpdateItemCommand);
+    const input = (call![0] as UpdateItemCommand).input;
+    expect(input.UpdateExpression).toContain('sourceImageMaskKey = :skm');
+    expect(input.UpdateExpression).not.toContain('REMOVE sourceImageMaskKey');
+    expect(input.ExpressionAttributeValues![':skm'].S).toBe('pattern-source-images/2026-08-13/x.mask.png');
   });
 });
 

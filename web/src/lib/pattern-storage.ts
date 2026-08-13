@@ -91,6 +91,7 @@ export interface SavedPattern {
   sourceGenerationId?: string;
   researchImageKey?: string;
   sourceImageKey?: string;
+  sourceImageMaskKey?: string;
 }
 
 export async function savePattern(
@@ -105,6 +106,7 @@ export async function savePattern(
   sourceGenerationId?: string,
   researchImageKey?: string,
   sourceImageKey?: string,
+  sourceImageMaskKey?: string,
 ): Promise<string> {
   await ensureTable();
   const id = randomUUID();
@@ -143,6 +145,9 @@ export async function savePattern(
   // unconditional on any consent, never used for anything but serving it
   // back to that same owner (source-image/route.ts).
   if (sourceImageKey) item.sourceImageKey = { S: sourceImageKey };
+  // Only present when sourceImageKey's PNG had real transparency — see
+  // splitPngForStorage() in convert/route.ts.
+  if (sourceImageMaskKey) item.sourceImageMaskKey = { S: sourceImageMaskKey };
 
   await client.send(new PutItemCommand({ TableName: TABLE, Item: item }));
   return id;
@@ -160,6 +165,7 @@ export async function updatePattern(
   hiddenColors?: number[],
   researchImageKey?: string,
   sourceImageKey?: string,
+  sourceImageMaskKey?: string,
 ): Promise<void> {
   await ensureTable();
   const rle = rleEncode(grid);
@@ -197,6 +203,8 @@ export async function updatePattern(
   if (researchImageKey) { values[':rk'] = { S: researchImageKey }; setParts.push('researchImageKey = :rk'); }
   // Same "only set, never remove" rule as researchImageKey above, same reason.
   if (sourceImageKey) { values[':sk'] = { S: sourceImageKey }; setParts.push('sourceImageKey = :sk'); }
+  // Same rule again — only present on a fresh import with a transparent PNG.
+  if (sourceImageMaskKey) { values[':skm'] = { S: sourceImageMaskKey }; setParts.push('sourceImageMaskKey = :skm'); }
 
   let updateExpression = `SET ${setParts.join(', ')}`;
   if (removeParts.length > 0) updateExpression += ` REMOVE ${removeParts.join(', ')}`;
@@ -307,6 +315,7 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
     sourceGenerationId: Item.sourceGenerationId?.S,
     researchImageKey: Item.researchImageKey?.S,
     sourceImageKey: Item.sourceImageKey?.S,
+    sourceImageMaskKey: Item.sourceImageMaskKey?.S,
   };
 }
 

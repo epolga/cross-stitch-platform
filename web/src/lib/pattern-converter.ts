@@ -29,6 +29,13 @@ export interface ConvertedPattern {
   // saveSourceCopy()), when they opted into "keep my photo so I can redo
   // this later" — separate from researchImageKey and its consent/flag.
   sourceImageKey?: string;
+  // S3 key of the alpha-channel mask (lossless PNG) for sourceImageKey, only
+  // present when the original upload had real transparency. sourceImageKey
+  // itself is stored as JPG (no alpha) for size; the mask lets source-image/
+  // route.ts recombine RGB+alpha back into a faithful PNG on read, so a PNG
+  // with a transparent background still redoes the same conversion later
+  // (transparent pixels become empty stitches — see ALPHA_THRESHOLD below).
+  sourceImageMaskKey?: string;
 }
 
 const DMC: DmcColor[] = dmcColors;

@@ -60,7 +60,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Invalid pattern ID' }, { status: 400 });
 
     const body = await request.json();
-    const { name, width, height, palette, grid, thumbnail, hiddenColors, researchImageKey, sourceImageKey } = body;
+    const { name, width, height, palette, grid, thumbnail, hiddenColors, researchImageKey, sourceImageKey, sourceImageMaskKey } = body;
 
     if (!Array.isArray(grid) || !Array.isArray(palette))
       return NextResponse.json({ error: 'Invalid pattern data' }, { status: 400 });
@@ -83,6 +83,7 @@ export async function PUT(
       Array.isArray(hiddenColors) ? hiddenColors as number[] : undefined,
       typeof researchImageKey === 'string' ? researchImageKey : undefined,
       typeof sourceImageKey === 'string' ? sourceImageKey : undefined,
+      typeof sourceImageMaskKey === 'string' ? sourceImageMaskKey : undefined,
     );
     return NextResponse.json({ id });
   } catch (e) {

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { createHash } from 'crypto';
+import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { convertImage, type ColorDistanceMode } from '@/lib/pattern-converter';
 import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-analysis';
 import { isResearchImageCollectionEnabled } from '@/lib/research-consent';
+import { splitPngForStorage } from '@/lib/png-jpg-mask';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,34 @@ const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
 const DESIGNS_BUCKET = 'cross-stitch-designs'; // shared by both copies below, different prefixes
 const RESEARCH_PREFIX = 'research-uploads';
 const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+
+async function objectExists(key: string): Promise<boolean> {
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Content-addressed key: sha256 of the exact bytes being stored under this
+// key. 2026-08-13 (Olga's ask) — Redo reconverts the same file with
+// different width/colors/mode, hitting saveResearchCopy/saveSourceCopy
+// again each time; a random key per call meant every Redo left behind a
+// fresh, orphaned duplicate in S3. Deriving the key from content instead of
+// randomUUID() makes re-uploading the same bytes naturally idempotent (same
+// content -> same key -> objectExists() skips the PutObject) with no need
+// for the client to assert "this is the same file as last time" — which
+// would otherwise be a trust-the-client footgun: source-image/route.ts
+// serves sourceImageKey back to whoever owns the *pattern* it's attached
+// to, so blindly accepting a client-supplied "reuse this key" value would
+// let anyone attach an arbitrary (possibly someone else's) key to a new
+// pattern they own and read it back through that route. Content-addressing
+// sidesteps this entirely: the only key you can ever produce is one for
+// bytes you already possess.
+function contentKey(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
 
 // Best-effort only — a failed research upload must never break the actual
 // conversion a visitor is waiting on. Gated independently of whatever the
@@ -38,8 +67,10 @@ async function saveResearchCopy(buffer: Buffer, contentType: string, consentGive
   if (!consentGiven || !isResearchImageCollectionEnabled()) return undefined;
   try {
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
-    const key = `${RESEARCH_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
-    await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    const key = `${RESEARCH_PREFIX}/${contentKey(buffer)}.${ext}`;
+    if (!(await objectExists(key))) {
+      await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    }
     return key;
   } catch (e) {
     console.error('[convert] research copy upload failed:', e);
@@ -56,16 +87,40 @@ const SOURCE_PREFIX = 'pattern-source-images';
 // review — that flag/review is specifically about the *research* use case.
 // Same best-effort shape as saveResearchCopy(): a failed upload must never
 // break the conversion itself.
-async function saveSourceCopy(buffer: Buffer, contentType: string, keepConsent: boolean): Promise<string | undefined> {
-  if (!keepConsent) return undefined;
+async function saveSourceCopy(
+  buffer: Buffer,
+  contentType: string,
+  keepConsent: boolean,
+): Promise<{ key?: string; maskKey?: string }> {
+  if (!keepConsent) return {};
   try {
+    const hash = contentKey(buffer);
+
+    if (contentType === 'image/png') {
+      const { rgbJpeg, maskPng } = await splitPngForStorage(buffer);
+      const key = `${SOURCE_PREFIX}/${hash}.jpg`;
+      if (!(await objectExists(key))) {
+        await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: rgbJpeg, ContentType: 'image/jpeg' }));
+      }
+      let maskKey: string | undefined;
+      if (maskPng) {
+        maskKey = `${SOURCE_PREFIX}/${hash}.mask.png`;
+        if (!(await objectExists(maskKey))) {
+          await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: maskKey, Body: maskPng, ContentType: 'image/png' }));
+        }
+      }
+      return { key, maskKey };
+    }
+
     const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
-    const key = `${SOURCE_PREFIX}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${ext}`;
-    await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
-    return key;
+    const key = `${SOURCE_PREFIX}/${hash}.${ext}`;
+    if (!(await objectExists(key))) {
+      await s3.send(new PutObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key, Body: buffer, ContentType: contentType }));
+    }
+    return { key };
   } catch (e) {
     console.error('[convert] source copy upload failed:', e);
-    return undefined;
+    return {};
   }
 }
 
@@ -116,9 +171,9 @@ export async function POST(request: NextRequest) {
     const pattern = await convertImage(buffer, width, height, colors, resolvedMode, colorDistanceMode);
 
     const researchImageKey = await saveResearchCopy(buffer, file.type, researchConsent);
-    const sourceImageKey = await saveSourceCopy(buffer, file.type, keepForReuse);
+    const { key: sourceImageKey, maskKey: sourceImageMaskKey } = await saveSourceCopy(buffer, file.type, keepForReuse);
 
-    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode, researchImageKey, sourceImageKey });
+    return NextResponse.json({ ...pattern, imageType, warnings, mode: resolvedMode, researchImageKey, sourceImageKey, sourceImageMaskKey });
   } catch (e) {
     console.error('[convert] error:', e);
     return NextResponse.json({ error: 'Conversion failed' }, { status: 500 });
