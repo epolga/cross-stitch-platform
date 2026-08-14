@@ -64,6 +64,7 @@ const STATIC_PAGE_LASTMOD: Record<string, string> = {
   '/small-cross-stitch-patterns': '2026-08-08', // src/app/small-cross-stitch-patterns/page.tsx
   '/terms': '2026-08-02', // src/app/terms/page.tsx
   '/CrossStitchTips.aspx': '2026-06-01', // src/app/CrossStitchTips.aspx/page.tsx
+  '/about': '2026-08-14', // src/app/about/page.tsx — bump to actual deploy date when shipped
 };
 
 // Function to generate the sitemap XML
@@ -88,6 +89,7 @@ async function generateAndUploadSitemap(baseUrl: string) {
     { url: '/privacy-policy', changefreq: 'yearly', priority: 0.3, lastmod: STATIC_PAGE_LASTMOD['/privacy-policy'] },
     { url: '/terms', changefreq: 'yearly', priority: 0.3, lastmod: STATIC_PAGE_LASTMOD['/terms'] },
     { url: '/CrossStitchTips.aspx', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/CrossStitchTips.aspx'] },
+    { url: '/about', changefreq: 'monthly', priority: 0.5, lastmod: STATIC_PAGE_LASTMOD['/about'] },
   ];
 
   // Fetch album URLs

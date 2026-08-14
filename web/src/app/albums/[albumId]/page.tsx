@@ -42,15 +42,22 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const canonicalPath = albumCaption ? await CreateAlbumUrl(albumCaption) : `/albums/${albumId}`;
   const canonicalUrl = buildCanonicalUrl(canonicalPath);
   const baseName = albumCaption || `Album ${albumId}`;
+  // The "Free" theme (independence/liberation designs) reads as "free of charge" when
+  // dropped into the standard "{name} Cross-Stitch Patterns" template, colliding with the
+  // homepage's own "Free Cross-Stitch PDF Patterns" title/intent for the same search terms.
+  const isFreeThemeAlbum = (albumCaption || '').trim().toLowerCase() === 'free';
+  const displayName = isFreeThemeAlbum ? '"Free" Theme' : baseName;
   const highlightNames = (designs || []).slice(0, 2).map((d) => d.Caption).filter(Boolean);
   const isBookmarksAlbum = (albumCaption || '').toLowerCase() === 'bookmarks';
-  const title = `${baseName} Cross-Stitch Patterns (Album ${albumId}${page > 1 ? `, Page ${page}` : ''})`;
+  const title = `${displayName} Cross-Stitch Patterns (Album ${albumId}${page > 1 ? `, Page ${page}` : ''})`;
   const highlights = highlightNames.length ? ` Highlights: ${highlightNames.join(' | ')}.` : '';
   const bookmarkNote = isBookmarksAlbum ? ' Includes free cross-stitch bookmark patterns with slim, ready-to-print PDF charts.' : '';
-  const description = `Explore free cross-stitch designs in ${baseName} (Album ${albumId})${page > 1 ? ` on page ${page}` : ''}. Downloadable PDF patterns available.${highlights}${bookmarkNote}`;
+  const description = `Explore free cross-stitch designs in the ${displayName} collection (Album ${albumId})${page > 1 ? ` on page ${page}` : ''}. Downloadable PDF patterns available.${highlights}${bookmarkNote}`;
   const slugCaption = baseName.replace(/\s+/g, '-');
   const keywords = albumCaption
-    ? `free cross stitch ${albumCaption} patterns, ${albumCaption} charts, free embroidery PDFs, ${slugCaption} designs, download ${albumCaption} charts, album ${albumId}`
+    ? (isFreeThemeAlbum
+        ? `independence themed cross stitch patterns, liberation cross stitch charts, free embroidery PDFs, ${slugCaption}-theme designs, album ${albumId}`
+        : `free cross stitch ${albumCaption} patterns, ${albumCaption} charts, free embroidery PDFs, ${slugCaption} designs, download ${albumCaption} charts, album ${albumId}`)
     : `cross stitch, free designs, free patterns, PDFs, album ${albumId}, download album ${albumId} charts`;
   const hasPart = (designs || []).slice(0, 3).map((design) => ({
     "@type": "CreativeWork",
@@ -131,6 +138,8 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
   const { designs, entryCount, page: currentPage, totalPages, albumCaption, albumSeoDescription } = designsResponse;
   const baseUrl = albumCaption ? await CreateAlbumUrl(albumCaption) : `/albums/${albumId}`;
   const isBookmarksAlbum = (albumCaption || '').toLowerCase() === 'bookmarks';
+  const isFreeThemeAlbum = (albumCaption || '').trim().toLowerCase() === 'free';
+  const h1DisplayName = isFreeThemeAlbum ? '"Free" Theme' : (albumCaption || `Album ${albumId}`);
   const nav = await getAdjacentAlbums(parseInt(albumId));
 
   const breadcrumbStructuredData = {
@@ -151,7 +160,7 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
   return (
     <div className="container mx-auto p-4">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }} />
-      <h1 className="text-3xl font-bold mb-6">Designs in {albumCaption || `Album ${albumId}`} ({entryCount} designs)</h1>
+      <h1 className="text-3xl font-bold mb-6">Designs in {h1DisplayName} ({entryCount} designs)</h1>
       {albumSeoDescription ? (
         <div className="text-gray-600 text-sm mb-4">
           {albumSeoDescription.split('\n').filter(p => p.trim()).map((para, i) => (

@@ -111,7 +111,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               </a>
             </p>
 
-            <p>Ann Logan</p>
+            <p>
+              <Link
+                href="/about"
+                className="text-blue-600 hover:underline"
+                aria-label="About Ann Logan"
+              >
+                Ann Logan
+              </Link>
+            </p>
             <p>Krivoklatska 271, Praha, 19900, CZECH REPUBLIC</p>
             <p className="mt-2">
               <Link
