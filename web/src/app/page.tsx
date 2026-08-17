@@ -132,10 +132,10 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     : isIsolatedBeginnerFacet
       ? buildCanonicalUrl('/easy-cross-stitch-patterns-for-beginners')
       : buildCanonicalUrl('/');
-  const title = searchText ? `Search Results for "${searchText}" - Cross Stitch Designs` : 'Cross Stitch Designs';
-  const description = searchText 
-    ? `Search results for "${searchText}". Explore thousands of free cross-stitch PDF patterns with instant downloads.` 
-    : 'Explore thousands of free cross-stitch PDF patterns with instant downloads.';
+  const title = searchText ? `Search Results for "${searchText}" - Cross Stitch Designs` : 'Free Cross-Stitch Patterns — Printable PDF Charts';
+  const description = searchText
+    ? `Search results for "${searchText}". Explore thousands of free cross-stitch PDF patterns with instant downloads.`
+    : 'Thousands of free cross-stitch PDF patterns — printable charts with DMC color keys and stitch counts, instant download, no subscription.';
 
   const homeUrl = buildCanonicalUrl('/');
   const websiteStructuredData = {

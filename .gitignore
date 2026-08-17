@@ -28,6 +28,9 @@ reports/
 **/lambda/dist/
 embeddings-progress.json
 
+# Manual converter/AI-draft test images (local only, not repo content)
+TestImages/
+
 # Scratch/diagnostic scripts (one-off, underscore-prefixed by convention)
 **/scripts/_*.ts
 

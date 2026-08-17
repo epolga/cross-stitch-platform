@@ -46,7 +46,7 @@ const CACHE_TTL_SECONDS = 3600; // 1 hour - adjust as needed
 // as an approximation (commit date, not confirmed deploy date) — good enough
 // for pages that rarely change; keep it exact for anything edited from here on.
 const STATIC_PAGE_LASTMOD: Record<string, string> = {
-  '/': '2026-08-08', // src/app/page.tsx
+  '/': '2026-08-17', // src/app/page.tsx
   '/XStitch-Charts.aspx': '2026-08-07', // src/app/[slug]/page.tsx (shared catch-all)
   '/photo-to-cross-stitch': '2026-08-13', // src/app/photo-to-cross-stitch/page.tsx
   '/Embroidery_History.aspx': '2026-07-07', // src/app/[slug]/page.tsx (shared catch-all)
