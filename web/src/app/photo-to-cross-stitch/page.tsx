@@ -22,24 +22,23 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const params = await searchParams;
-  // designId/albumId/catalogPatternId are referrer-tracking params (which
-  // page linked here) — real, valuable data we keep in the URL/analytics,
-  // but they turn this one page into thousands of crawlable near-duplicate
-  // URLs (one per design/album/catalog pattern — catalogPatternId alone is
-  // linked from every design's "Open in editor" button, ~5271 designs).
-  // Canonical alone wasn't enough — GSC classified them "Duplicate without
-  // user-selected canonical" despite a correct canonical tag, likely
-  // because so many of them are individually internally-linked. noindex on
-  // just the referrer-tagged variants is the reliable fix; the bare URL and
-  // ?source=-only variant stay indexable.
-  const hasReferrerId = Boolean(params?.designId || params?.albumId || params?.catalogPatternId);
+  // General rule (replaces the old designId/albumId/catalogPatternId
+  // enumeration, which kept missing cases GSC flagged as "Duplicate without
+  // user-selected canonical"): canonical here never carries a query string,
+  // so ANY search param at all — designId/albumId/catalogPatternId/source/
+  // anything else — means this exact URL isn't the canonical form, noindex
+  // it. This is a behavior change from before: the ?source=-only variant
+  // (no id) used to stay indexable deliberately; it's now noindex too,
+  // since it's not actually distinct content from the bare URL. follow (not
+  // nofollow) so Googlebot still reaches the bare page from these links.
+  const hasAnySearchParam = Object.keys(params || {}).length > 0;
 
   return {
     title: TITLE,
     description: DESCRIPTION,
     keywords: 'cross stitch pattern maker, photo to cross stitch pattern, image to cross stitch, turn photo into cross stitch, cross stitch editor, cross stitch pattern generator, custom cross stitch pattern, make your own cross stitch pattern, cross stitch pattern from photo, pet portrait cross stitch, convert photo to cross stitch, DMC pattern generator, cross stitch PDF, counted cross stitch pattern, cross stitch chart maker, cross stitch from photo, DMC floss colors, cross stitch for beginners, Aida fabric cross stitch, save cross stitch pattern, cross stitch pattern editor account, stitchable cross stitch pattern, confetti cleanup cross stitch',
     alternates: { canonical: buildCanonicalUrl('/photo-to-cross-stitch') },
-    robots: hasReferrerId ? 'noindex, follow' : 'index, follow',
+    robots: hasAnySearchParam ? 'noindex, follow' : 'index, follow',
     openGraph: {
       title: TITLE,
       description: DESCRIPTION,

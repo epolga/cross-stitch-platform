@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import DesignPage, { generateMetadata as generateDesignMetadata } from '../designs/[designId]/page'; // Adjust path if needed
-import AlbumDesignsPage, { generateMetadata as generateAlbumMetadata } from '../albums/[albumId]/page'; // Adjust path if needed
+import AlbumDesignsPage from '../albums/[albumId]/page'; // Adjust path if needed
+import { buildAlbumMetadata } from '@/lib/album-metadata';
 import AlbumsPage from '../albums/page'; // Adjust path if needed
 import { getAlbumIdByCaption, getDesignIdByAlbumAndPage, updateLastEmailEntryByCid } from '@/lib/data-access'; // Adjust path if needed
 import { sendEmailToAdmin } from '@/lib/email-service'; // Import the email service
@@ -138,7 +139,7 @@ export async function generateMetadata({ params, searchParams }: {
     if (albumCaption) {
       const albumId = await getAlbumIdByCaption(albumCaption);
       if (albumId) {
-        return generateAlbumMetadata({ params: Promise.resolve({ albumId: albumId.toString() }), searchParams: Promise.resolve(resolvedSearchParams) });
+        return buildAlbumMetadata({ params: Promise.resolve({ albumId: albumId.toString() }), searchParams: Promise.resolve(resolvedSearchParams) }, true);
       }
     }
   }

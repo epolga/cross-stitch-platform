@@ -16,6 +16,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl, 308);
   }
 
+  // Legacy pagination param from the pre-migration site (?page=N) — current
+  // pagination uses ?nPage=. No code generates ?page= links anymore, but old
+  // indexed URLs still get crawled, render identical page-1 content, and GSC
+  // flags them "Duplicate without user-selected canonical". Since nothing
+  // internally links these, a redirect (not just noindex) is the clean fix —
+  // passes any residual link equity to the canonical homepage instead of
+  // leaving a dead-end indexable duplicate.
+  if (
+    request.nextUrl.pathname === '/' &&
+    request.nextUrl.searchParams.has('page') &&
+    !request.nextUrl.searchParams.has('nPage')
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.searchParams.delete('page');
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
   const g = globalThis as typeof globalThis & {
     __LAST_REQUEST_URL__?: string;
   };

@@ -118,14 +118,16 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const hasOtherFilters = Boolean(subject) || Boolean(filters.orientation) || hasWidthFilter || hasHeightFilter || hasColorFilter || Boolean(filters.semanticIds?.length);
   const isIsolatedSmallFacet = filters.sizeCategory === 'small' && !hasOtherFilters && !searchText;
   const isIsolatedBeginnerFacet = filters.isBeginnerFriendly === true && !hasOtherFilters && !searchText;
-  const hasAnyFacetFilter = hasOtherFilters || Boolean(filters.sizeCategory) || filters.isBeginnerFriendly === true || Boolean(searchText);
-  // Page 2+ of any listing is just another slice of the same grid — no
-  // unique value as a standalone search result, and indexing every
-  // pagination page would dilute crawl/index budget away from the
-  // actual design pages. follow (not nofollow) so Googlebot still
-  // discovers designs linked from later pages via PaginationControl's
-  // real <a href> links.
-  const isPaginated = nPage > 1;
+  // General rule (replaces the old per-param enumeration, which kept missing
+  // cases GSC flagged as "Duplicate without user-selected canonical" —
+  // ?page=, ?utm_source=/?gclid=, etc.): canonical here never carries a query
+  // string, so ANY search param at all means this exact URL isn't the
+  // canonical form — noindex it. follow (not nofollow) so Googlebot still
+  // discovers designs linked from later pages via PaginationControl's real
+  // <a href> links. Tracking params (utm_*, gclid) are deliberately not
+  // exempted from this — they must stay in the URL for GA4 attribution, but
+  // the page itself still shouldn't be indexed as a separate result.
+  const hasAnySearchParam = Object.keys(resolvedSearchParams || {}).length > 0;
 
   const canonicalUrl = isIsolatedSmallFacet
     ? buildCanonicalUrl('/small-cross-stitch-patterns')
@@ -171,7 +173,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     alternates: {
       canonical: canonicalUrl,
     },
-    robots: (hasAnyFacetFilter || isPaginated) ? 'noindex, follow' : 'index, follow',
+    robots: hasAnySearchParam ? 'noindex, follow' : 'index, follow',
     openGraph: {
       title,
       description,
