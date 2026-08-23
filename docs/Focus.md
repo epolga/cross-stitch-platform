@@ -203,6 +203,58 @@ live-user bug fix (Christa — verify-email login). Full detail:
    **both clean**, ruling out a penalty/policy flag as the cause. **Decided:
    not urgent (likely industry-wide noise, not a site problem, and not a
    policy violation), re-check position in a couple of days.**
+   **2026-08-23 update:** Olga found she'd cut the Pinterest daily budget
+   to ~$4.5 around 08-07 (matches this item's decline window) and raised
+   it back to ~$6.5 on 08-17. US-filtered GSC position improved 15.2→13.4
+   avg and clicks +37% (35→48/day) comparing 08-07..16 vs 08-17..21;
+   cross-checked independently via GA4 US Organic Search sessions, which
+   moved the same direction (+32%, 62.9→83.3/day) while Direct-channel
+   sessions stayed flat (32.7→31.8) — rules out "people typing the URL
+   after seeing a pin" as the mechanism, points to it landing as organic
+   search lift specifically. Whole-history Pearson correlation (spend vs
+   GA4 organic sessions, 97 days, `_check_halo_effect.ts`): r=0.567
+   same-day, r≈0.51-0.53 at 1-3 day lag; a prior natural experiment (the
+   2026-06-19 cut from $11.84→$4.89/day) showed the same direction
+   (-26.5% organic). **This is a second, independent candidate cause for
+   the same 08-12 decline this item already attributes to industry-wide
+   "Google dance" — not a replacement for that explanation, a confound.**
+   Both may be partially true. **Next check: ~2026-09-06**, once ~3 weeks
+   of data exist at the $6.5 budget (matches the 10-day low-budget sample
+   size) — re-run `_check_halo_effect.ts` and compare US position/GA4
+   organic against the 08-07..16 baseline again. Also worth checking then
+   whether the broader Google-ranking volatility mentioned above has
+   independently settled, to help separate the two candidate causes.
+   **2026-08-23, same day, web search confirms a third candidate cause,
+   found AFTER the Pinterest-spend comparison above was already written:**
+   a **confirmed** (not just tracker-inferred) Google spam update ran
+   2026-08-18 12:30pm ET → 2026-08-21 4:50am ET (~2.5 days, third of 2026
+   after March/June, announced by Google Search Central), landing almost
+   exactly on the budget-raise date (08-17) and the sharp position jump
+   (08-18: 18.6→10.8). This makes the 08-07..16 vs 08-17..21 before/after
+   comparison above **confounded** — can't cleanly separate "budget
+   raised" from "global spam update reshuffled rankings" using that short
+   window alone. Separately, the earlier 08-01..13 unconfirmed volatility
+   (the original "Google dance" theory this item started from) stays
+   unconfirmed by Google's own status dashboard — third-party trackers
+   disagreed on its severity even at the time (e.g. one composite tracker
+   called it "a wobble, not a storm" for 08-12/13).
+   The whole-history r=0.567 correlation (97 days, predates this one
+   update) is NOT affected by this confound and remains the stronger
+   piece of evidence. **Revised guidance for the 2026-09-06 check:** by
+   then the spam update's effects should be fully settled (it completed
+   08-21), so if US position/organic stays elevated well past that
+   settling point, that's much cleaner evidence for the budget effect
+   than the 08-23 same-day comparison was.
+   **2026-08-23, later same day: direct ROI check run** (last 21 days,
+   `_check_pinterest_roi.ts`) — Pinterest spend $107.33, proportionally-
+   attributed revenue only ₪134.46 vs ₪321.79 spend in ILS = -₪187.34
+   over 21 days; whole-site profit near breakeven (-₪5.83). Based on this,
+   **Olga set the Pinterest daily budget to $5.5/day (down from $6.5)**
+   — a deliberate mid-point between the $4.5 (low, pre-08-17) and $6.5
+   (high, 08-17 to 08-22, confounded by the spam update) levels. This is
+   now the baseline for the 2026-09-06 check above — compare US GSC
+   position / GA4 organic at $5.5 against both prior periods once the
+   spam update's effects are fully settled.
 8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
    Perpetual Love", 07-24) confirmed healthy 2026-07-27. **Announcement
    email ("You spoke, I listened") remains unverifiable** — exact send
@@ -440,7 +492,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
-- [ ] GSC average position — re-check in a couple of days (see Open item #7, new 2026-08-12 decline)
+- [ ] GSC average position — re-check ~2026-09-06 (see Open item #7; Pinterest-spend correlation found 08-23 as a second candidate cause alongside the original "Google dance" theory, need more data at the restored $6.5 budget to separate the two)
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)

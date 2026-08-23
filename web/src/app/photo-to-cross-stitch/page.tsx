@@ -22,15 +22,17 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const params = await searchParams;
-  // designId/albumId are referrer-tracking params (which page linked here) —
-  // real, valuable data we keep in the URL/analytics, but they turn this one
-  // page into thousands of crawlable near-duplicate URLs (one per design/
-  // album). Canonical alone wasn't enough — GSC classified them "Duplicate
-  // without user-selected canonical" despite a correct canonical tag, likely
+  // designId/albumId/catalogPatternId are referrer-tracking params (which
+  // page linked here) — real, valuable data we keep in the URL/analytics,
+  // but they turn this one page into thousands of crawlable near-duplicate
+  // URLs (one per design/album/catalog pattern — catalogPatternId alone is
+  // linked from every design's "Open in editor" button, ~5271 designs).
+  // Canonical alone wasn't enough — GSC classified them "Duplicate without
+  // user-selected canonical" despite a correct canonical tag, likely
   // because so many of them are individually internally-linked. noindex on
   // just the referrer-tagged variants is the reliable fix; the bare URL and
   // ?source=-only variant stay indexable.
-  const hasReferrerId = Boolean(params?.designId || params?.albumId);
+  const hasReferrerId = Boolean(params?.designId || params?.albumId || params?.catalogPatternId);
 
   return {
     title: TITLE,
