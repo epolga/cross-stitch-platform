@@ -39,6 +39,22 @@ export async function getSession(request: NextRequest): Promise<SessionPayload |
   return verifySessionToken(token);
 }
 
+// The one path every "you are now logged in" moment should go through —
+// password login, email-link verification, newsletter-click auto-login,
+// any future one. Login/register-only/verify/login-from-email each used to
+// call createSessionToken + setSessionCookie separately; login-from-email
+// simply forgot the second call for a while (2026-08-27), leaving visitors
+// who arrived via a newsletter link "logged in" client-side with no real
+// server session. One shared function makes that specific mistake
+// structurally impossible to repeat at a fourth call site.
+export async function establishSession(
+  response: NextResponse,
+  payload: SessionPayload,
+): Promise<void> {
+  const token = await createSessionToken(payload);
+  setSessionCookie(response, token);
+}
+
 export function setSessionCookie(response: NextResponse, token: string): void {
   response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,

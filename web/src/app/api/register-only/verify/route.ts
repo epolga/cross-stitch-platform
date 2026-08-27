@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyUserByToken } from '@/lib/users';
 import { sendEmailToAdmin } from '@/lib/email-service';
 import { getSiteBaseUrl, normalizeBaseUrl } from '@/lib/url-helper';
-import { createSessionToken, setSessionCookie } from '@/lib/session';
+import { establishSession } from '@/lib/session';
 
 // Human-readable labels for the RegistrationSource values dispatched to
 // openRegisterModal across the site (DownloadPdfLink, AuthControl,
@@ -82,10 +82,6 @@ export async function GET(req: Request): Promise<Response> {
     // looked like the whole flow going in circles (reported by a real user,
     // 2026-07-28: "All it does is go in circles back to the registration
     // form!").
-    const sessionToken = result.email && result.cid
-      ? await createSessionToken({ userId: result.cid, email: result.email })
-      : null;
-
     let response: NextResponse;
     if (result.cid) {
       let targetUrl: URL;
@@ -103,7 +99,9 @@ export async function GET(req: Request): Promise<Response> {
       response = NextResponse.json({ ok: true, message: 'Email verified' }, { status: 200 });
     }
 
-    if (sessionToken) setSessionCookie(response, sessionToken);
+    if (result.email && result.cid) {
+      await establishSession(response, { userId: result.cid, email: result.email });
+    }
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';

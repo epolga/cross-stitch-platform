@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getVerifiedUserByCid, updateLastEmailEntryInUsersTable, updateLastSeenAtByEmail } from '@/lib/users';
 import { updateLastEmailEntryByCid } from '@/lib/data-access';
 import { recordEmailEntryEvent } from '@/lib/email-entries';
-import { createSessionToken, setSessionCookie } from '@/lib/session';
+import { establishSession } from '@/lib/session';
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -57,8 +57,7 @@ export async function POST(req: Request): Promise<Response> {
     // the UI but had no actual server session — any cookie-gated route
     // (pattern save/load, etc.) would silently treat them as logged out.
     if (verifiedUser.email) {
-      const token = await createSessionToken({ userId: cid, email: verifiedUser.email });
-      setSessionCookie(response, token);
+      await establishSession(response, { userId: cid, email: verifiedUser.email });
     }
 
     return response;

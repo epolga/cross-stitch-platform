@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyUserWithProfile } from '@/lib/data-access';
 import { updateLastSeenAtByEmail } from '@/lib/users';
-import { createSessionToken, setSessionCookie } from '@/lib/session';
+import { establishSession } from '@/lib/session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,9 +25,8 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error('[login] Failed to update LastSeenAt:', err);
       }
-      const token = await createSessionToken({ userId: user.userId, email: user.email });
       const response = NextResponse.json({ success: true, email: user.email, firstName: user.firstName });
-      setSessionCookie(response, token);
+      await establishSession(response, { userId: user.userId, email: user.email });
 
       const adminEmails = (process.env.ADMIN_EMAILS || '')
         .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
