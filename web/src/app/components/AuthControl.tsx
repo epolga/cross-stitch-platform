@@ -119,6 +119,48 @@ function AutoLogin({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   return null;
 }
 
+// Self-heals the client's `isLoggedIn` flag against the real server session
+// cookie. The flag only gets set on the tab/browser context where a login,
+// registration, or the email auto-login above actually ran — if a visitor
+// ends up somewhere else with a valid session cookie but no local flag (a
+// verification link opened in a different browser/app context, a tab that
+// predates the flag being set, localStorage cleared independently of the
+// cookie, etc.), every `isUserLoggedIn()` check in the app would otherwise
+// wrongly say "logged out" and keep re-prompting them to register — a real
+// user hit exactly this 2026-08-27 (registered, verified, "Download" still
+// asked her to register again). Runs once per mount, only when localStorage
+// doesn't already say logged in, so it's a no-op fetch in the common case.
+function SessionSync({ onLoginSuccess }: { onLoginSuccess: () => void }) {
+  useEffect(() => {
+    if (isUserLoggedIn()) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch('/api/auth/session', { cache: 'no-store' });
+        const data: { loggedIn?: boolean; email?: string; firstName?: string } = await response.json();
+        if (cancelled || !data.loggedIn) return;
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('isLoggedIn', 'true');
+          localStorage.setItem('userEmail', data.email ?? '');
+          persistStoredFirstName(data.firstName);
+        }
+        onLoginSuccess();
+        dispatchAuthStateChange();
+      } catch (error) {
+        console.error('Error during session sync:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onLoginSuccess]);
+
+  return null;
+}
+
 export type DownloadMode = 'free' | 'register' | 'paid';
 
 const normalizeDownloadMode = (raw: string): DownloadMode => {
@@ -624,6 +666,7 @@ export function AuthControl() {
       <Suspense fallback={null}>
         <AutoLogin onLoginSuccess={handleAutoLoginSuccess} />
       </Suspense>
+      <SessionSync onLoginSuccess={handleAutoLoginSuccess} />
 
       {showVerifyNotice && (
         <div
