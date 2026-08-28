@@ -8,6 +8,11 @@ type RegisterOnlyDialogProps = {
   onClose: () => void;
   onSuccess?: (payload: { email: string; firstName: string }) => void;
   sourceInfo?: RegistrationSourceInfo | null;
+  // Real user report, 2026-08-27: a returning verified user whose session
+  // had lapsed hit "This email is already registered" with no way out
+  // except closing the dialog and hunting for Sign In herself. Lets the
+  // dialog hand off directly to the existing login modal instead.
+  onSwitchToLogin?: (email: string) => void;
 };
 
 export function RegisterOnlyDialog({
@@ -15,6 +20,7 @@ export function RegisterOnlyDialog({
   onClose,
   onSuccess,
   sourceInfo,
+  onSwitchToLogin,
 }: RegisterOnlyDialogProps) {
   const [firstName, setFirstName] = useState('');
   const [email, setEmail] = useState('');
@@ -143,6 +149,18 @@ export function RegisterOnlyDialog({
             {error && (
               <p className="mb-2 text-sm text-red-500 text-center" role="alert">
                 {error}
+                {onSwitchToLogin && error === 'This email is already registered.' && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      onClick={() => onSwitchToLogin(email)}
+                      className="underline text-blue-600 hover:text-blue-800"
+                    >
+                      Sign in instead
+                    </button>
+                  </>
+                )}
               </p>
             )}
 

@@ -911,6 +911,13 @@ export function AuthControl() {
         }}
         onSuccess={handleRegisterOnlySuccess}
         sourceInfo={registrationSource}
+        onSwitchToLogin={(emailValue) => {
+          closeRegisterOnly();
+          setRegistrationSource(null);
+          setLoginUsername(emailValue);
+          setErrorMessage('');
+          setIsLoginModalOpen(true);
+        }}
       />
     </div>
   );
