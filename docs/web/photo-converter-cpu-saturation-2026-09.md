@@ -1,11 +1,82 @@
 # Photo-converter CPU saturation — investigation and fix options
 
-**Status: open, root cause confirmed in code, no fix implemented yet.**
-Started 2026-09-01 from Olga noticing GA4 Realtime showing 0-1 active users
-when she normally sees several at once. Full pointer lives in `Focus.md`
-Open item #29 — this file is the durable detailed write-up (survives
-Focus.md archiving, same pattern as
+**Status: open, root cause confirmed in code, a CPU-based scaling policy
+drafted and tested in a disposable environment (not yet deployed to
+production).** Started 2026-09-01 from Olga noticing GA4 Realtime showing
+0-1 active users when she normally sees several at once. Full pointer lives
+in `Focus.md` Open item #29 — this file is the durable detailed write-up
+(survives Focus.md archiving, same pattern as
 `docs/web/gsc-indexing-investigation-2026-08.md`).
+
+## Update 2026-09-01: CPU-based scaling policy drafted and tested
+
+Draft config: `web/.ebextensions/08_cpu_scaling.config` (not yet deployed
+to `cross-stitch-com-env-clone`). Adds a second CloudWatch alarm +
+Auto Scaling scaling policy alongside EB's existing default NetworkOut
+trigger (option 5 below) — `CPUUtilization`, `Threshold: 65`, scale up by
++1 instance, 360s cooldown, `EvaluationPeriods: 1` (matches the existing
+NetworkOut alarm's responsiveness).
+
+**Validated twice in a disposable clone environment
+(`cross-stitch-test-scaling`, created via `eb clone ... --exact`, torn
+down immediately after each test — see the AWS-cost discussion earlier in
+the 2026-09-01 conversation for why disposable-on-demand was chosen over a
+persistent staging environment: an idle load-balanced EB environment costs
+~$16/mo for the ALB alone, which can't be paused, only deleted):**
+
+1. **Alarm → policy → ASG wiring**: forced the alarm into `ALARM` state via
+   `aws cloudwatch set-alarm-state` on a 1-instance test environment.
+   Confirmed via `describe-scaling-activities`: the policy fired and
+   desired capacity went 1→2, new instance launched successfully. Plumbing
+   works.
+2. **Multi-instance dilution — caught a real bug in the first draft**: the
+   first draft used `Statistic: Average` (copied from EB's own NetworkOut
+   alarm convention) on the `AutoScalingGroupName`-dimensioned
+   `CPUUtilization` metric. Tested on a 2-instance clone with a real CPU
+   stress load (SSM `RunShellScript`, busy-loop across all cores) on only
+   one of the two instances: loaded instance read ~99.7% avg, idle instance
+   ~1.6% avg, but the **ASG-aggregate `Average` statistic came out to
+   ~50.67%** — because it's an arithmetic mean across all instances in the
+   group, a single fully-saturated instance gets diluted by however many
+   *other* instances happen to be idle. At the real production desired
+   capacity (2), this would have sat *below* the 65% threshold — the alarm
+   would not have fired in exactly the one-instance-chokes scenario this
+   whole investigation is about. **Fix: `Statistic: Maximum` instead of
+   `Average`** — same test showed the ASG-aggregate `Maximum` read ~99.71%,
+   exactly matching the single overloaded instance, undiluted by however
+   many other instances are idle. `08_cpu_scaling.config` now uses
+   `Maximum`. (This also means the original 65% threshold reasoning, which
+   was based on single-instance CPU behavior during the real incident, is
+   valid again under `Maximum` — the fix was the statistic, not the
+   number.)
+
+**Important limitation, found by Olga's own question 2026-09-01 — CPU
+scaling is a backstop for *sustained* load, not a fix for a single
+request:** the alarm evaluates on `Period: 300` (5 minutes) before it even
+notices a spike, and a new instance then takes roughly another 1-3 minutes
+to launch and pass the target group's health check (`HealthyThresholdCount:
+3` × `HealthCheckIntervalSeconds: 15` ≈ 45s, plus instance boot). Total
+reactive latency is on the order of **5-7 minutes** from "CPU starts
+spiking" to "a new instance is actually serving traffic." A single
+conversion request only blocks its instance for seconds to tens of
+seconds (per the ALB log evidence) — that episode is almost always over
+before the alarm has even finished its first evaluation period, let alone
+before a new instance arrives. **Scale-out cannot rescue anyone from one
+isolated blocking request; reactive infra-level scaling is structurally
+too slow for that.** It only helps when CPU pressure is *sustained* over
+many minutes (many overlapping conversions back to back) — which does
+match the real 2026-08-31 incident's shape (health flapped
+Ok→Warning→Severe repeatedly across roughly an hour, not once), but is not
+a general substitute for fixing the blocking behavior itself. **Options 1
+(worker threads) and 2 (concurrency limit) act immediately, in-process,
+and are the real fix for the acute single-request case; the CPU-based
+scaling policy here should be treated as a secondary backstop for
+sustained bursts, not the primary fix.**
+
+**Not yet done:** decide with Olga whether 65%/`Maximum` is the value to
+ship, then deploy `08_cpu_scaling.config` to `cross-stitch-com-env-clone`
+for real (a production change, needs explicit go-ahead separate from the
+disposable-environment testing above).
 
 ## TL;DR
 
