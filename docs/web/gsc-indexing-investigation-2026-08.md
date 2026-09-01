@@ -51,7 +51,23 @@ similar has shown up on a route type this fix didn't touch.
 
 ## 2. Pinterest ad spend vs. organic traffic ("halo effect")
 
-Started from Olga asking about a US traffic drop around 2026-08-14.
+Started from Olga asking about a US traffic drop around 2026-08-14, which
+traces back to a GSC average-position decline first spotted 2026-08-12:
+08-09 (11.0) → 08-10 (13.3) → 08-11 (16.3), a new 3+ week high, with a
+sharper US-specific slice (11.9→16.5→20.1, clicks 45→29). **Ruled out on
+our side before looking externally:** server 5xx rate (stayed low all
+week, 0.08-0.32%), Googlebot-specific error rate (also low), response
+latency (no degradation), recent deploys (none touched
+redirects/canonical/sitemap/middleware), and — checked directly in the
+GSC UI — Manual Actions and Security Issues (**both clean**, ruling out a
+penalty/policy flag). Page-level pattern was broad/mixed, not isolated to
+one template. This pointed at an external/mechanical cause rather than a
+site bug, leading to the three candidates below (an initially-suspected
+unconfirmed "Google dance" industry-wide volatility report from
+~2026-08-01 turned out superseded by the confirmed spam update in the
+confound note below — third-party trackers had called the earlier
+volatility "a wobble, not a storm").
+
 Timeline of what actually happened to the ad budget:
 
 - ~$5/day through late July

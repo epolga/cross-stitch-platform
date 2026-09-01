@@ -42,6 +42,12 @@ and fixed along the way. Full detail: `docs/session-log/2026-08.md`
 
 ## Next session — pick up here first
 
+**Decide and implement a fix for the photo-converter CPU saturation
+(see Open item #29, full write-up in
+`docs/web/photo-converter-cpu-saturation-2026-09.md`)** — root cause
+confirmed in code 2026-09-01, 5 ranked solution options written up,
+none implemented yet.
+
 **Fix the pattern-save DynamoDB item-size bug (see Open item #25) —
 detailed write-up, real repro, real users exposed too, not just a
 script.** Found 2026-08-12 saving a real design ("Black Cat with Magic
@@ -179,101 +185,17 @@ live-user bug fix (Christa — verify-email login). Full detail:
    07-26). Also worth directly confirming in the GSC UI whether the
    original 2026-07-09 "Crawled – currently not indexed" Validate Fix
    actually passed (checkpoint was due 07-23, never explicitly confirmed).
-7. **GSC average position — new decline found 2026-08-12, watching.**
-   Previous softening (peaked 14.8 on 07-23) had fully resolved by
-   08-07 (recovered to 9.9-14.4 range through 08-05). But a fresh,
-   real 3-day worsening trend: 08-09 (11.0) → 08-10 (13.3) → 08-11
-   (16.3) — a new 3+ week high, clicks/impressions also dipped on 08-11.
-   Checked and ruled out on our side: server 5xx rate (stayed low all
-   week, 0.08-0.32%), Googlebot-specific error rate (also low), response
-   latency (no degradation, fastest on 08-12), recent deploys (none
-   touched redirects/canonical/sitemap/middleware). Page-level pattern is
-   broad/mixed, not isolated to one template (homepage 11.6→13.6, several
-   category pages worse, a few better). Cross-checked against external
-   reports: real, unconfirmed industry-wide Google ranking volatility
-   ("Google dance") reported since ~2026-08-01, no official update
-   confirmed by Google, possibly a delayed-effect tail of the June 2026
-   spam update. Same-day follow-up: sliced by country=USA specifically —
-   real (non-bot) GSC click data shows the decline is sharper there than
-   site-wide (pos 11.9 on 08-09 → 16.5 on 08-10 → 20.1 on 08-11, clicks
-   45→29), and this is what's actually behind Olga's "no live US
-   visitors" observation the same day — real people seeing the site
-   lower in US search results, not a traffic-tracking mystery. Olga
-   checked the GSC UI directly for Manual Actions and Security Issues —
-   **both clean**, ruling out a penalty/policy flag as the cause. **Decided:
-   not urgent (likely industry-wide noise, not a site problem, and not a
-   policy violation), re-check position in a couple of days.**
-   **2026-08-23 update:** Olga found she'd cut the Pinterest daily budget
-   to ~$4.5 around 08-07 (matches this item's decline window) and raised
-   it back to ~$6.5 on 08-17. US-filtered GSC position improved 15.2→13.4
-   avg and clicks +37% (35→48/day) comparing 08-07..16 vs 08-17..21;
-   cross-checked independently via GA4 US Organic Search sessions, which
-   moved the same direction (+32%, 62.9→83.3/day) while Direct-channel
-   sessions stayed flat (32.7→31.8) — rules out "people typing the URL
-   after seeing a pin" as the mechanism, points to it landing as organic
-   search lift specifically. Whole-history Pearson correlation (spend vs
-   GA4 organic sessions, 97 days, `_check_halo_effect.ts`): r=0.567
-   same-day, r≈0.51-0.53 at 1-3 day lag; a prior natural experiment (the
-   2026-06-19 cut from $11.84→$4.89/day) showed the same direction
-   (-26.5% organic). **This is a second, independent candidate cause for
-   the same 08-12 decline this item already attributes to industry-wide
-   "Google dance" — not a replacement for that explanation, a confound.**
-   Both may be partially true. **Next check: ~2026-09-06**, once ~3 weeks
-   of data exist at the $6.5 budget (matches the 10-day low-budget sample
-   size) — re-run `_check_halo_effect.ts` and compare US position/GA4
-   organic against the 08-07..16 baseline again. Also worth checking then
-   whether the broader Google-ranking volatility mentioned above has
-   independently settled, to help separate the two candidate causes.
-   **2026-08-23, same day, web search confirms a third candidate cause,
-   found AFTER the Pinterest-spend comparison above was already written:**
-   a **confirmed** (not just tracker-inferred) Google spam update ran
-   2026-08-18 12:30pm ET → 2026-08-21 4:50am ET (~2.5 days, third of 2026
-   after March/June, announced by Google Search Central), landing almost
-   exactly on the budget-raise date (08-17) and the sharp position jump
-   (08-18: 18.6→10.8). This makes the 08-07..16 vs 08-17..21 before/after
-   comparison above **confounded** — can't cleanly separate "budget
-   raised" from "global spam update reshuffled rankings" using that short
-   window alone. Separately, the earlier 08-01..13 unconfirmed volatility
-   (the original "Google dance" theory this item started from) stays
-   unconfirmed by Google's own status dashboard — third-party trackers
-   disagreed on its severity even at the time (e.g. one composite tracker
-   called it "a wobble, not a storm" for 08-12/13).
-   The whole-history r=0.567 correlation (97 days, predates this one
-   update) is NOT affected by this confound and remains the stronger
-   piece of evidence. **Revised guidance for the 2026-09-06 check:** by
-   then the spam update's effects should be fully settled (it completed
-   08-21), so if US position/organic stays elevated well past that
-   settling point, that's much cleaner evidence for the budget effect
-   than the 08-23 same-day comparison was.
-   **2026-08-23, later same day: direct ROI check run** (last 21 days,
-   `_check_pinterest_roi.ts`) — Pinterest spend $107.33, proportionally-
-   attributed revenue only ₪134.46 vs ₪321.79 spend in ILS = -₪187.34
-   over 21 days; whole-site profit near breakeven (-₪5.83). Based on this,
-   **Olga set the Pinterest daily budget to $5.5/day (down from $6.5)**
-   — a deliberate mid-point between the $4.5 (low, pre-08-17) and $6.5
-   (high, 08-17 to 08-22, confounded by the spam update) levels. This is
-   now the baseline for the 2026-09-06 check above — compare US GSC
-   position / GA4 organic at $5.5 against both prior periods once the
-   spam update's effects are fully settled.
-   **2026-08-23, Olga's own catch: a third candidate cause, connecting
-   back to Open item #6.** `GSC_INDEX_SAMPLE` history shows estimated
-   indexed pages rose from ~1000-1300 (~20-25%) in mid-July to ~1800-2240
-   (~33-41%) by mid-August — a real multi-week trend (noisy per-day,
-   ±7-8pp margin of error on a 150-URL sample, but the direction holds),
-   driven by item #6's own canonicalization/lastmod work, not by anything
-   external. Newly-indexed pages almost always start with weak positions
-   (no accumulated authority yet), so adding several hundred of them to
-   the indexed pool mechanically drags the site-wide *average* position
-   down — no external Google volatility needed to explain at least part
-   of the 08-11..17 dip. This doesn't rule out the spam-update or
-   Pinterest-spend candidates, but is a more direct, evidence-grounded
-   mechanism than "unconfirmed industry chatter" alone. **2026-09-06
-   check should also look at whether indexed-page growth has leveled off
-   by then** — if position stays depressed even after both the spam
-   update settles AND indexed-count growth plateaus, that would point
-   more toward the Pinterest-budget explanation; if position recovers
-   in step with indexed-count leveling off, that favors this mechanism
-   instead.
+7. **GSC average position decline (found 2026-08-12) — full write-up in
+   `docs/web/gsc-indexing-investigation-2026-08.md` § 2, read that first.**
+   Three non-exclusive candidate causes tracked there: Pinterest ad-spend
+   halo effect (whole-history r=0.567 correlation), a confirmed Google
+   spam update (2026-08-18 to 08-21), and mechanical drag from rising
+   indexed-page-count (item #6's canonicalization work). Site-side causes
+   (5xx rate, Googlebot errors, latency, deploys, Manual Actions/Security)
+   already checked and ruled out. **Check ~2026-09-06**: re-run
+   `_check_halo_effect.ts`, compare US position/GA4 organic at the current
+   $5.5/day budget against both prior periods, and check whether the spam
+   update has settled and indexed-count growth has plateaued.
 8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
    Perpetual Love", 07-24) confirmed healthy 2026-07-27. **Announcement
    email ("You spoke, I listened") remains unverifiable** — exact send
@@ -416,91 +338,17 @@ live-user bug fix (Christa — verify-email login). Full detail:
     side effect (extra orphaned `AiDesignGenerations` row on a re-run) is
     now surfaced via an SES alert (`alertExistingPatternRerun()`) rather
     than silent.
-25. **Real bug found 2026-08-12: saving a detailed/colorful pattern can
-    fail outright with a raw DynamoDB `ValidationException` ("Item size to
-    update has exceeded the maximum allowed size") — affects real users
-    too, not just scripts.**
-
-    **Root cause:** `updatePattern()`/`savePattern()`
-    (`web/src/lib/pattern-storage.ts`) only guard the *grid* field size
-    (`rle.length > 350_000` throws a friendly custom error) before writing
-    to DynamoDB. They never check the size of the **`thumbnail`** field,
-    or the total item size — but `thumbnail` is a full base64 PNG data URI
-    and is by far the biggest field in the item. DynamoDB's real hard
-    limit is 400 KB (409,600 bytes) per item, so a pattern with a small
-    grid can still blow the limit purely because of its thumbnail, and the
-    failure surfaces as a raw unhandled AWS SDK exception with a stack
-    trace — not a friendly message a real user would ever understand.
-
-    **Concrete measured evidence** (pattern `c72e3387-6892-455e-870f-6f8304cbcfca`,
-    "Black Cat with Magic Cauldron", saved from `TestImages/BlackCat.png`
-    via `save-ai-draft.ts` into Olga's own account,
-    ownerID/cid `0419f4ba-8c84-4bfe-a318-4cc90f7fd934`):
-    - First save (68×71 stitches, 40 colors, line-art mode — a
-      misclassification, see below) succeeded: **348,187 bytes total**,
-      of which **`thumbnail` alone was 341,162 bytes (98%)**. `grid` was
-      only 2,921 bytes, `palette` 3,831 bytes — nowhere near the 350 KB
-      grid guard.
-    - Re-save at the same ~68×71 scale but in (correct) illustration mode
-      (67×69, 31→31 colors) **failed** — item size exceeded DynamoDB's
-      real limit even though grid size was fine.
-    - Re-save at 56×57 (31→30 colors) **also failed**, same error.
-    - Re-save at 52×54 (31→29 colors) succeeded.
-    - Re-save at 48×49 (27→25 colors) succeeded.
-    So the real ceiling for this specific image's color complexity sits
-    somewhere around 55-56 stitches wide — found only by manual trial and
-    error shrinking `TARGET_WIDTH_OVERRIDE`, which is not a real fix and
-    isn't available to a real user in the actual editor UI anyway. Olga
-    noticed and flagged the resulting design as "too small"
-    (`Уж больно маленький получился дизайн`) — that's a direct, real,
-    user-visible symptom of this bug, not a separate complaint.
-
-    **Why the thumbnail is so large:** `renderCoverThumbnailPng()`
-    (`web/src/lib/server-cover-thumbnail.ts`) renders a full simulated-
-    fabric preview — real Aida weave texture tiled under every cell, a
-    drop shadow per stitch (alpha scaled by thread lightness, tuned
-    2026-08-10), and fabric holes at every grid intersection, at up to
-    ~1200px on the long side. All of that fine per-cell texture/shadow
-    noise is exactly what makes a PNG compress badly — flat, simple
-    illustrations still produce reasonably small files, but a busy,
-    many-colored, detailed pattern (like this cat) does not, regardless of
-    the underlying design's actual stitch count.
-
-    **This is not just a script problem — real users are exposed too.**
-    Confirmed by reading the real save API routes
-    (`web/src/app/api/converter/patterns/route.ts` and
-    `.../patterns/[id]/route.ts`): both accept `thumbnail` directly from
-    the client request body and pass it straight into the same
-    `savePattern()`/`updatePattern()` functions with the same inadequate
-    guard. The client-side thumbnail is generated by
-    `canvasHandle.current.capturePreview()` in `ConvertClient.tsx` — per
-    `server-cover-thumbnail.ts`'s own file header, this server-side
-    renderer was deliberately built "to produce the same look, not an
-    approximation" as that exact client capture, meaning a real user
-    saving a big, detailed, colorful pattern through the actual editor UI
-    is likely at risk of hitting this exact same raw, confusing
-    `ValidationException` failure, with no useful error message and no
-    way for them to know why.
-
-    **Not yet fixed — needs a considered fix, not a rushed one**, since
-    `server-cover-thumbnail.ts` has a lot of deliberately-tuned visual
-    behavior Olga cares about (shadow alpha per thread lightness, hole
-    visibility — see that file's inline history comments) and is shared
-    between this script's fallback path and (in spirit, via
-    `capturePreview()`) the live editor's real save path. Real directions
-    worth considering next session, not yet decided:
-    - Add a real total-item-size guard (not just grid) that fails with a
-      clear, friendly message *before* attempting the DynamoDB write, on
-      both the client and server save paths.
-    - Store the thumbnail in S3 (like source images already are) instead
-      of inline in DynamoDB, and keep only a short S3 key/URL in the item
-      — this sidesteps the 400 KB item limit entirely rather than fighting
-      it, and 300+ KB of binary image data arguably doesn't belong inline
-      in a DynamoDB item regardless of the size limit.
-    - Separately, compressing the PNG harder or capping its resolution
-      lower would help but doesn't fully solve it for a big enough/
-      colorful enough design — likely worth doing anyway, but not a
-      substitute for the item-size guard.
+25. **Pattern-save DynamoDB item-size bug — full write-up in
+    `docs/web/pattern-save-item-size-bug-2026-08.md`, read that first.**
+    Found 2026-08-12: saving a detailed/colorful pattern can fail with a
+    raw DynamoDB `ValidationException` because `savePattern()`/
+    `updatePattern()` only guard the *grid* field size, never the
+    `thumbnail` field (often 98% of item size) or the total item — affects
+    real users through the live editor UI, not just scripts. **Not yet
+    fixed** — needs a considered fix (doc has 3 candidate directions: a
+    real total-item-size guard, move thumbnail to S3, or compress harder),
+    since the thumbnail renderer has a lot of deliberately-tuned visual
+    behavior Olga cares about.
 
 26. **GSC "Duplicate without user-selected canonical" cleanup — deployed
     2026-08-23, Validate Fix clicked same day.** Olga found several flagged
@@ -603,6 +451,22 @@ live-user bug fix (Christa — verify-email login). Full detail:
     meaningful difference, the crawl-budget-neglect theory needs
     rethinking.
 
+29. **Photo-converter CPU saturation — full write-up at
+    `docs/web/photo-converter-cpu-saturation-2026-09.md`, read that first.**
+    Found 2026-09-01, starting from Olga noticing GA4 Realtime showing
+    0-1 active users when she normally sees several at once. Root cause
+    confirmed in code: `/api/convert`, `/api/convert/pdf` (and the
+    `/photo-to-cross-stitch` page that calls them) run pattern generation
+    as synchronous JS in the request handler, on a single `next start`
+    process with no worker threads/queue/concurrency limit — a normal
+    burst of concurrent conversions pegs CPU at 100%, blocks the whole
+    process (including the ALB/EB health check), and causes real 502/504s
+    for unrelated visitors. Caused a real ~60% GA4 session drop, uniform
+    across every channel, on 2026-08-31. Not yet fixed — the doc has 5
+    ranked solution options (worker threads, concurrency limiting,
+    algorithmic cost reduction, background queue, infra headroom) and a
+    suggested order of attack, not yet decided with Olga.
+
 ## Done when
 
 - [ ] Pattern-save DynamoDB item-size bug fixed (thumbnail not size-guarded, real users exposed — see Open item #25)
@@ -628,3 +492,4 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17)
 - [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
+- [ ] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29)
