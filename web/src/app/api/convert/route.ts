@@ -1,11 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
+import path from 'path';
+import Piscina from 'piscina';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
-import { convertImage, type ColorDistanceMode } from '@/lib/pattern-converter';
+import type { ColorDistanceMode } from '@/lib/pattern-converter';
 import { analyzeImage, imageTypeToMode, type ConversionMode } from '@/lib/image-analysis';
 import { isResearchImageCollectionEnabled } from '@/lib/research-consent';
 
 export const dynamic = 'force-dynamic';
+
+// convertImage() runs k-means color quantization, CIEDE2000, and DMC
+// matching - synchronous CPU-bound work that would otherwise block this
+// instance's entire event loop (including its own health check) for the
+// duration. Runs in a worker-thread pool instead - see
+// docs/web/photo-converter-cpu-saturation-2026-09.md.
+// Lazily created on first request, not at module load time: `next build`
+// imports every route file during "Collecting page data" to statically
+// analyze it, and a module-top-level `new Piscina(...)` would spin up
+// real worker threads during the build itself (confirmed: caused
+// "Cannot find module .../chunks/worker.js" errors from Next's own
+// internal build-time worker pool colliding with this one).
+let convertPool: Piscina | undefined;
+function getConvertPool(): Piscina {
+  if (!convertPool) {
+    convertPool = new Piscina({
+      filename: path.join(process.cwd(), 'workers', 'convert-worker.js'),
+    });
+  }
+  return convertPool;
+}
 
 const VALID_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const VALID_MODES = new Set<string>(['auto', 'photo', 'illustration', 'line-art']);
@@ -166,7 +189,14 @@ export async function POST(request: NextRequest) {
     }
 
     const colorDistanceMode = resolveColorDistanceMode(distanceModeParam);
-    const pattern = await convertImage(buffer, width, height, colors, resolvedMode, colorDistanceMode);
+    const pattern = await getConvertPool().run({
+      buffer,
+      width,
+      height,
+      colors,
+      mode: resolvedMode,
+      colorDistanceMode,
+    });
 
     const researchImageKey = await saveResearchCopy(buffer, file.type, researchConsent);
     const { key: sourceImageKey, maskKey: sourceImageMaskKey } = await saveSourceCopy(buffer, file.type, keepForReuse);

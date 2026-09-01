@@ -73,3 +73,4 @@ automation/pinterest-agent/daily-run.log
 # Babysitter local working state (SDK install, run journal, drafts, blobs)
 .a5c/
 .a5c_backup/
+/workers/
