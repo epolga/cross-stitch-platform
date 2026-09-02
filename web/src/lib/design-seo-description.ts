@@ -84,7 +84,19 @@ export async function generateSeoDescription(input: GenerateSeoDescriptionInput)
     const block = msg.content[0];
     const text = block.type === 'text' ? block.text.trim() : '';
     return text || null;
-  } catch {
+  } catch (e) {
+    // Non-fatal by design (publish must never block on this) - but the
+    // failure itself must not vanish. Silently swallowing it here (as this
+    // used to do) meant a real 3-of-10 failure during the 2026-09-02 batch
+    // publish left no trace to diagnose from; retrying the same 3 designs
+    // afterward succeeded with zero errors, suggesting a transient
+    // API/network blip - but that's a guess made *after* the fact, not
+    // something confirmed from a log, because there wasn't one. Logs land
+    // wherever this call runs: CloudWatch
+    // /aws/elasticbeanstalk/cross-stitch-com-env-clone/var/log/web.stdout.log
+    // for the live publish-to-catalog route, or the invoking script's own
+    // stdout/stderr for a one-off batch script.
+    console.error('[design-seo-description] generation failed:', e instanceof Error ? e.message : e);
     return null;
   }
 }

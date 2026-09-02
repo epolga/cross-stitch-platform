@@ -120,9 +120,14 @@ export async function POST(request: NextRequest) {
       imageContentType = decoded.contentType;
       photoFileName = `4.${decoded.ext}`;
     } else {
-      imageBuffer = await renderCoverThumbnailPng(grid, palette);
-      imageContentType = 'image/png';
-      photoFileName = '4.png';
+      // 'jpeg', not the function's PNG default: every other cover-image
+      // path here produces .jpg, and several read paths (data-access.ts,
+      // blog-posts.ts, semantic-search.ts) hardcode that extension when
+      // building a design's image URL - a .png cover 404s on all of them.
+      // Found live 2026-09-02 via a batch publish with no browser involved.
+      imageBuffer = await renderCoverThumbnailPng(grid, palette, 'jpeg');
+      imageContentType = 'image/jpeg';
+      photoFileName = '4.jpg';
     }
 
     // 3. Kit PDFs (color+symbol / symbol / color) — in-process, no HTTP round-trip

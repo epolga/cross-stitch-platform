@@ -45,6 +45,7 @@ function buildCrossMask(cellPx: number) {
 export async function renderCoverThumbnailPng(
   grid: number[][],
   palette: { r: number; g: number; b: number }[],
+  format: 'png' | 'jpeg' = 'png',
 ): Promise<Buffer> {
   const rows = grid.length, cols = grid[0]?.length ?? 0;
   const cellPx = Math.max(6, Math.min(20, Math.floor(1200 / Math.max(rows, cols, 1))));
@@ -135,5 +136,19 @@ export async function renderCoverThumbnailPng(
     ctx.fillRect(0, 0, w, h);
   }
 
+  // Canvas is fully opaque by this point (the Aida fill covers every pixel
+  // before anything else is drawn), so JPEG encoding needs no background
+  // flatten step - format only changes the last line. Default stays PNG:
+  // pattern-pdf.ts's caller uses pdf-lib's embedPng() specifically and
+  // would break on a JPEG buffer. The publish-to-catalog route's
+  // no-client-preview fallback requests 'jpeg' explicitly, because every
+  // other cover-image path (a real client capture, or Pinterest's own
+  // default photoFileName) produces .jpg, and several read paths
+  // (data-access.ts, blog-posts.ts, semantic-search.ts) hardcode that
+  // extension when building a design's image URL - a design published via
+  // this fallback with a .png cover 404s on all of them. Found live
+  // 2026-09-02 (a batch publish with no browser involved was the first
+  // real exercise of this fallback path).
+  if (format === 'jpeg') return canvas.toBuffer('image/jpeg', 90);
   return canvas.toBuffer('image/png');
 }
