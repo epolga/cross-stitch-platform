@@ -594,8 +594,9 @@ static async Task SendAdminTestAsync()
     string patternUrl = BuildPatternUrl(linkHelper, latestDesign);
     string imageUrl = linkHelper.BuildImageUrl(latestDesign.DesignId, latestDesign.AlbumId);
     string altText = string.IsNullOrWhiteSpace(latestDesign.Title) ? "New cross stitch pattern" : latestDesign.Title;
-    string patternUrlWithTracking = AppendTrackingParameters(patternUrl, "admin", DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
-    string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture));
+    string adminEid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
+    string patternUrlWithTracking = AppendTrackingParameters(patternUrl, "admin", adminEid);
+    string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", adminEid);
     string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
 
     var content = RenderHtmlEmailContent(template, "admin", patternUrlWithTracking, siteUrlWithTracking, imageUrl, altText, unsubscribeUrl);
@@ -772,13 +773,17 @@ static string RenderHtmlSignature(string signature, string? siteUrl)
 }
 
 static RenderedEmailContent RenderHtmlEmailContent(
-    EmailTemplateDefinition template, string? firstName, string patternUrl, string? siteUrl, string imageUrl, string altText, string? unsubscribeUrl)
+    EmailTemplateDefinition template, string? firstName, string patternUrl, string? siteUrl, string imageUrl, string altText, string? unsubscribeUrl,
+    IReadOnlyDictionary<string, string>? extraReplacements = null)
 {
     var replacements = CreateCommonTemplateReplacements(firstName);
     replacements["<pattern_url>"] = patternUrl ?? string.Empty;
     replacements["<image_url>"] = imageUrl ?? string.Empty;
     replacements["<alt_text>"] = altText ?? string.Empty;
     replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
+    if (extraReplacements != null)
+        foreach (var pair in extraReplacements)
+            replacements[pair.Key] = pair.Value;
 
     string subject = ReplaceTemplateTokens(template.GetRequiredSection("Subject"), replacements);
     string greeting = ReplaceTemplateTokens(template.GetRequiredSection("Greeting"), replacements);
@@ -1171,6 +1176,8 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
     }
 
     var stopwatch = Stopwatch.StartNew();
+    var lastReportElapsed = TimeSpan.Zero;
+    var reportInterval = TimeSpan.FromSeconds(30);
     int sent = 0;
     foreach (var recipient in toSend)
     {
@@ -1194,12 +1201,18 @@ static async Task SendNewsletterAsync(int months, bool autoYes)
         }
 
         sent++;
-        if (sent % 50 == 0 || sent == toSend.Count)
+        bool isLast = sent == toSend.Count;
+        if (stopwatch.Elapsed - lastReportElapsed >= reportInterval || isLast)
         {
+            lastReportElapsed = stopwatch.Elapsed;
             int remaining = toSend.Count - sent;
+            double sentPct = 100.0 * sent / toSend.Count;
+            double remainingPct = 100.0 * remaining / toSend.Count;
             TimeSpan avgPerItem = stopwatch.Elapsed / sent;
             TimeSpan eta = avgPerItem * remaining;
-            Console.WriteLine($"Sent {sent}/{toSend.Count} | Remaining {remaining} | Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss} | ETA {eta:hh\\:mm\\:ss}");
+            Console.WriteLine(
+                $"Sent {sent}/{toSend.Count} ({sentPct:F1}%) | Remaining {remaining} ({remainingPct:F1}%) | " +
+                $"Elapsed {stopwatch.Elapsed:hh\\:mm\\:ss} | ETA {eta:hh\\:mm\\:ss}");
         }
     }
 
