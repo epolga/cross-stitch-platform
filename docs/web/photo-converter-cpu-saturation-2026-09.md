@@ -1,12 +1,20 @@
 # Photo-converter CPU saturation — investigation and fix options
 
-**Status: open, root cause confirmed in code, a CPU-based scaling policy
-drafted and tested in a disposable environment (not yet deployed to
-production).** Started 2026-09-01 from Olga noticing GA4 Realtime showing
-0-1 active users when she normally sees several at once. Full pointer lives
-in `Focus.md` Open item #29 — this file is the durable detailed write-up
-(survives Focus.md archiving, same pattern as
-`docs/web/gsc-indexing-investigation-2026-08.md`).
+**Status: acute failure mode fixed and deployed to production.** Option 1
+(worker threads, `31670f4`, 2026-09-01) and Option 5 (CPU-based Auto
+Scaling trigger, `8ef2099`/`c0a66d1`, 2026-09-01) are both live —
+confirmed 2026-09-03: `web/next.config.js` has `piscina` wired into
+`serverExternalPackages`, and `aws cloudwatch describe-alarms` shows the
+`AWSEBCloudwatchAlarmHighCPU` alarm live with `Statistic=Maximum,
+Threshold=65`. Production deploy `app-260902_201907185445`
+(2026-09-02 17:23 UTC, Health Green) postdates both fix commits. Options 2
+(concurrency limit), 3 (algorithmic cost reduction), and 4 (background
+queue) remain undone — defense-in-depth/nice-to-have, not blockers, per
+the "suggested order of attack" below. Started 2026-09-01 from Olga
+noticing GA4 Realtime showing 0-1 active users when she normally sees
+several at once. Full pointer lives in `Focus.md` Open item #29 — this
+file is the durable detailed write-up (survives Focus.md archiving, same
+pattern as `docs/web/gsc-indexing-investigation-2026-08.md`).
 
 ## Update 2026-09-01: CPU-based scaling policy drafted and tested
 
@@ -73,10 +81,10 @@ and are the real fix for the acute single-request case; the CPU-based
 scaling policy here should be treated as a secondary backstop for
 sustained bursts, not the primary fix.**
 
-**Not yet done:** decide with Olga whether 65%/`Maximum` is the value to
-ship, then deploy `08_cpu_scaling.config` to `cross-stitch-com-env-clone`
-for real (a production change, needs explicit go-ahead separate from the
-disposable-environment testing above).
+**Update 2026-09-03: deployed.** `08_cpu_scaling.config` shipped to
+`cross-stitch-com-env-clone` for real — confirmed live via
+`aws cloudwatch describe-alarms` (`AWSEBCloudwatchAlarmHighCPU`,
+`Statistic=Maximum`, `Threshold=65`, state `OK`).
 
 ## TL;DR
 
@@ -324,13 +332,14 @@ in mind if options 1-3 don't fully solve it under real load.
 
 ## Not yet done
 
+- Options 2 (concurrency limit/queue), 3 (algorithmic cost reduction), and
+  4 (background job queue) are still unimplemented — defense-in-depth on
+  top of the deployed fix, not required to close this out, per the
+  "suggested order of attack" above.
 - Read the exact code path between k-means output and final DMC
   assignment closely enough to confirm/deny whether the final match
   already runs per-centroid or per-cell (option 3's first bullet) —
   flagged as worth checking, not yet checked.
-- No fix has been implemented or deployed yet. This document is the
-  investigation + options; the decision and implementation are separate,
-  future work.
 - Decide whether to backfill/annotate the 08-31 GA4 dip somewhere so it
   doesn't get misread later as a real audience drop when someone reviews
   historical GA4 data.

@@ -42,11 +42,28 @@ and fixed along the way. Full detail: `docs/session-log/2026-08.md`
 
 ## Next session — pick up here first
 
-**Decide and implement a fix for the photo-converter CPU saturation
-(see Open item #29, full write-up in
-`docs/web/photo-converter-cpu-saturation-2026-09.md`)** — root cause
-confirmed in code 2026-09-01, 5 ranked solution options written up,
-none implemented yet.
+**Check whether the 2026-09-02 traffic/AdSense spike (+121% vs 34-day
+mean, $39.28) was really newsletter-driven, once GA4 finishes processing
+that day** — asked same day, deliberately deferred because GA4's standard
+Reporting API lags on the current day (confirmed earlier this same
+session — the intraday numbers aren't reliable yet). Three things
+launched simultaneously that day (1024-recipient newsletter, 10 new
+Pinterest pins, 10 newly-indexed pages), so the spike is confounded
+between them — can't attribute it to "these particular designs being
+appealing" specifically without the channel breakdown. Also worth
+checking then: 2026-08-31 AdSense was $35.34 despite that day's GA4
+sessions crashing ~60% from the CPU-saturation incident (Open item #29)
+— unexplained, worth a look (revenue not tracking session count as
+tightly as expected, or a timezone mismatch between the GA4 and AdSense
+reports — not investigated).
+
+~~Decide and implement a fix for the photo-converter CPU saturation~~ —
+**core fix deployed 2026-09-01/02 (see Open item #29).** Worker-threads
+(Option 1) and CPU-based Auto Scaling (Option 5) are both live in
+production, confirmed 2026-09-03. Full write-up in
+`docs/web/photo-converter-cpu-saturation-2026-09.md`. Remaining Options
+2-4 (concurrency limit, algorithmic cost reduction, background queue) are
+optional hardening, not blockers.
 
 **Fix the pattern-save DynamoDB item-size bug (see Open item #25) —
 detailed write-up, real repro, real users exposed too, not just a
@@ -456,19 +473,65 @@ live-user bug fix (Christa — verify-email login). Full detail:
     Found 2026-09-01, starting from Olga noticing GA4 Realtime showing
     0-1 active users when she normally sees several at once. Root cause
     confirmed in code: `/api/convert`, `/api/convert/pdf` (and the
-    `/photo-to-cross-stitch` page that calls them) run pattern generation
+    `/photo-to-cross-stitch` page that calls them) ran pattern generation
     as synchronous JS in the request handler, on a single `next start`
     process with no worker threads/queue/concurrency limit — a normal
-    burst of concurrent conversions pegs CPU at 100%, blocks the whole
-    process (including the ALB/EB health check), and causes real 502/504s
+    burst of concurrent conversions pegged CPU at 100%, blocked the whole
+    process (including the ALB/EB health check), and caused real 502/504s
     for unrelated visitors. Caused a real ~60% GA4 session drop, uniform
-    across every channel, on 2026-08-31. Not yet fixed — the doc has 5
-    ranked solution options (worker threads, concurrency limiting,
-    algorithmic cost reduction, background queue, infra headroom) and a
-    suggested order of attack, not yet decided with Olga.
+    across every channel, on 2026-08-31. **Fixed and deployed**: Option 1
+    (worker threads, `31670f4`) moves `convertImage()`/`buildPatternPdf()`
+    into a Piscina worker pool; Option 5 (CPU-based Auto Scaling trigger,
+    `8ef2099`/`c0a66d1`, `Statistic=Maximum`/`Threshold=65`) is a
+    sustained-load backstop. Both confirmed live in production 2026-09-03
+    (deploy `app-260902_201907185445`, 2026-09-02 17:23 UTC, postdates
+    both commits; CPU alarm confirmed live via `describe-alarms`).
+    Remaining Options 2 (concurrency limit), 3 (algorithmic cost
+    reduction), 4 (background queue) are optional hardening, not
+    implemented, not required to close this out.
+
+30. **IAM allowlist for self-provisioning DynamoDB tables — audited 2026-09-02, same day (Olga's ask, don't defer it).**
+    Found live 2026-09-02: `EmailEntryEvents` was missing from
+    `CrossStitchDynamoDBAccessPolicy` (the EB EC2 role's manual per-table
+    DynamoDB allowlist), so every newsletter click-through silently failed
+    to record — real clicks were happening (confirmed in CloudWatch logs,
+    `GetLogEvents` workaround since `FilterLogEvents` is still broken for
+    this log group, see Open item #15) but the campaign's own tracking
+    table showed zero, because the write threw `AccessDeniedException`
+    and was swallowed by a best-effort `catch` block. Fixed live by adding
+    `EmailEntryEvents` (+ `/index/*`) to the policy's second statement and
+    verified end-to-end (a test cid recorded correctly after the change,
+    then cleaned up). **This is the second time this exact class of bug
+    has hit production** — the first was 2026-08-08, `AiDesignGenerations`
+    et al. missing from the same policy, made AI-draft patterns
+    unloadable in the admin review UI. Durable rule now written into
+    `web/CLAUDE.md` ("New DynamoDB tables need an explicit IAM grant
+    before production use").
+    **Full audit done same day:** all 16 tables `web/` self-provisions
+    (grep for `ensureTable()`/`const TABLE =` across `src/lib/*.ts`)
+    checked against both `CrossStitchDynamoDBAccessPolicy` and
+    `AmplifyCrossStitchPolicy`. `CrossStitchItems` looked like a gap at
+    first (absent from `CrossStitchDynamoDBAccessPolicy`) but is actually
+    covered by the separate legacy `AmplifyCrossStitchPolicy` — false
+    alarm. **One real second gap found: `SubscriptionEvents`**, used only
+    by `/api/subscription/confirm/route.ts` — not actively hit right now
+    (paywall is off, all 1574 users free per
+    `project_no_paid_subscription_tier` memory) so this wasn't live-broken
+    the way `EmailEntryEvents` was, but would have failed identically the
+    moment the paywall is ever turned back on. Fixed the same way, same
+    session. All 16 tables now correctly granted — nothing left open here.
+
+31. **Legacy IAM cruft from the pre-EB Amplify hosting era — found while
+    checking Open item #30, nothing deleted, just documented.** Full list
+    (confirmed-dead roles/policies with evidence, the "probably fine"
+    list, what's not yet done) moved to
+    `docs/web/iam-legacy-amplify-cruft-2026-09.md`. Still needs Olga's
+    explicit go-ahead before anything is deleted.
 
 ## Done when
 
+- [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see Open item #30)
+- [ ] Legacy pre-EB Amplify-era IAM cruft cleaned up or explicitly deferred — full list in `docs/web/iam-legacy-amplify-cruft-2026-09.md`, nothing deleted yet, needs Olga's go-ahead
 - [ ] Pattern-save DynamoDB item-size bug fixed (thumbnail not size-guarded, real users exposed — see Open item #25)
 - [ ] GSC "Duplicate without user-selected canonical" cleanup validated — re-check ~2026-09-06, Validate Fix clicked 2026-08-23 (see Open item #26)
 - [ ] Backfill-vs-control A/B test checked — re-check ~2026-09-06, groups saved in `ab-test-backfill-groups.json` (see Open item #27); afterward restore control group's 150 designs to new AI text
@@ -492,4 +555,4 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17)
 - [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
-- [ ] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29)
+- [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
