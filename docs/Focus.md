@@ -1,14 +1,15 @@
 # Focus
 
 Session-start guide — current goal, active work, and genuinely open items
-only. Resolved narrative lives in `docs/session-log/2026-07.md` and
-`docs/session-log/2026-08.md` (detailed history) and git log (what
-changed, when). Longer-term ideas with no urgency live in
-`web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`. Big-picture roadmap
-lives in `web/plan/Pinterest AI Agent — Milestones and Roadmap.md` and
-`web/plan/Cross-Stitch.com — Site Technology Milestones.md`. Split into
-these four files on 2026-07-26; archived again on 2026-08-03 (~510 lines)
-and 2026-08-12 (~554 lines) to stay lean.
+only. Resolved narrative lives in `docs/session-log/2026-07.md`,
+`docs/session-log/2026-08.md`, and `docs/session-log/2026-09.md`
+(detailed history) and git log (what changed, when). Longer-term ideas
+with no urgency live in `web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`.
+Big-picture roadmap lives in `web/plan/Pinterest AI Agent — Milestones and
+Roadmap.md` and `web/plan/Cross-Stitch.com — Site Technology Milestones.md`.
+Split into these four files on 2026-07-26; archived again on 2026-08-03
+(~510 lines), 2026-08-12 (~554 lines), and 2026-09-03 (~660 lines) to stay
+lean.
 
 ## Session-start check — GSC growth (do this every session)
 
@@ -56,64 +57,6 @@ sessions crashing ~60% from the CPU-saturation incident (Open item #29)
 — unexplained, worth a look (revenue not tracking session count as
 tightly as expected, or a timezone mismatch between the GA4 and AdSense
 reports — not investigated).
-
-~~Decide and implement a fix for the photo-converter CPU saturation~~ —
-**core fix deployed 2026-09-01/02 (see Open item #29).** Worker-threads
-(Option 1) and CPU-based Auto Scaling (Option 5) are both live in
-production, confirmed 2026-09-03. Full write-up in
-`docs/web/photo-converter-cpu-saturation-2026-09.md`. Remaining Options
-2-4 (concurrency limit, algorithmic cost reduction, background queue) are
-optional hardening, not blockers.
-
-~~Fix the pattern-save DynamoDB item-size bug (see Open item #25)~~ —
-**fixed and deployed 2026-09-03.** Thumbnail moved to S3, all 113 legacy
-rows backfilled and verified live. Full write-up:
-`docs/web/pattern-save-item-size-bug-2026-08.md`.
-
-~~Revisit the AWS WAF Bot Control decision (see Open item #2).~~ — **done
-2026-08-13.** Real morning-after evidence made the case on its own: 08-12
-(the bot-heavy day) had the highest AdSense impressions of the whole
-month (2893) but the *lowest* RPM ($5.04 vs. a normal $6.55-$12.73 range)
-— real, measured invalid-traffic dilution, not just annoying dashboard
-noise. Checked real AWS costs via Cost Explorer before deciding (current
-`CrossStitchBotProtection` WAF: ~$8-9/mo measured, not estimated; Bot
-Control Common adds ~$10/mo + likely $0 more since normal traffic stays
-under the 10M/mo free tier — Olga confirmed "давай попробуем" with real
-numbers in hand). **Added `AWSManagedRulesBotControlRuleSet` (Common
-inspection level) to `CrossStitchBotProtection` as rule priority 3,
-`OverrideAction: Count` (observe-only, blocks nothing yet)** — Capacity
-went 2→52 WCU, nowhere near the 1500 limit. Selective enforcement (Category
-SEO/Advertising/ScrapingFramework kept at native Block, everything else
-forced to Count) added 2026-08-13, see the review-ip skill doc for the
-full sub-rule table.
-
-**2026-09-03 — reviewed 22 days of real data, decided against a wholesale
-flip.** Found a real CloudWatch quirk first: only sub-rules listed in
-`RuleActionOverrides` (the Count-mode ones) get their own per-rule metric —
-the 3 kept-native-Block categories have no separate metric, only the
-aggregate `BotControlCommonCount` (which does show real daily blocking,
-~1100-3500/day). Confirmed via a live 3h `get-sampled-requests` sample
-(500 requests) that CategorySeo/CategoryAdvertising are genuinely firing
-(72 + 5 hits respectively). Pulled real 22-day totals for every Count-mode
-sub-rule: `SignalNonBrowserUserAgent` dominates (546,521, ~24.8K/day) and
-is confirmed genuinely mixed by real UA samples — Googlebot, Bingbot,
-ClaudeBot, and Facebook's link-preview crawler sit in the *same* bucket as
-commercial SEO tools like AhrefsBot and Sogou — so the category can't be
-blocked wholesale without also cutting off wanted crawlers. `CategoryAI`
-(122,151) and `CategorySocialMedia` (6,637) confirmed still legitimate,
-left as-is. Everything else is low-volume (`CategoryHttpLibrary` ~800/day
-down to 0 for Archiver/SearchEngine/Security).
-
-**Shipped instead: a narrow, separate rule** — `BlockSeoCrawlerUserAgents`
-(priority 4, `CrossStitchBotProtection`), a `User-Agent` byte-match
-(`CONTAINS`, case-insensitive) for "ahrefsbot" or "sogou", `Action: Block`
-— targets exactly the two named commercial SEO crawlers found sitting
-inside the otherwise-unblockable `SignalNonBrowserUserAgent` bucket,
-without touching the category itself. Verified live: normal browser UA
-still gets 200, an AhrefsBot UA gets 403. **This closes out the "decide
-whether to flip it" open item — no further category-level changes
-planned**, this narrow-rule approach is the answer for any other
-specifically-named unwanted crawler found later too.
 
 **Track 2 embeddings/`search_catalog` dedup tool** (discussed and built
 2026-08-09, confirmed against a real live run same day — see Open item
@@ -198,13 +141,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
    4 Alibaba subnets stayed 100% blocked all day (9561/9561 req = 403
    in one later hourly check) — confirmed still solid.
    **2026-08-13 morning: AWS WAF Bot Control (Common, Count mode) enabled**
-   — see the "Next session" entry above for the full real-cost justification
-   (08-12's AdSense RPM dropped to the month's lowest, $5.04, on its
-   highest-impression day, 2893) and the technical detail (rule
-   `BotControlCommonCount`, priority 3, `OverrideAction: Count`, WebACL
-   `CrossStitchBotProtection`, capacity 2→52 WCU). **Observe-only for now
-   — not yet switched to actually blocking.** Next: review
-   CloudWatch/sampled-requests after a few days, then decide.
+   (08-12's AdSense RPM had dropped to the month's lowest, $5.04, on its
+   highest-impression day, 2893) — rule `BotControlCommonCount`, priority
+   3, WebACL `CrossStitchBotProtection`, SEO/Advertising/ScrapingFramework
+   kept at native Block, everything else Count-mode. ~~Reviewed 22 days of
+   real data 2026-09-03~~ — decided against a wholesale category flip
+   (the dominant Count-mode bucket is confirmed genuinely mixed with
+   wanted crawlers), shipped a narrow `BlockSeoCrawlerUserAgents` rule
+   (AhrefsBot/Sogou) instead, verified live. **Closed** — full detail:
+   `docs/session-log/2026-09.md`.
    Older context: distinct scraping (download-counter inflation bots
    exploiting the no-auth email-in-body pattern) still monitored via
    `/review-ip`, status 2026-07-24: 0 watched, 25 blocked.
@@ -222,8 +167,8 @@ live-user bug fix (Christa — verify-email login). Full detail:
    claim/pin logic → download-mode gating → Uploader publish sequence. Add a
    CI job for pinterest-agent/autopinner/Uploader once each gets its first
    real test.
-5. **Thank-you reply to Leisa** (feedback source for 3 editor fixes shipped
-   2026-07-10) — waiting on her email address.
+5. ~~Thank-you reply to Leisa~~ (feedback source for 3 editor fixes shipped
+   2026-07-10) — **done**, no longer blocked on her email address.
 6. **GSC indexed-rate re-checks** — two pending: after the Gap 3
    canonicalization fix (baseline ~21-22% avg, noisy) and after the
    2026-07-25 subject-blurb/lastmod changes (too early to attribute as of
@@ -294,11 +239,12 @@ live-user bug fix (Christa — verify-email login). Full detail:
     CloudWatch log group has no data at all past ~11:17 UTC today.
     Bottom line: one clean real example, no broad statistical confirmation
     yet, and a second example currently unreachable. Do **not** remove
-    the temporary diagnostic `console.log`s yet. Separately (not a bug,
-    still an open product question): clicking the *opposite* arrow while
-    already voted currently "clears" the vote rather than "switching" it,
-    consistent client+server — left as-is pending an explicit decision on
-    the wanted behavior.
+    the temporary diagnostic `console.log`s yet.
+
+    (Separately, not part of this mystery: whether clicking the opposite
+    arrow should "switch" the vote instead of "clearing" it was an open
+    product question — resolved 2026-09-03, Olga confirmed "clears" is the
+    intended design. See `docs/session-log/2026-09.md`.)
 15. **CloudWatch log streaming for `cross-stitch-com-env-clone` — more
     precisely diagnosed 2026-08-12, still unfixed.** Root cause is
     narrower than "logs are stale": the **`FilterLogEvents` API returns
@@ -383,21 +329,10 @@ live-user bug fix (Christa — verify-email login). Full detail:
     side effect (extra orphaned `AiDesignGenerations` row on a re-run) is
     now surfaced via an SES alert (`alertExistingPatternRerun()`) rather
     than silent.
-25. **Pattern-save DynamoDB item-size bug — FIXED and deployed 2026-09-03,
-    full write-up in `docs/web/pattern-save-item-size-bug-2026-08.md`.**
-    Found 2026-08-12: saving a detailed/colorful pattern could fail with a
-    raw DynamoDB `ValidationException` because `savePattern()`/
-    `updatePattern()` only guarded the *grid* field size, never the
-    `thumbnail` field (often 98% of item size) or the total item. Fixed by
-    moving `thumbnail` to S3 (`photos/converter-patterns/<patternId>.<ext>`,
-    reusing the already-whitelisted CloudFront `/photos/**` path — no new
-    infra needed): backward-compatible reads shipped first
-    (`resolveThumbnailSrc()`), then the write path
-    (`storeThumbnail()` in `pattern-storage.ts`), then all 113 existing
-    legacy-format rows backfilled and verified live via CloudFront (10
-    spot-checked, all valid), then `deletePattern()` simplified to also
-    clean up the S3 object, then the now-dead legacy-format read branch
-    removed. 104 tests passing, deployed same day.
+25. ~~Pattern-save DynamoDB item-size bug~~ — **FIXED and deployed
+    2026-09-03**: `thumbnail` moved to S3, all 113 legacy rows backfilled.
+    Full write-up: `docs/web/pattern-save-item-size-bug-2026-08.md`;
+    session narrative: `docs/session-log/2026-09.md`.
 
 26. **GSC "Duplicate without user-selected canonical" cleanup — deployed
     2026-08-23, Validate Fix clicked same day.** Olga found several flagged
@@ -500,124 +435,47 @@ live-user bug fix (Christa — verify-email login). Full detail:
     meaningful difference, the crawl-budget-neglect theory needs
     rethinking.
 
-    **2026-09-03: a reminder is now scheduled so this checkpoint cluster
+    **2026-09-03: a reminder is now scheduled** so this checkpoint cluster
     (items #7, #26, #27, #28, plus the two IPs watched the same day) isn't
-    forgotten.** Windows Scheduled Task `Checkpoint20260906` (one-shot,
-    2026-09-06 09:00 local, self-deletes after firing — installed via
-    `automation/pinterest-agent/install-checkpoint-2026-09-06.ps1`) runs
-    `scripts/checkpoint-2026-09-06.ts`, which re-runs the existing
-    `_check_backfill_vs_control.ts` (#27) and `_check_halo_effect.ts` (#7)
-    as-is, adds a caption-rename re-crawl signal (#28, reconstructing each
-    URL via the same formula as `CreateDesignUrl()` in
-    `web/src/lib/url-helper.ts` — the batch JSON only stores the caption/
-    album/page pieces, not the URL itself) and the current WATCHED_IP/
-    IP_HISTORY status for `2.29.24.92`/`2.178.224.19`, then emails the raw
-    data digest to Olga via the existing `sesClient.ts` (same channel as
-    `dailySummary.ts` etc.). Deliberately reports data only, no verdicts —
-    those judgment calls stay hers. Item #26 (GSC Validate Fix status) is
-    NOT automated — that's a GSC-UI-only widget for 6 one-off URLs, flagged
-    in the email as a manual check instead.
+    forgotten — Windows Scheduled Task `Checkpoint20260906` (one-shot,
+    2026-09-06 09:00 local) emails a raw data digest (no verdicts) via
+    `scripts/checkpoint-2026-09-06.ts`. GSC Validate Fix status (#26) isn't
+    automated — flagged in the email as a manual check. Full detail:
+    `docs/session-log/2026-09.md`.
 
-29. **Photo-converter CPU saturation — full write-up at
-    `docs/web/photo-converter-cpu-saturation-2026-09.md`, read that first.**
-    Found 2026-09-01, starting from Olga noticing GA4 Realtime showing
-    0-1 active users when she normally sees several at once. Root cause
-    confirmed in code: `/api/convert`, `/api/convert/pdf` (and the
-    `/photo-to-cross-stitch` page that calls them) ran pattern generation
-    as synchronous JS in the request handler, on a single `next start`
-    process with no worker threads/queue/concurrency limit — a normal
-    burst of concurrent conversions pegged CPU at 100%, blocked the whole
-    process (including the ALB/EB health check), and caused real 502/504s
-    for unrelated visitors. Caused a real ~60% GA4 session drop, uniform
-    across every channel, on 2026-08-31. **Fixed and deployed**: Option 1
-    (worker threads, `31670f4`) moves `convertImage()`/`buildPatternPdf()`
-    into a Piscina worker pool; Option 5 (CPU-based Auto Scaling trigger,
-    `8ef2099`/`c0a66d1`, `Statistic=Maximum`/`Threshold=65`) is a
-    sustained-load backstop. Both confirmed live in production 2026-09-03
-    (deploy `app-260902_201907185445`, 2026-09-02 17:23 UTC, postdates
-    both commits; CPU alarm confirmed live via `describe-alarms`).
-    Remaining Options 2 (concurrency limit), 3 (algorithmic cost
-    reduction), 4 (background queue) are optional hardening, not
-    implemented, not required to close this out.
+29. ~~Photo-converter CPU saturation~~ — **FIXED and deployed 2026-09-03**:
+    worker threads + CPU-based Auto Scaling, both confirmed live. Caused a
+    real ~60% GA4 session drop on 2026-08-31. Full write-up:
+    `docs/web/photo-converter-cpu-saturation-2026-09.md`; session
+    narrative: `docs/session-log/2026-09.md`. Optional hardening (Options
+    2-4: concurrency limit, algorithmic cost reduction, background queue)
+    not implemented, not required.
 
-30. **IAM allowlist for self-provisioning DynamoDB tables — audited 2026-09-02, same day (Olga's ask, don't defer it).**
-    Found live 2026-09-02: `EmailEntryEvents` was missing from
-    `CrossStitchDynamoDBAccessPolicy` (the EB EC2 role's manual per-table
-    DynamoDB allowlist), so every newsletter click-through silently failed
-    to record — real clicks were happening (confirmed in CloudWatch logs,
-    `GetLogEvents` workaround since `FilterLogEvents` is still broken for
-    this log group, see Open item #15) but the campaign's own tracking
-    table showed zero, because the write threw `AccessDeniedException`
-    and was swallowed by a best-effort `catch` block. Fixed live by adding
-    `EmailEntryEvents` (+ `/index/*`) to the policy's second statement and
-    verified end-to-end (a test cid recorded correctly after the change,
-    then cleaned up). **This is the second time this exact class of bug
-    has hit production** — the first was 2026-08-08, `AiDesignGenerations`
-    et al. missing from the same policy, made AI-draft patterns
-    unloadable in the admin review UI. Durable rule now written into
-    `web/CLAUDE.md` ("New DynamoDB tables need an explicit IAM grant
-    before production use").
-    **Full audit done same day:** all 16 tables `web/` self-provisions
-    (grep for `ensureTable()`/`const TABLE =` across `src/lib/*.ts`)
-    checked against both `CrossStitchDynamoDBAccessPolicy` and
-    `AmplifyCrossStitchPolicy`. `CrossStitchItems` looked like a gap at
-    first (absent from `CrossStitchDynamoDBAccessPolicy`) but is actually
-    covered by the separate legacy `AmplifyCrossStitchPolicy` — false
-    alarm. **One real second gap found: `SubscriptionEvents`**, used only
-    by `/api/subscription/confirm/route.ts` — not actively hit right now
-    (paywall is off, all 1574 users free per
-    `project_no_paid_subscription_tier` memory) so this wasn't live-broken
-    the way `EmailEntryEvents` was, but would have failed identically the
-    moment the paywall is ever turned back on. Fixed the same way, same
-    session. All 16 tables now correctly granted — nothing left open here.
+30. ~~IAM allowlist for self-provisioning DynamoDB tables~~ — **audited
+    2026-09-02, all 16 tables correctly granted, nothing left open.**
+    Found and fixed 2 real gaps (`EmailEntryEvents` — live-broken,
+    newsletter click-throughs silently failed to record;
+    `SubscriptionEvents` — inert since the paywall is off, would have
+    failed once it's back on). Session narrative: `docs/session-log/2026-09.md`.
+31. **Legacy IAM cruft from the pre-EB Amplify hosting era** — found while
+    checking item #30, documented, nothing deleted. Full list:
+    `docs/web/iam-legacy-amplify-cruft-2026-09.md`. **Still needs Olga's
+    explicit go-ahead before anything is deleted.**
 
-31. **Legacy IAM cruft from the pre-EB Amplify hosting era — found while
-    checking Open item #30, nothing deleted, just documented.** Full list
-    (confirmed-dead roles/policies with evidence, the "probably fine"
-    list, what's not yet done) moved to
-    `docs/web/iam-legacy-amplify-cruft-2026-09.md`. Still needs Olga's
-    explicit go-ahead before anything is deleted.
+32. ~~Source-image key sharing, S3 orphans, `newPattern()` reset bug~~ —
+    **all closed 2026-09-03** (Tracks A/B/C/D of the S3-orphan cleanup,
+    plus the `newPattern()` fix). Full write-up:
+    `docs/web/source-image-key-sharing-and-orphans-2026-09.md`; session
+    narrative: `docs/session-log/2026-09.md`.
 
-32. **Source-image key sharing, S3 orphans, and an ownerless-pattern auth
-    gap — full write-up in
-    `docs/web/source-image-key-sharing-and-orphans-2026-09.md`, read that
-    first.** Found 2026-09-03 while investigating whether `thumbnail`
-    (Open item #25) could move to S3 like `sourceImageKey`/
-    `researchImageKey` already do. Three findings:
-    - **~506 MiB orphaned S3 objects** (783/827, 94.7%, in
-      `pattern-source-images/`+`research-uploads/`) — mostly from
-      converter use that never got saved as a pattern, not from
-      deletions. Bucket has versioning + a 90-day noncurrent-version
-      lifecycle rule already, so any cleanup is recoverable. All four
-      tracks **done 2026-09-03**: Track A (delete-time cleanup,
-      unconditional — no reference check), Track C (migrate `thumbnail`,
-      Open item #25), Track B (real cross-reference cleanup, NOT a
-      blind age-based lifecycle rule — that was corrected before
-      implementing, since these keys never get rewritten so age alone
-      can't distinguish old-but-live from garbage; new
-      `web/scripts/cleanup-orphaned-source-images.ts`, kept as a reusable
-      script since new orphans keep accumulating from unsaved converter
-      use — ran for real, 697/697 deleted, 0 failures, ~457 MiB cleared),
-      and **Track D — the actual structural fix**: moved the S3 upload
-      itself out of `api/convert/route.ts` (fired on every conversion
-      attempt) into a new `api/converter/upload-source-photo/route.ts`,
-      called only from `handleSavePattern()` — an abandoned conversion
-      now never touches S3 at all, closing the leak at its source rather
-      than just cleaning up after it. Verified live (convert-without-save
-      left the S3 object count unchanged; the new endpoint uploads
-      correctly when called directly).
-    - **`newPattern()` didn't reset `sourceImageKey`/`researchImageKey`/
-      `sourceImageMaskKey`** (added ~6 weeks after `newPattern()` was
-      written, never wired into its reset list) — **fixed, committed, and
-      deployed 2026-09-03** (`ConvertClient.tsx`).
-    - **Ownerless-pattern auth gap**: `GET`/`PUT`/`DELETE`
-      (`api/converter/patterns/[id]/route.ts`) and `source-image/route.ts`
-      only check ownership `if (pattern.ownerID)` — a row with no owner
-      has no check at all. Verified dormant (the 14 ownerless rows all
-      predate the `sourceImageKey` field; `POST` always requires a
-      session and always sets `ownerID`, so no new ownerless row can
-      appear). **Deliberately deferred, not fixed** — Olga's explicit
-      "запиши на будущее" 2026-09-03, not a live risk today.
+    **Still open — ownerless-pattern auth gap**: `GET`/`PUT`/`DELETE`
+    (`api/converter/patterns/[id]/route.ts`) and `source-image/route.ts`
+    only check ownership `if (pattern.ownerID)` — a row with no owner has
+    no check at all. Verified dormant (the 14 ownerless rows all predate
+    the `sourceImageKey` field; `POST` always requires a session and sets
+    `ownerID`, so no new ownerless row can appear). **Deliberately
+    deferred, not fixed** — Olga's explicit "запиши на будущее"
+    2026-09-03, not a live risk today.
 
 ## Done when
 
@@ -629,7 +487,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] Caption-rename recrawl-trigger batch checked — re-check ~2026-09-06, list saved in `caption-rename-batch.json` (see Open item #28); scale up gradually if it worked
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
 - [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see Open item #2) — [x] reviewed 2026-09-03 with real 22-day data, decided against a wholesale category flip (SignalNonBrowserUserAgent confirmed genuinely mixed with wanted crawlers); shipped a narrow BlockSeoCrawlerUserAgents rule (AhrefsBot/Sogou) instead, verified live
-- [ ] Thank-you reply sent to Leisa — waiting on her email address
+- [x] Thank-you reply sent to Leisa
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
