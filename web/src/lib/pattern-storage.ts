@@ -10,7 +10,7 @@ import {
   UpdateTimeToLiveCommand,
   type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import type { PatternPalette } from './pattern-converter';
 import { rleEncode, rleDecode } from './rle';
@@ -383,8 +383,24 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
   };
 }
 
+// Step 5 of docs/web/pattern-save-item-size-bug-2026-08.md's implementation
+// plan: unlike sourceImageKey/researchImageKey (content-addressed, so a
+// key can be shared by multiple patterns — see Track A in
+// docs/web/source-image-key-sharing-and-orphans-2026-09.md, which needs a
+// reference count check before deleting), a thumbnail key is derived from
+// patternId and never shared, so it's always safe to delete unconditionally
+// alongside the pattern itself. Best-effort: an S3 delete failure must
+// never block deleting the pattern the owner actually asked to delete.
 export async function deletePattern(id: string): Promise<void> {
   await ensureTable();
+  const existing = await loadPattern(id);
+  if (existing?.thumbnail) {
+    try {
+      await s3.send(new DeleteObjectCommand({ Bucket: THUMBNAIL_BUCKET, Key: existing.thumbnail }));
+    } catch (e) {
+      console.error('[pattern-storage] thumbnail S3 delete failed (continuing with pattern delete):', e);
+    }
+  }
   await client.send(new DeleteItemCommand({
     TableName: TABLE,
     Key: { patternId: { S: id } },

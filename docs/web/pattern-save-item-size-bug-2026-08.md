@@ -1,8 +1,9 @@
 # Pattern-save DynamoDB item-size bug — August 2026
 
-**Status: root fix (move thumbnail to S3) in progress — steps 0-3 shipped
-2026-09-03, not yet deployed; steps 4-6 (backfill existing rows, simplify
-deletion, remove the legacy read branch) not started.** Durable record
+**Status: FIXED, 2026-09-03.** Root fix (move thumbnail to S3) fully
+implemented, all 6 steps done, 113 legacy rows backfilled (0 left), steps
+0-4 deployed same day — steps 5-6 not yet deployed (code done, tests
+pass). Durable record
 moved out of `Focus.md` (which only keeps a one-line pointer + status now)
 so the full reasoning and evidence survive Focus.md archiving — same
 pattern as `docs/web/gsc-indexing-investigation-2026-08.md`.
@@ -158,17 +159,41 @@ safe.
    behavior was needed.
 3. **Client render paths — DONE 2026-09-03**, as part of step 0 above
    (both display sites already route through `resolveThumbnailSrc()`).
-4. **Existing rows — backfill, not left permanently dual-format.** Olga's
-   call, 2026-09-03: the dual-format read support from step 0 is a
-   transition aid, not the end state. Once steps 1-3 are live, run a
-   one-off script to move all 127 existing inline thumbnails to S3 and
-   rewrite their DynamoDB rows to the key-only format.
-5. **Deletion.** Simpler than `sourceImageKey`: since the key isn't
-   content-addressed, `deletePattern()` can delete its own thumbnail
-   object unconditionally, no reference-count check needed (contrast with
-   Track A in the source-image doc).
-6. **Remove the old inline-format read path.** After step 4's backfill is
-   verified complete (no row left with an inline data-URI thumbnail), drop
-   the data-URI branch from step 0's dual-format read code — the
-   transition period ends once nothing depends on it anymore, so the
-   codebase doesn't carry a permanent legacy-format branch.
+4. **Existing rows — backfill, DONE 2026-09-03.** A one-off
+   `web/scripts/backfill-thumbnails-to-s3.ts` (dry-run by default,
+   `--confirm` to apply, same convention as `fix-catalog-metadata-mismatches.ts`)
+   reused `storeThumbnail()` from `pattern-storage.ts` (briefly exported
+   for this) so the backfill produced byte-identical keys to the live
+   write path. Scanned `ConverterPatterns` in full: 113 of 127 rows were
+   still inline (the other 14 had already migrated via normal resaves
+   after the step 1-3 deploy). Ran with `--confirm`: **113/113 migrated,
+   0 failures.** Re-scan afterward confirmed 0 rows left in the legacy
+   format. Spot-checked 10 migrated thumbnails live via CloudFront
+   (`https://d2o1uvvg91z7o4.cloudfront.net/photos/converter-patterns/<id>.jpg`,
+   spanning the full size range from ~2 KB to ~77 KB original inline size)
+   — all 200, correct `image/jpeg` content-type, valid JPEG magic bytes.
+   **Script deleted after the run** (Olga's call — unlike
+   `fix-catalog-metadata-mismatches.ts`'s hardcoded one-time list, this was
+   a general "migrate anything still legacy" sweep with no ongoing purpose
+   once 0 rows remained and the write path could no longer reintroduce the
+   old format; `storeThumbnail()` reverted to unexported). This paragraph
+   plus git history (commit that added and the one that removed it) is the
+   record of how the migration was done, if ever needed again.
+5. **Deletion — DONE 2026-09-03.** `deletePattern()` now loads the pattern
+   first, and if it has a `thumbnail`, deletes that S3 object
+   (best-effort — a failed S3 delete never blocks deleting the pattern
+   itself) before deleting the DDB item. Simpler than `sourceImageKey`:
+   since the key isn't content-addressed, no reference-count check is
+   needed (contrast with Track A in the source-image doc). Covered by 3
+   new tests in `pattern-storage.test.ts` (deletes the right key,
+   skips S3 entirely when there's no thumbnail, still deletes the DDB
+   item if the S3 delete throws).
+6. **Remove the old inline-format read path — DONE 2026-09-03.** Dropped
+   the `data:` passthrough branch from `resolveThumbnailSrc()`
+   (`pattern-thumbnail-url.ts`) now that step 4's backfill confirmed 0
+   rows left in the old format and the write path can no longer produce
+   one — the transition period is over, the codebase no longer carries a
+   permanent legacy-format branch.
+
+**All 6 steps done as of 2026-09-03.** Full test suite: 104 passed,
+`tsc --noEmit` clean.

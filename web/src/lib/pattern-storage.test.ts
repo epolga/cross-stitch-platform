@@ -33,15 +33,18 @@ import {
   PutItemCommand,
   UpdateItemCommand,
   QueryCommand,
+  GetItemCommand,
+  DeleteItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
   rleEncode,
   rleDecode,
   savePattern,
   updatePattern,
+  deletePattern,
   listPatternsByOwner,
 } from './pattern-storage';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import type { PatternPalette } from './pattern-converter';
 
 const RED: PatternPalette = { number: '666', name: 'Red', r: 200, g: 0, b: 0, symbol: 'X', stitchCount: 0 };
@@ -52,6 +55,8 @@ beforeAll(() => {
     if (cmd instanceof DescribeTableCommand) return { Table: { TableStatus: 'ACTIVE' } };
     if (cmd instanceof PutItemCommand)       return {};
     if (cmd instanceof UpdateItemCommand)    return {};
+    if (cmd instanceof DeleteItemCommand)    return {};
+    if (cmd instanceof GetItemCommand)       return { Item: undefined };
     if (cmd instanceof QueryCommand)         return { Items: [] };
     return {};
   });
@@ -217,6 +222,63 @@ describe('updatePattern', () => {
     expect(input.UpdateExpression).toContain('sourceImageMaskKey = :skm');
     expect(input.UpdateExpression).not.toContain('REMOVE sourceImageMaskKey');
     expect(input.ExpressionAttributeValues![':skm'].S).toBe('pattern-source-images/2026-08-13/x.mask.png');
+  });
+});
+
+// ── deletePattern ─────────────────────────────────────────────────────────────
+
+// Minimal well-formed GetItem response so loadPattern() (called internally
+// by deletePattern() to find the thumbnail key) doesn't throw on missing
+// required fields.
+function ddbPatternItem(overrides: Record<string, unknown> = {}) {
+  return {
+    patternId:  { S: 'fixed-id' },
+    name:       { S: 'Some Pattern' },
+    width:      { N: '1' },
+    height:     { N: '1' },
+    palette:    { S: JSON.stringify([RED]) },
+    grid:       { S: '1:0' },
+    createdAt:  { S: '2026-01-01T00:00:00.000Z' },
+    ...overrides,
+  };
+}
+
+describe('deletePattern', () => {
+  it('deletes the thumbnail from S3 (using the stored key) before deleting the DDB item', async () => {
+    mockSend.mockImplementationOnce(async () => ({
+      Item: ddbPatternItem({ thumbnail: { S: 'photos/converter-patterns/fixed-id.jpg' } }),
+    }));
+
+    await deletePattern('fixed-id');
+
+    const s3Call = mockS3Send.mock.calls.findLast((c) => c[0] instanceof DeleteObjectCommand);
+    expect((s3Call![0] as DeleteObjectCommand).input.Bucket).toBe('cross-stitch-designs');
+    expect((s3Call![0] as DeleteObjectCommand).input.Key).toBe('photos/converter-patterns/fixed-id.jpg');
+    const ddbCall = mockSend.mock.calls.findLast((c) => c[0] instanceof DeleteItemCommand);
+    expect((ddbCall![0] as DeleteItemCommand).input.Key!.patternId.S).toBe('fixed-id');
+  });
+
+  it('skips the S3 delete when the pattern has no thumbnail, but still deletes the DDB item', async () => {
+    mockS3Send.mockClear();
+    mockSend.mockImplementationOnce(async () => ({ Item: ddbPatternItem() })); // no thumbnail field
+
+    await deletePattern('fixed-id');
+
+    expect(mockS3Send).not.toHaveBeenCalled();
+    const ddbCall = mockSend.mock.calls.findLast((c) => c[0] instanceof DeleteItemCommand);
+    expect((ddbCall![0] as DeleteItemCommand).input.Key!.patternId.S).toBe('fixed-id');
+  });
+
+  it('still deletes the DDB item even if the S3 thumbnail delete fails', async () => {
+    mockSend.mockImplementationOnce(async () => ({
+      Item: ddbPatternItem({ thumbnail: { S: 'photos/converter-patterns/fixed-id.jpg' } }),
+    }));
+    mockS3Send.mockImplementationOnce(async () => { throw new Error('S3 down'); });
+
+    await expect(deletePattern('fixed-id')).resolves.not.toThrow();
+
+    const ddbCall = mockSend.mock.calls.findLast((c) => c[0] instanceof DeleteItemCommand);
+    expect((ddbCall![0] as DeleteItemCommand).input.Key!.patternId.S).toBe('fixed-id');
   });
 });
 
