@@ -1,9 +1,8 @@
 # Source-image key sharing, S3 orphans, and an ownerless-pattern auth gap — September 2026
 
-**Status: mixed — `newPattern()` fix and Track A (delete-time cleanup)
-shipped 2026-09-03, Track C (thumbnail to S3) also done same day; Track B
-(the ~506 MiB backlog) not started; the ownerless-pattern auth gap
-documented and deliberately deferred.** Found 2026-09-03 while
+**Status: all three tracks (A, B, C) plus the `newPattern()` fix done and
+deployed 2026-09-03; only the ownerless-pattern auth gap remains, deferred
+deliberately.** Found 2026-09-03 while
 investigating the pattern-save DynamoDB item-size bug (Open item #25,
 `docs/web/pattern-save-item-size-bug-2026-08.md`) and whether `thumbnail`
 could move to S3 the same way `sourceImageKey`/`researchImageKey` already
@@ -73,10 +72,28 @@ days without any new configuration.
   doesn't occur in practice. Covered by tests in `pattern-storage.test.ts`
   (deletes all four key types, no `ScanCommand` fired, one key's failure
   doesn't stop the rest).
-- **Track B — clears the existing ~506 MiB backlog, not started.** An S3
-  lifecycle rule expiring objects in these two prefixes past some age
-  (e.g. 30 days), relying on the existing versioning safety net rather
-  than new app code. Simpler and safer than a one-off delete script.
+- **Track B — DONE 2026-09-03.** Originally planned as a blind S3
+  lifecycle rule by object age — corrected before implementing (Olga
+  caught it): these keys are content-addressed and never rewritten, so a
+  genuinely old-but-still-referenced object (a pattern saved months ago,
+  untouched since) has the same `LastModified` as real garbage. Age alone
+  can't tell them apart — a lifecycle rule would eventually delete images
+  live patterns still depend on. Implemented instead as a real
+  cross-reference: new `web/scripts/cleanup-orphaned-source-images.ts`
+  (kept, not a one-off — unlike the thumbnail backfill, new orphans
+  accumulate continuously from ordinary unsaved converter use, so this
+  stays a reusable maintenance script) fetches the actual set of
+  currently-referenced keys from `ConverterPatterns`, lists all S3
+  objects in both prefixes, and deletes whatever isn't referenced *and*
+  is older than a grace period (default 48h, `--grace-hours` to
+  override) — the grace period protects objects from a session that
+  hasn't hit Save yet. Dry run by default, `--confirm` to apply, same
+  convention as the other scripts. Ran for real: **697/697 deleted, 0
+  failures**, ~457 MiB backlog cleared. Re-scan afterward: 0 orphans past
+  the grace period, 138 objects remain (44 referenced + 94 within the
+  grace window). Verified a real referenced key from 2026-08-14 (well
+  past the grace period, correctly kept because a live pattern still
+  references it) survived intact in S3.
 - **Track C — migrate `thumbnail` (Open item #25) to S3 — DONE
   2026-09-03**, full write-up in
   `docs/web/pattern-save-item-size-bug-2026-08.md`. Landed after Track A

@@ -541,11 +541,16 @@ live-user bug fix (Christa — verify-email login). Full detail:
       `pattern-source-images/`+`research-uploads/`) — mostly from
       converter use that never got saved as a pattern, not from
       deletions. Bucket has versioning + a 90-day noncurrent-version
-      lifecycle rule already, so any cleanup is recoverable. Track A
-      (delete-time cleanup, unconditional — no reference check, see below)
-      and Track C (migrate `thumbnail`, Open item #25) **done 2026-09-03**;
-      Track B (age-based S3 lifecycle rule for the existing backlog) —
-      **not started**.
+      lifecycle rule already, so any cleanup is recoverable. All three
+      tracks **done 2026-09-03**: Track A (delete-time cleanup,
+      unconditional — no reference check), Track C (migrate `thumbnail`,
+      Open item #25), and Track B (real cross-reference cleanup, NOT a
+      blind age-based lifecycle rule — that was corrected before
+      implementing, since these keys never get rewritten so age alone
+      can't distinguish old-but-live from garbage; new
+      `web/scripts/cleanup-orphaned-source-images.ts`, kept as a reusable
+      script since new orphans keep accumulating from unsaved converter
+      use — ran for real, 697/697 deleted, 0 failures, ~457 MiB cleared).
     - **`newPattern()` didn't reset `sourceImageKey`/`researchImageKey`/
       `sourceImageMaskKey`** (added ~6 weeks after `newPattern()` was
       written, never wired into its reset list) — **fixed, committed, and
@@ -589,5 +594,5 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
 - [x] `newPattern()` image-key reset bug fixed, committed, and deployed 2026-09-03 (see Open item #32)
 - [x] Delete-time S3 cleanup (Track A) shipped 2026-09-03, unconditional — thumbnail/sourceImageKey/researchImageKey/sourceImageMaskKey all deleted alongside the pattern (see Open item #32)
-- [ ] Existing ~506 MiB S3 orphan backlog cleared (Track B — age-based lifecycle rule) — not started (see Open item #32)
+- [x] Existing S3 orphan backlog cleared (Track B) 2026-09-03 via real cross-reference (not age-based) — 697 objects deleted, ~457 MiB, 0 failures (see Open item #32)
 - [ ] Ownerless-pattern auth gap in patterns/source-image routes fixed — deliberately deferred 2026-09-03, currently dormant/not exploitable (see Open item #32)
