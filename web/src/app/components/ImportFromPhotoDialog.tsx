@@ -33,6 +33,11 @@ interface Props {
   initialFile?: File | null;
   onClose: () => void;
   onImport: (data: ConvertedPattern, paddedGrid: number[][]) => void;
+  // Called right after a successful conversion, alongside onImport — hands
+  // the parent the exact File plus the two consent flags (see the comment
+  // at the call site) so it can defer the actual S3 upload to Save time
+  // instead of uploading on every conversion attempt.
+  onFileReady?: (file: File, consent: { keepForReuse: boolean; researchConsent: boolean }) => void;
   // Called when the photo is explicitly cleared (Load New, or Cancel before
   // any design exists) — lets the parent forget initialFile too, so a
   // cleared photo can't resurrect itself the next time this dialog opens.
@@ -53,7 +58,7 @@ interface Props {
   resetSignal?: number;
 }
 
-export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport, onRemoveFile, hasExistingDesign, resetSignal }: Props) {
+export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport, onFileReady, onRemoveFile, hasExistingDesign, resetSignal }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [patWidth, setPatWidth] = useState(100);
   const [patHeight, setPatHeight] = useState(100);
@@ -218,7 +223,8 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       : null;
 
   async function convert() {
-    if (!selectedFile.current) return;
+    const file = selectedFile.current;
+    if (!file) return;
     setLoading(true);
     setError('');
     try {
@@ -230,19 +236,17 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       }
       const mode = userMode === 'auto' ? 'auto' : userMode;
       const form = new FormData();
-      form.append('image', selectedFile.current);
+      form.append('image', file);
       form.append('width', String(innerW));
       form.append('height', String(innerH));
       form.append('colors', String(numColors));
       form.append('mode', mode);
       form.append('colorDistanceMode', colorDistanceMode);
-      form.append('researchConsent', String(researchCollectionEnabled && researchConsent));
-      form.append('keepForReuse', String(keepForReuse));
       trackEvent('pattern_generation_started', {
         width: innerW,
         height: innerH,
         colorCount: numColors,
-        fileType: selectedFile.current.type,
+        fileType: file.type,
         conversionMode: mode,
         detectedType: analysis?.type,
       });
@@ -266,6 +270,16 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
       // now the current design's source. Reopening the dialog shows it
       // again (ready for Redo with different settings); Load New is the
       // explicit action to replace it.
+      //
+      // The actual S3 upload (sourceImageKey/researchImageKey) no longer
+      // happens here (see api/convert/route.ts) — hand the file + consent
+      // flags to the parent so it can upload only if/when the owner
+      // actually saves (upload-source-photo/route.ts), not on every
+      // conversion attempt.
+      onFileReady?.(file, {
+        keepForReuse,
+        researchConsent: researchCollectionEnabled && researchConsent,
+      });
       onImport(data, paddedGrid);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Conversion failed');

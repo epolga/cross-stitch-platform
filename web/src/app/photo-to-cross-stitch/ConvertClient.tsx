@@ -478,14 +478,26 @@ export default function ConvertPage() {
   // got populated from a plain pattern load, only from an in-session import).
   const [researchImageKey, setResearchImageKey] = useState<string | undefined>(undefined);
   // 2026-08-11 (Olga's ask): separate from researchImageKey — this is the
-  // owner's own copy of their upload (see convert/route.ts's
-  // saveSourceCopy()), unconditional on research consent. Same set-on-import
-  // / set-on-load shape as researchImageKey above.
+  // owner's own copy of their upload, unconditional on research consent.
+  // Same set-on-import / set-on-load shape as researchImageKey above. Both
+  // are actually uploaded to S3 (upload-source-photo/route.ts) lazily, at
+  // Save time — see pendingSourceFile below.
   const [sourceImageKey, setSourceImageKey] = useState<string | undefined>(undefined);
-  // Only set when the imported PNG had real transparency — see
-  // splitPngForStorage() in convert/route.ts. Same set-on-import/set-on-load
-  // shape as sourceImageKey above.
+  // Only set when the imported PNG had real transparency, from a brief
+  // 2026-08-13 JPG+mask storage scheme, reverted same day — see git history
+  // on api/convert/route.ts. Not produced by new uploads any more, only
+  // read back for patterns saved while it was active. Same
+  // set-on-import/set-on-load shape as sourceImageKey above.
   const [sourceImageMaskKey, setSourceImageMaskKey] = useState<string | undefined>(undefined);
+  // 2026-09-03 (Track "defer S3 upload to Save",
+  // docs/web/source-image-key-sharing-and-orphans-2026-09.md): the File
+  // itself, held here from ImportFromPhotoDialog's onFileReady until the
+  // owner actually clicks Save (handleSavePattern uploads it then, via
+  // upload-source-photo/route.ts, and clears this). An abandoned
+  // conversion that's never saved never uploads anything to S3 at all.
+  const [pendingSourceFile, setPendingSourceFile] = useState<
+    { file: File; keepForReuse: boolean; researchConsent: boolean } | null
+  >(null);
   // Track 2 (Opportunity 9) — set from the pattern-load response when this
   // pattern has AI-draft provenance. needsAiReview specifically means the
   // Approve/Approve-with-changes step (docs/genai-growth/DESIGN_FEEDBACK_LOOP.md)
@@ -599,14 +611,19 @@ export default function ConvertPage() {
     setShowQualityFeedback(false);
   }
 
-  // Import from photo (called by ImportFromPhotoDialog on success)
+  // Import from photo (called by ImportFromPhotoDialog on success). Note:
+  // researchImageKey/sourceImageKey/sourceImageMaskKey are deliberately NOT
+  // set here any more — `data` (the /api/convert response) no longer
+  // carries them at all (see api/convert/route.ts and the pendingSourceFile
+  // comment above): the actual upload, and the state update that comes with
+  // it, now happens lazily in handleSavePattern(), only if/when the owner
+  // saves. Setting them here from `data` would be wrong on a Redo of an
+  // already-saved pattern — it would wipe the existing, still-valid key
+  // back to undefined before the owner has had a chance to resave.
   function handleImport(data: ConvertedPattern, paddedGrid: number[][]) {
     setPatternName('');
     setNameInput('');
     setEditingName(true);
-    setResearchImageKey(data.researchImageKey);
-    setSourceImageKey(data.sourceImageKey);
-    setSourceImageMaskKey(data.sourceImageMaskKey);
     updatePalette(data.palette);
     const confettiResult = removeConfetti(paddedGrid);
     updateGrid(confettiResult.grid);
@@ -1148,6 +1165,34 @@ export default function ConvertPage() {
       throw Object.assign(new Error('login required'), { silent: true });
     }
 
+    // Upload the pending source photo now, at the moment of an actual Save
+    // — see ImportFromPhotoDialog's onFileReady and
+    // api/converter/upload-source-photo/route.ts. Best-effort: on failure,
+    // leave pendingSourceFile set (so the next Save attempt retries — safe,
+    // the upload is content-addressed/idempotent) and just save with
+    // whatever key state already existed, rather than blocking the save.
+    let effectiveResearchImageKey = researchImageKey;
+    let effectiveSourceImageKey = sourceImageKey;
+    if (pendingSourceFile) {
+      try {
+        const uploadForm = new FormData();
+        uploadForm.append('image', pendingSourceFile.file);
+        uploadForm.append('keepForReuse', String(pendingSourceFile.keepForReuse));
+        uploadForm.append('researchConsent', String(pendingSourceFile.researchConsent));
+        const uploadResp = await fetch('/api/converter/upload-source-photo', { method: 'POST', body: uploadForm });
+        if (uploadResp.ok) {
+          const uploadData = await uploadResp.json() as { sourceImageKey?: string; researchImageKey?: string };
+          if (uploadData.sourceImageKey) { effectiveSourceImageKey = uploadData.sourceImageKey; setSourceImageKey(uploadData.sourceImageKey); }
+          if (uploadData.researchImageKey) { effectiveResearchImageKey = uploadData.researchImageKey; setResearchImageKey(uploadData.researchImageKey); }
+          setPendingSourceFile(null);
+        } else {
+          console.error('[handleSavePattern] source photo upload failed:', await uploadResp.text().catch(() => ''));
+        }
+      } catch (e) {
+        console.error('[handleSavePattern] source photo upload failed:', e);
+      }
+    }
+
     const g = gridRef.current;
     const pal = paletteRef.current;
     const thumbnail = generatePatternThumbnail(g, pal);
@@ -1158,8 +1203,8 @@ export default function ConvertPage() {
       // Both accepted on PUT too (updatePattern only ever sets, never
       // clears, so a routine resave with no new photo just leaves whatever
       // was already stored untouched — see pattern-storage.ts).
-      researchImageKey,
-      sourceImageKey,
+      researchImageKey: effectiveResearchImageKey,
+      sourceImageKey: effectiveSourceImageKey,
       sourceImageMaskKey,
     });
     const resp = await fetch(
@@ -2061,6 +2106,7 @@ export default function ConvertPage() {
     setSourceImageMaskKey(undefined);
     setImportInitialFile(null);
     setImportResetSignal(s => s + 1);
+    setPendingSourceFile(null);
     setIsAiDraft(false);
     setSourceGenerationId(null);
     setNeedsAiReview(false);
@@ -2943,6 +2989,7 @@ export default function ConvertPage() {
         initialFile={importInitialFile}
         onClose={() => setShowImportDialog(false)}
         onImport={handleImport}
+        onFileReady={(file, consent) => setPendingSourceFile({ file, ...consent })}
         onRemoveFile={() => setImportInitialFile(null)}
         hasExistingDesign={hasDesign}
         resetSignal={importResetSignal}

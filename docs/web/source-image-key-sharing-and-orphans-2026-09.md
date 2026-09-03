@@ -1,8 +1,11 @@
 # Source-image key sharing, S3 orphans, and an ownerless-pattern auth gap — September 2026
 
-**Status: all three tracks (A, B, C) plus the `newPattern()` fix done and
-deployed 2026-09-03; only the ownerless-pattern auth gap remains, deferred
-deliberately.** Found 2026-09-03 while
+**Status: all four tracks (A, B, C, D) plus the `newPattern()` fix done
+2026-09-03; only the ownerless-pattern auth gap remains, deferred
+deliberately.** Track D (the structural fix — defer S3 upload to Save
+time, closing the leak at its actual source) is the important one: it
+means new orphans stop accumulating going forward, not just that the
+existing backlog got cleaned once. Found 2026-09-03 while
 investigating the pattern-save DynamoDB item-size bug (Open item #25,
 `docs/web/pattern-save-item-size-bug-2026-08.md`) and whether `thumbnail`
 could move to S3 the same way `sourceImageKey`/`researchImageKey` already
@@ -101,6 +104,59 @@ days without any new configuration.
   Confirmed genuinely simpler than `sourceImageKey`/`researchImageKey` as
   expected — not content-addressed, so no sharing risk ever existed for
   it regardless of the Track A reference-check decision above.
+
+### Structural fix — stop the leak at the source (Track D, DONE 2026-09-03)
+
+Tracks A-C above clean up *after the fact* (on delete, or the existing
+backlog). Olga asked the obvious follow-up: what actually guarantees new
+orphans stop appearing? Answer at the time: nothing — Track A only
+prevents leakage from pattern *deletion*, which was never the main source.
+The real source is `/api/convert` uploading a copy on **every conversion
+attempt**, saved or not — normal, expected behavior (most visitors try
+before they save), so it was guaranteed to keep generating new orphans
+indefinitely.
+
+Investigated whether the S3 upload could move from convert-time to
+Save-time instead of just being cleaned up after. Confirmed in code
+(`ConvertClient.tsx`'s `openImportDialog()` comment): the original photo
+file lives in the browser's memory for the whole editing session
+(`ImportFromPhotoDialog`'s `selectedFile` ref) — the S3 copy of
+`sourceImageKey` is only ever actually read back through
+`source-image/route.ts` for **"Redo from Photo" after a page reload/reopen
+of an already-*saved* pattern** (`sourceImageKey && savedPatternId` both
+required). An unsaved conversion never needs the S3 copy at all, at any
+point. `researchImageKey` is a different case in principle — its intent is
+to capture every attempt for research, saved or not — but research
+collection is currently disabled entirely (GDPR review pending), so
+deferring it alongside `sourceImageKey` has zero live effect either way;
+flagged as worth revisiting if research collection is ever re-enabled.
+
+**Implemented:** moved the actual upload out of `api/convert/route.ts`
+into a new `api/converter/upload-source-photo/route.ts`, called only from
+`ConvertClient.tsx`'s `handleSavePattern()` — i.e., only when the owner
+actually clicks Save. `ImportFromPhotoDialog` hands the File + consent
+flags up via a new `onFileReady` callback (parallel to `onImport`) instead
+of uploading them itself; `ConvertClient` holds them in `pendingSourceFile`
+until Save, then uploads and threads the resulting keys into the same save
+request. Found and fixed a real regression risk while implementing:
+`handleImport()` used to set `sourceImageKey`/`researchImageKey` straight
+from the convert response — since that response no longer carries them,
+doing so would have wiped a *previously-saved* pattern's still-valid key
+back to `undefined` on every "Redo from Photo"; removed instead, since the
+Save flow is now the sole place these fields get updated.
+
+Verified live: `POST /api/convert` response no longer contains
+`sourceImageKey`/`researchImageKey` (confirmed via curl); converting the
+sample photo without saving left `pattern-source-images/`'s object count
+completely unchanged (139 → 139); the new `upload-source-photo` endpoint,
+called directly, uploads correctly and returns a valid key (confirmed via
+`head-object`). Full suite: 106 tests passing, `tsc --noEmit` clean.
+
+With this, an abandoned conversion — the dominant real-world case per
+Finding 1 — never touches S3 at all. Tracks A-C remain necessary as a
+backstop (deletions, the pre-existing backlog, and `thumbnail`), but the
+primary leak is now closed at the source rather than merely cleaned up
+after.
 
 ## Finding 2 (fixed, uncommitted): `newPattern()` didn't reset the image-key state
 

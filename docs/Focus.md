@@ -541,16 +541,24 @@ live-user bug fix (Christa — verify-email login). Full detail:
       `pattern-source-images/`+`research-uploads/`) — mostly from
       converter use that never got saved as a pattern, not from
       deletions. Bucket has versioning + a 90-day noncurrent-version
-      lifecycle rule already, so any cleanup is recoverable. All three
+      lifecycle rule already, so any cleanup is recoverable. All four
       tracks **done 2026-09-03**: Track A (delete-time cleanup,
       unconditional — no reference check), Track C (migrate `thumbnail`,
-      Open item #25), and Track B (real cross-reference cleanup, NOT a
+      Open item #25), Track B (real cross-reference cleanup, NOT a
       blind age-based lifecycle rule — that was corrected before
       implementing, since these keys never get rewritten so age alone
       can't distinguish old-but-live from garbage; new
       `web/scripts/cleanup-orphaned-source-images.ts`, kept as a reusable
       script since new orphans keep accumulating from unsaved converter
-      use — ran for real, 697/697 deleted, 0 failures, ~457 MiB cleared).
+      use — ran for real, 697/697 deleted, 0 failures, ~457 MiB cleared),
+      and **Track D — the actual structural fix**: moved the S3 upload
+      itself out of `api/convert/route.ts` (fired on every conversion
+      attempt) into a new `api/converter/upload-source-photo/route.ts`,
+      called only from `handleSavePattern()` — an abandoned conversion
+      now never touches S3 at all, closing the leak at its source rather
+      than just cleaning up after it. Verified live (convert-without-save
+      left the S3 object count unchanged; the new endpoint uploads
+      correctly when called directly).
     - **`newPattern()` didn't reset `sourceImageKey`/`researchImageKey`/
       `sourceImageMaskKey`** (added ~6 weeks after `newPattern()` was
       written, never wired into its reset list) — **fixed, committed, and
@@ -595,4 +603,5 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] `newPattern()` image-key reset bug fixed, committed, and deployed 2026-09-03 (see Open item #32)
 - [x] Delete-time S3 cleanup (Track A) shipped 2026-09-03, unconditional — thumbnail/sourceImageKey/researchImageKey/sourceImageMaskKey all deleted alongside the pattern (see Open item #32)
 - [x] Existing S3 orphan backlog cleared (Track B) 2026-09-03 via real cross-reference (not age-based) — 697 objects deleted, ~457 MiB, 0 failures (see Open item #32)
+- [x] S3 orphan leak closed at the source (Track D) 2026-09-03 — upload deferred from convert-time to Save-time (new api/converter/upload-source-photo/route.ts), verified an unsaved conversion no longer touches S3 (see Open item #32)
 - [ ] Ownerless-pattern auth gap in patterns/source-image routes fixed — deliberately deferred 2026-09-03, currently dormant/not exploitable (see Open item #32)
