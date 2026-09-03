@@ -82,9 +82,38 @@ under the 10M/mo free tier — Olga confirmed "давай попробуем" wi
 numbers in hand). **Added `AWSManagedRulesBotControlRuleSet` (Common
 inspection level) to `CrossStitchBotProtection` as rule priority 3,
 `OverrideAction: Count` (observe-only, blocks nothing yet)** — Capacity
-went 2→52 WCU, nowhere near the 1500 limit. **Next: let it run a few days,
-review `BotControlCommonCount` CloudWatch metrics + sampled requests,
-then decide whether to flip it to actually blocking.** Not yet done.
+went 2→52 WCU, nowhere near the 1500 limit. Selective enforcement (Category
+SEO/Advertising/ScrapingFramework kept at native Block, everything else
+forced to Count) added 2026-08-13, see the review-ip skill doc for the
+full sub-rule table.
+
+**2026-09-03 — reviewed 22 days of real data, decided against a wholesale
+flip.** Found a real CloudWatch quirk first: only sub-rules listed in
+`RuleActionOverrides` (the Count-mode ones) get their own per-rule metric —
+the 3 kept-native-Block categories have no separate metric, only the
+aggregate `BotControlCommonCount` (which does show real daily blocking,
+~1100-3500/day). Confirmed via a live 3h `get-sampled-requests` sample
+(500 requests) that CategorySeo/CategoryAdvertising are genuinely firing
+(72 + 5 hits respectively). Pulled real 22-day totals for every Count-mode
+sub-rule: `SignalNonBrowserUserAgent` dominates (546,521, ~24.8K/day) and
+is confirmed genuinely mixed by real UA samples — Googlebot, Bingbot,
+ClaudeBot, and Facebook's link-preview crawler sit in the *same* bucket as
+commercial SEO tools like AhrefsBot and Sogou — so the category can't be
+blocked wholesale without also cutting off wanted crawlers. `CategoryAI`
+(122,151) and `CategorySocialMedia` (6,637) confirmed still legitimate,
+left as-is. Everything else is low-volume (`CategoryHttpLibrary` ~800/day
+down to 0 for Archiver/SearchEngine/Security).
+
+**Shipped instead: a narrow, separate rule** — `BlockSeoCrawlerUserAgents`
+(priority 4, `CrossStitchBotProtection`), a `User-Agent` byte-match
+(`CONTAINS`, case-insensitive) for "ahrefsbot" or "sogou", `Action: Block`
+— targets exactly the two named commercial SEO crawlers found sitting
+inside the otherwise-unblockable `SignalNonBrowserUserAgent` bucket,
+without touching the category itself. Verified live: normal browser UA
+still gets 200, an AhrefsBot UA gets 403. **This closes out the "decide
+whether to flip it" open item — no further category-level changes
+planned**, this narrow-rule approach is the answer for any other
+specifically-named unwanted crawler found later too.
 
 **Track 2 embeddings/`search_catalog` dedup tool** (discussed and built
 2026-08-09, confirmed against a real live run same day — see Open item
@@ -471,6 +500,24 @@ live-user bug fix (Christa — verify-email login). Full detail:
     meaningful difference, the crawl-budget-neglect theory needs
     rethinking.
 
+    **2026-09-03: a reminder is now scheduled so this checkpoint cluster
+    (items #7, #26, #27, #28, plus the two IPs watched the same day) isn't
+    forgotten.** Windows Scheduled Task `Checkpoint20260906` (one-shot,
+    2026-09-06 09:00 local, self-deletes after firing — installed via
+    `automation/pinterest-agent/install-checkpoint-2026-09-06.ps1`) runs
+    `scripts/checkpoint-2026-09-06.ts`, which re-runs the existing
+    `_check_backfill_vs_control.ts` (#27) and `_check_halo_effect.ts` (#7)
+    as-is, adds a caption-rename re-crawl signal (#28, reconstructing each
+    URL via the same formula as `CreateDesignUrl()` in
+    `web/src/lib/url-helper.ts` — the batch JSON only stores the caption/
+    album/page pieces, not the URL itself) and the current WATCHED_IP/
+    IP_HISTORY status for `2.29.24.92`/`2.178.224.19`, then emails the raw
+    data digest to Olga via the existing `sesClient.ts` (same channel as
+    `dailySummary.ts` etc.). Deliberately reports data only, no verdicts —
+    those judgment calls stay hers. Item #26 (GSC Validate Fix status) is
+    NOT automated — that's a GSC-UI-only widget for 6 one-off URLs, flagged
+    in the email as a manual check instead.
+
 29. **Photo-converter CPU saturation — full write-up at
     `docs/web/photo-converter-cpu-saturation-2026-09.md`, read that first.**
     Found 2026-09-01, starting from Olga noticing GA4 Realtime showing
@@ -581,7 +628,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] Backfill-vs-control A/B test checked — re-check ~2026-09-06, groups saved in `ab-test-backfill-groups.json` (see Open item #27); afterward restore control group's 150 designs to new AI text
 - [ ] Caption-rename recrawl-trigger batch checked — re-check ~2026-09-06, list saved in `caption-rename-batch.json` (see Open item #28); scale up gradually if it worked
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
-- [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see Open item #2) — [ ] switch to actually blocking once reviewed
+- [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see Open item #2) — [x] reviewed 2026-09-03 with real 22-day data, decided against a wholesale category flip (SignalNonBrowserUserAgent confirmed genuinely mixed with wanted crawlers); shipped a narrow BlockSeoCrawlerUserAgents rule (AhrefsBot/Sogou) instead, verified live
 - [ ] Thank-you reply sent to Leisa — waiting on her email address
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
