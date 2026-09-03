@@ -528,6 +528,33 @@ live-user bug fix (Christa — verify-email login). Full detail:
     `docs/web/iam-legacy-amplify-cruft-2026-09.md`. Still needs Olga's
     explicit go-ahead before anything is deleted.
 
+32. **Source-image key sharing, S3 orphans, and an ownerless-pattern auth
+    gap — full write-up in
+    `docs/web/source-image-key-sharing-and-orphans-2026-09.md`, read that
+    first.** Found 2026-09-03 while investigating whether `thumbnail`
+    (Open item #25) could move to S3 like `sourceImageKey`/
+    `researchImageKey` already do. Three findings:
+    - **~506 MiB orphaned S3 objects** (783/827, 94.7%, in
+      `pattern-source-images/`+`research-uploads/`) — mostly from
+      converter use that never got saved as a pattern, not from
+      deletions. Bucket has versioning + a 90-day noncurrent-version
+      lifecycle rule already, so any cleanup is recoverable. 3-track plan
+      proposed (reference-counted delete-time cleanup, an age-based S3
+      lifecycle rule for the backlog, then migrate `thumbnail`) — **not
+      started**.
+    - **`newPattern()` didn't reset `sourceImageKey`/`researchImageKey`/
+      `sourceImageMaskKey`** (added ~6 weeks after `newPattern()` was
+      written, never wired into its reset list) — **fixed 2026-09-03,
+      not yet committed** (`ConvertClient.tsx`).
+    - **Ownerless-pattern auth gap**: `GET`/`PUT`/`DELETE`
+      (`api/converter/patterns/[id]/route.ts`) and `source-image/route.ts`
+      only check ownership `if (pattern.ownerID)` — a row with no owner
+      has no check at all. Verified dormant (the 14 ownerless rows all
+      predate the `sourceImageKey` field; `POST` always requires a
+      session and always sets `ownerID`, so no new ownerless row can
+      appear). **Deliberately deferred, not fixed** — Olga's explicit
+      "запиши на будущее" 2026-09-03, not a live risk today.
+
 ## Done when
 
 - [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see Open item #30)
@@ -556,3 +583,6 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
 - [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
+- [x] `newPattern()` image-key reset bug fixed 2026-09-03, not yet committed (see Open item #32)
+- [ ] S3 orphan cleanup for `pattern-source-images/`/`research-uploads/` (~506 MiB, 94.7% orphaned) — 3-track plan proposed, not started (see Open item #32)
+- [ ] Ownerless-pattern auth gap in patterns/source-image routes fixed — deliberately deferred 2026-09-03, currently dormant/not exploitable (see Open item #32)

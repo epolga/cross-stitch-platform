@@ -2051,6 +2051,9 @@ export default function ConvertPage() {
     setNameInput('');
     setEditingName(true);
     setSavedPatternId(null);
+    setResearchImageKey(undefined);
+    setSourceImageKey(undefined);
+    setSourceImageMaskKey(undefined);
     setIsAiDraft(false);
     setSourceGenerationId(null);
     setNeedsAiReview(false);
