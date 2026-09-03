@@ -6,10 +6,12 @@ deliberately.** Track D (the structural fix — defer S3 upload to Save
 time, closing the leak at its actual source) is the important one: it
 means new orphans stop accumulating going forward, not just that the
 existing backlog got cleaned once. Found 2026-09-03 while
-investigating the pattern-save DynamoDB item-size bug (Open item #25,
-`docs/web/pattern-save-item-size-bug-2026-08.md`) and whether `thumbnail`
-could move to S3 the same way `sourceImageKey`/`researchImageKey` already
-do. Full pointer in `Focus.md` Open item #32.
+investigating the pattern-save DynamoDB item-size bug (archived as Item
+#25 in `Focus.md`, full write-up `docs/web/pattern-save-item-size-bug-2026-08.md`)
+and whether `thumbnail` could move to S3 the same way
+`sourceImageKey`/`researchImageKey` already do. Archived as `Focus.md`
+Item #32 main body; the ownerless-pattern auth gap remains open as
+`Focus.md` Item #32.
 
 ## Background: content-addressed source-image storage
 
@@ -97,7 +99,7 @@ days without any new configuration.
   grace window). Verified a real referenced key from 2026-08-14 (well
   past the grace period, correctly kept because a live pattern still
   references it) survived intact in S3.
-- **Track C — migrate `thumbnail` (Open item #25) to S3 — DONE
+- **Track C — migrate `thumbnail` (archived as `Focus.md` Item #25) to S3 — DONE
   2026-09-03**, full write-up in
   `docs/web/pattern-save-item-size-bug-2026-08.md`. Landed after Track A
   as planned, so it went straight under the same delete-time cleanup.

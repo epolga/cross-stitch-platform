@@ -43,20 +43,106 @@ and fixed along the way. Full detail: `docs/session-log/2026-08.md`
 
 ## Next session — pick up here first
 
-**Check whether the 2026-09-02 traffic/AdSense spike (+121% vs 34-day
-mean, $39.28) was really newsletter-driven, once GA4 finishes processing
-that day** — asked same day, deliberately deferred because GA4's standard
-Reporting API lags on the current day (confirmed earlier this same
-session — the intraday numbers aren't reliable yet). Three things
-launched simultaneously that day (1024-recipient newsletter, 10 new
-Pinterest pins, 10 newly-indexed pages), so the spike is confounded
-between them — can't attribute it to "these particular designs being
-appealing" specifically without the channel breakdown. Also worth
-checking then: 2026-08-31 AdSense was $35.34 despite that day's GA4
-sessions crashing ~60% from the CPU-saturation incident (Open item #29)
-— unexplained, worth a look (revenue not tracking session count as
-tightly as expected, or a timezone mismatch between the GA4 and AdSense
-reports — not investigated).
+Priority-ordered pointer list, written 2026-09-03. Full context for each
+lives in the matching Open item below — this list only adds the first
+concrete step, not a restatement.
+
+1. **09-02 traffic/AdSense spike (+121%, $39.28)** — do first, GA4 data
+   should be reliable by now (deferred same-day due to Reporting API lag).
+   Run `gsc-compare.ts`/`gsc-explore.ts` (dimension=channel) for 2026-09-02
+   and cross-reference `DAILY_BUSINESS`'s `ga4*Sessions` split — three
+   things launched that day (newsletter, 10 pins, 10 newly-indexed pages),
+   attribute by channel, don't just confirm "traffic was up." While in the
+   same data: check whether AdSense's day boundary vs GA4's explains the
+   08-31 anomaly ($35.34 AdSense despite the CPU-saturation session crash).
+2. **`docs/srs/`** (the SRS doc set, built 2026-07-11 — a full requirements/
+   test-plan spec for the site) — ask Olga directly whether she's read it
+   yet (state once, don't nudge repeatedly). Yes → item 3.
+3. **Automated test coverage — Open item #4.** No tests exist yet for
+   `web/` beyond CI's build check; only after #2 is a yes. Start with the
+   **PayPal webhook** per `09-Test-Plan.md` §4.2, priority order after that:
+   auth/session → conversion algorithm → autopinner claim/pin logic →
+   download-mode gating → Uploader publish sequence.
+4. **Legacy IAM cruft — Open item #31.** Dead pre-EB-hosting-era IAM
+   roles/policies found during the 2026-09-02 IAM allowlist audit,
+   documented but nothing deleted. Just needs a yes/no from Olga — list
+   already written in `docs/web/iam-legacy-amplify-cruft-2026-09.md`.
+5. **Ownerless-pattern auth gap — Open item #32 remainder.** `GET`/`PUT`/
+   `DELETE` on converter patterns only check ownership `if (pattern.ownerID)`
+   — a row with no owner has no check at all. Verified dormant (all 14
+   ownerless rows predate `sourceImageKey`; new rows always get an owner),
+   so **only implement if Olga asks** — she deliberately deferred this
+   2026-09-03 ("запиши на будущее"). Fix: in
+   `web/src/app/api/converter/patterns/[id]/route.ts` (GET/PUT/DELETE) and
+   `.../[id]/source-image/route.ts`, replace
+   ```ts
+   if (pattern.ownerID) {
+     const session = await getSession(request);
+     if (!session || session.userId !== pattern.ownerID)
+       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+   }
+   ```
+   with an unconditional check, all four spots.
+6. **Singapore/bot-traffic GA4 anomaly — Open item #3.** Confirmed bot
+   traffic 2026-07-10 (0.7% engagement, 99% direct/none — same signature
+   as the Alibaba scrapers). No fix decided yet: needs a session-quality
+   filter added to the Milestone 9 pin-attribution pipeline (or a re-run
+   excluding Singapore/China/Russia) to get a number on how much this
+   understates real traffic's revenue attribution before deciding anything.
+7. **GSC indexed-rate re-checks — Open item #6.** Two pending comparisons:
+   current indexed rate vs. the ~21-22% baseline after the Gap 3
+   canonicalization fix, and vs. after the 2026-07-25 subject-blurb/lastmod
+   changes. Also directly confirm in the GSC UI (not just the API) whether
+   the original 2026-07-09 "Crawled – currently not indexed" Validate Fix
+   ever actually passed — due 07-23, never explicitly confirmed.
+8. **`EmailSendLog` end-to-end verification — Open item #9.** Built
+   2026-07-26, first real exercise was the 2026-07-27 Announcement send
+   (723 rows via `send-announcement`) — never verified it actually worked.
+   Run `check-email-campaign.ts`/`check-email-recipient.ts` against that
+   send's `eid`.
+9. **DINOHash prototype — Open item #12.** Not started. Current dedup
+   pipeline (SHA-256 exact-match + 64-bit dHash) has a confirmed
+   false-positive mode (the "99 Names of Allah" series — same layout,
+   different text, flagged as duplicates). First step: clone
+   https://github.com/proteus-photos/dinohash-perceptual-hash and test it
+   against the known pairs in `reports/duplicate-designs-visual.json`; only
+   wire into the real pipeline if it actually distinguishes better than
+   dHash.
+10. **2026-07-27 Announcement send follow-up — Open item #13.** Sent to
+    723/723, 0 errors, never checked since. Look at GA4 traffic to
+    `/XStitch-Charts.aspx` and the `catalog_pattern_opens` event for a
+    post-send bump, plus SES complaint/bounce rate for this batch.
+11. **Design-vote "Previous vote: none" mystery — Open item #14.** A rare
+    user-reported bug where a repeat vote doesn't register the prior
+    choice. One real example (2026-08-08) checked clean (no bug); a second
+    real example (2026-08-12) can't be checked until item #12 below is
+    fixed. Blocked on that — don't remove the diagnostic `console.log`s in
+    `design-likes.ts` yet.
+12. **CloudWatch log gap, `cross-stitch-com-env-clone` — Open item #15.**
+    Two stacked problems: `FilterLogEvents` (what `eb logs`/CloudWatch
+    console search use) returns empty for this log group even with no
+    filter, though `GetLogEvents` on a specific stream works fine; and log
+    ingestion itself appears to have stopped entirely around 11:17 UTC on
+    2026-08-12 (no newer timestamp found across all 87 streams as of last
+    check). Remember `MSYS_NO_PATHCONV=1` prefix for any AWS CLI arg
+    starting with `/` in this Git Bash env, or the path gets mangled.
+13. **S3 archiving in `save-ai-draft.ts` — Open item #24.** 2026-08-11
+    decision (always archive the source image to S3, admin-only) is
+    explicitly "in effect at least through 2026-09-30" — not due before
+    then, skip until that date.
+14. **2026-09-26 — confirm the AI-tools-scan/Competitor-scan retry
+    actually succeeds — Open item #10.** Both failed 2026-08-26 (Anthropic
+    API credit balance too low); `SEND_DAY_OF_MONTH = 26` means both retry
+    automatically on the 26th of each month. `pipelineAlert.ts` (added
+    2026-09-03) now sends a Telegram alert on any pipeline-step failure, so
+    a repeat failure should no longer go silent — but still worth
+    explicitly checking CloudWatch/Telegram around that date to confirm an
+    actual *success*, not just the absence of a visible failure.
+
+**2026-09-06 checkpoint** — already automated, no manual action needed:
+Windows Scheduled Task `Checkpoint20260906` (Open item #28) handles items
+#7/#26/#27/#28 plus the two watched IPs and emails the digest. Only
+manual step: item #26's GSC Validate Fix status, flagged in that email.
 
 **Track 2 embeddings/`search_catalog` dedup tool** (discussed and built
 2026-08-09, confirmed against a real live run same day — see Open item
@@ -111,51 +197,10 @@ live-user bug fix (Christa — verify-email login). Full detail:
 
 ## Open items
 
-1. ~~Blog teaser email for `why-i-built-this`~~ — **already sent** (full
-   send, confirmed by Olga 2026-08-05; exact date not recorded, see
-   `web/plan/Email_Content_Plan.md`).
-2. **Distributed scraping mitigation** — escalated 2026-08-12: found and
-   blocked a large Alibaba Cloud Singapore scraper (4 rotating `/24`
-   subnets — `43.119.100.0/24`, `43.119.104.0/24`, `47.82.201.0/24`,
-   `47.82.202.0/24` — 459+ IPs, 50k+ req/day, breadth-first content scrape,
-   no exploit-probe pattern). All 4 confirmed 100% blocked (403) via WAF
-   after manual sync. Same day, GA4 realtime showed a second wave — much
-   more diffuse (hundreds of low-count IPs across many countries/hosting
-   providers, no single dominant subnet) — discussed AWS WAF Bot Control
-   (Common tier, Count-mode first) as the real next step since manual
-   CIDR blocking doesn't scale against this shape of traffic. **Decided:
-   wait a couple of days (confirmed not dangerous — no server strain, no
-   exploit patterns, just extra bandwidth/analytics noise) and revisit.**
-   **Explicit next-session ask (2026-08-12): come back to the WAF Bot
-   Control decision tomorrow — don't let it drop.** Later same day: the
-   diffuse wave kept growing (GA4 realtime up to 128 active, Singapore
-   35), and a large NEW cluster was found (`57.141.0.0/24`, 70 IPs,
-   935 req/hr) — but that one turned out to be legitimate:
-   `meta-externalagent/1.1` (Meta's documented crawler, real Facebook
-   Inc. IPs, used for link-preview + Meta AI training data collection per
-   `developers.facebook.com/docs/sharing/webmasters/crawler`). Doesn't
-   run JS so it's invisible in GA4 — not the cause of the elevated
-   numbers, not something to block as abuse (though blocking it via
-   `robots.txt` for AI-training reasons would be a legitimate separate
-   policy question if Olga wants to raise it). The already-blocked
-   4 Alibaba subnets stayed 100% blocked all day (9561/9561 req = 403
-   in one later hourly check) — confirmed still solid.
-   **2026-08-13 morning: AWS WAF Bot Control (Common, Count mode) enabled**
-   (08-12's AdSense RPM had dropped to the month's lowest, $5.04, on its
-   highest-impression day, 2893) — rule `BotControlCommonCount`, priority
-   3, WebACL `CrossStitchBotProtection`, SEO/Advertising/ScrapingFramework
-   kept at native Block, everything else Count-mode. ~~Reviewed 22 days of
-   real data 2026-09-03~~ — decided against a wholesale category flip
-   (the dominant Count-mode bucket is confirmed genuinely mixed with
-   wanted crawlers), shipped a narrow `BlockSeoCrawlerUserAgents` rule
-   (AhrefsBot/Sogou) instead, verified live. **Closed** — full detail:
-   `docs/session-log/2026-09.md`.
-   Older context: distinct scraping (download-counter inflation bots
-   exploiting the no-auth email-in-body pattern) still monitored via
-   `/review-ip`, status 2026-07-24: 0 watched, 25 blocked.
 3. **Singapore/bot-traffic GA4 anomaly** — confirmed bot traffic
    2026-07-10 (0.7% engagement, 99% direct/none, same signature as ALB
-   scrapers; see Open item #2 for the much larger 2026-08-12 recurrence).
+   scrapers; see `docs/session-log/2026-08.md`/`2026-09.md` for the much
+   larger 2026-08-12 recurrence and its resolution).
    Not yet done: add a session-quality filter to the Milestone 9
    pin-attribution pipeline (or re-run recent numbers excluding
    Singapore/China/Russia) to see how much this understates real traffic's
@@ -167,8 +212,6 @@ live-user bug fix (Christa — verify-email login). Full detail:
    claim/pin logic → download-mode gating → Uploader publish sequence. Add a
    CI job for pinterest-agent/autopinner/Uploader once each gets its first
    real test.
-5. ~~Thank-you reply to Leisa~~ (feedback source for 3 editor fixes shipped
-   2026-07-10) — **done**, no longer blocked on her email address.
 6. **GSC indexed-rate re-checks** — two pending: after the Gap 3
    canonicalization fix (baseline ~21-22% avg, noisy) and after the
    2026-07-25 subject-blurb/lastmod changes (too early to attribute as of
@@ -213,12 +256,9 @@ live-user bug fix (Christa — verify-email login). Full detail:
     infra — wired into all 6 of `lambda/handler.ts`'s existing try/catch
     blocks (WAF sync, suspicious-IP detection, AI tools scan, Competitor
     scan, design pin map export, GSC report). Verified live end-to-end
-    (real test Telegram message sent and received). **Not yet
-    committed/deployed.** Next real scheduled trigger to actually confirm
+    (real test Telegram message sent and received). **Committed and
+    deployed 2026-09-03.** Next real scheduled trigger to actually confirm
     success: **2026-09-26**.
-11. ~~Switch photo converter's DMC matching from CIE76 to CIEDE2000~~ —
-    **done 2026-08-03**, public picker shipped, `cie76` stays the default.
-    Full detail: `docs/session-log/2026-08.md`.
 12. **Adopt DINOHash for near-duplicate catalog image detection** — found
     via the 2026-07-26 AI-tools-scan. Current pipeline (SHA-256 exact-match
     + 64-bit dHash) has a confirmed false-positive mode: the "99 Names of
@@ -291,41 +331,6 @@ live-user bug fix (Christa — verify-email login). Full detail:
     heavy bot load). Worth checking first thing next session — if it's
     still not flowing, this is now blocking more than just occasional
     debugging.
-16. ~~Outline-preservation: stray small-patch noise~~ — **done
-    2026-08-04**, k-means quantization pre-pass fixed it. Full detail:
-    `docs/session-log/2026-08.md`.
-17. ~~Track 2 grounding-gate fix~~ — **fixed 2026-08-09**
-    (`allowed_callers: ['direct']` — `web_search` was routing through a
-    code-execution intermediary). Full detail: `docs/genai-growth/PROGRESS.md`.
-18. ~~Transparent-PNG black-background bug~~ (`pattern-converter.ts`) —
-    **fixed and deployed 2026-08-08**, live and verified (Health Green).
-    Full detail: `docs/genai-growth/PROGRESS.md`, `OPPORTUNITIES.md`
-    Opportunity 9 "Cause A".
-19. ~~AI-draft patterns unloadable after admin-review-UI deploy~~ — **found
-    and fixed 2026-08-08, live within the hour.** Root cause: EB role's
-    DynamoDB policy is a manual per-table allowlist, new tables weren't
-    added. **Standing pattern worth remembering: any new self-provisioning
-    DynamoDB table needs an explicit IAM grant before its first production
-    deploy** — `ensureTable()` alone doesn't grant EB role access. Full
-    detail: `docs/genai-growth/PROGRESS.md`.
-20. ~~Track 2 catalog-dedup `search_catalog` tool~~ — **confirmed live
-    2026-08-09**, after fixing 3 real bugs (a `container_id` 400 error, a
-    strict-typeof JSON parsing bug, and an embedding-staleness gap now
-    self-healed via `backfillMissingEmbeddings()`). First real successful
-    result: theme "luna moth", grounded in real citations and genuine
-    catalog awareness. Full detail: `docs/genai-growth/PROGRESS.md`.
-21. ~~"Luna Moth" wrongly matching unrelated themes~~ — **found and fixed
-    2026-08-09.** Root cause: `backfillMissingEmbeddings()` embedded the
-    caption alone (9 chars) instead of caption+description (~1200 chars);
-    short text lands in a less discriminative embedding region. Fixed to
-    match the batch tool's convention; verified correct matches after.
-    Full detail: `docs/genai-growth/PROGRESS.md`.
-22. ~~"Minimalist Line Art Face" AI-draft saved almost entirely empty~~ —
-    **fixed 2026-08-09, three rounds before it was actually right**
-    (background-erasure fallback tunneling through anti-aliased edges,
-    then a "blanc White" background-as-real-color bug, then a border-seed
-    color-check bug). Final result: full outline intact, no spurious
-    background color. Full detail: `docs/genai-growth/PROGRESS.md`.
 23. **Converter improvements from a real kitten test image** (2026-08-09) —
     three findings: removed an unconditional photo→illustration mode
     override in `save-ai-draft.ts` (Olga's call — trust the classifier's
@@ -344,11 +349,6 @@ live-user bug fix (Christa — verify-email login). Full detail:
     side effect (extra orphaned `AiDesignGenerations` row on a re-run) is
     now surfaced via an SES alert (`alertExistingPatternRerun()`) rather
     than silent.
-25. ~~Pattern-save DynamoDB item-size bug~~ — **FIXED and deployed
-    2026-09-03**: `thumbnail` moved to S3, all 113 legacy rows backfilled.
-    Full write-up: `docs/web/pattern-save-item-size-bug-2026-08.md`;
-    session narrative: `docs/session-log/2026-09.md`.
-
 26. **GSC "Duplicate without user-selected canonical" cleanup — deployed
     2026-08-23, Validate Fix clicked same day.** Olga found several flagged
     URLs (`/photo-to-cross-stitch?catalogPatternId=`, `/?page=59`,
@@ -457,33 +457,17 @@ live-user bug fix (Christa — verify-email login). Full detail:
     `scripts/checkpoint-2026-09-06.ts`. GSC Validate Fix status (#26) isn't
     automated — flagged in the email as a manual check. Full detail:
     `docs/session-log/2026-09.md`.
-
-29. ~~Photo-converter CPU saturation~~ — **FIXED and deployed 2026-09-03**:
-    worker threads + CPU-based Auto Scaling, both confirmed live. Caused a
-    real ~60% GA4 session drop on 2026-08-31. Full write-up:
-    `docs/web/photo-converter-cpu-saturation-2026-09.md`; session
-    narrative: `docs/session-log/2026-09.md`. Optional hardening (Options
-    2-4: concurrency limit, algorithmic cost reduction, background queue)
-    not implemented, not required.
-
-30. ~~IAM allowlist for self-provisioning DynamoDB tables~~ — **audited
-    2026-09-02, all 16 tables correctly granted, nothing left open.**
-    Found and fixed 2 real gaps (`EmailEntryEvents` — live-broken,
-    newsletter click-throughs silently failed to record;
-    `SubscriptionEvents` — inert since the paywall is off, would have
-    failed once it's back on). Session narrative: `docs/session-log/2026-09.md`.
 31. **Legacy IAM cruft from the pre-EB Amplify hosting era** — found while
-    checking item #30, documented, nothing deleted. Full list:
+    checking the IAM-allowlist audit (`docs/session-log/2026-09.md`),
+    documented, nothing deleted. Full list:
     `docs/web/iam-legacy-amplify-cruft-2026-09.md`. **Still needs Olga's
     explicit go-ahead before anything is deleted.**
 
-32. ~~Source-image key sharing, S3 orphans, `newPattern()` reset bug~~ —
-    **all closed 2026-09-03** (Tracks A/B/C/D of the S3-orphan cleanup,
-    plus the `newPattern()` fix). Full write-up:
-    `docs/web/source-image-key-sharing-and-orphans-2026-09.md`; session
-    narrative: `docs/session-log/2026-09.md`.
-
-    **Still open — ownerless-pattern auth gap**: `GET`/`PUT`/`DELETE`
+32. **Ownerless-pattern auth gap** (source-image-key sharing/S3-orphans
+    investigation itself is closed — see
+    `docs/web/source-image-key-sharing-and-orphans-2026-09.md` and
+    `docs/session-log/2026-09.md` — only this remnant is still open):
+    `GET`/`PUT`/`DELETE`
     (`api/converter/patterns/[id]/route.ts`) and `source-image/route.ts`
     only check ownership `if (pattern.ownerID)` — a row with no owner has
     no check at all. Verified dormant (the 14 ownerless rows all predate
@@ -494,15 +478,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
 
 ## Done when
 
-- [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see Open item #30)
+- [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see `docs/session-log/2026-09.md`)
 - [ ] Legacy pre-EB Amplify-era IAM cruft cleaned up or explicitly deferred — full list in `docs/web/iam-legacy-amplify-cruft-2026-09.md`, nothing deleted yet, needs Olga's go-ahead
-- [x] Pattern-save DynamoDB item-size bug fixed — thumbnail moved to S3, all 113 legacy rows backfilled, deployed and verified live 2026-09-03 (see Open item #25)
+- [x] Pattern-save DynamoDB item-size bug fixed — thumbnail moved to S3, all 113 legacy rows backfilled, deployed and verified live 2026-09-03 (see `docs/web/pattern-save-item-size-bug-2026-08.md`)
 - [ ] GSC "Duplicate without user-selected canonical" cleanup validated — re-check ~2026-09-06, Validate Fix clicked 2026-08-23 (see Open item #26)
 - [ ] Backfill-vs-control A/B test checked — re-check ~2026-09-06, groups saved in `ab-test-backfill-groups.json` (see Open item #27); afterward restore control group's 150 designs to new AI text
 - [ ] Caption-rename recrawl-trigger batch checked — re-check ~2026-09-06, list saved in `caption-rename-batch.json` (see Open item #28); scale up gradually if it worked
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
-- [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see Open item #2) — [x] reviewed 2026-09-03 with real 22-day data, decided against a wholesale category flip (SignalNonBrowserUserAgent confirmed genuinely mixed with wanted crawlers); shipped a narrow BlockSeoCrawlerUserAgents rule (AhrefsBot/Sogou) instead, verified live
-- [x] Thank-you reply sent to Leisa
+- [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see `docs/session-log/2026-08.md`) — [x] reviewed 2026-09-03 with real 22-day data, decided against a wholesale category flip (SignalNonBrowserUserAgent confirmed genuinely mixed with wanted crawlers); shipped a narrow BlockSeoCrawlerUserAgents rule (AhrefsBot/Sogou) instead, verified live (see `docs/session-log/2026-09.md`)
+- [x] Thank-you reply sent to Leisa (see `docs/session-log/2026-09.md`)
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
@@ -516,12 +500,12 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] 2026-07-27 Announcement send follow-up metrics checked (GA4 + SES, see Open item #13)
 - [ ] Design-vote "Previous vote: none" — one real example (08-08) checked clean, but no broad statistical confirmation yet and a second example (08-12) is currently unreachable due to the CloudWatch gap (see Open item #14) — keep diagnostic logging in place
 - [ ] CloudWatch log ingestion for `cross-stitch-com-env-clone` fixed/confirmed working again — both the `FilterLogEvents` issue AND a total gap since ~11:17 UTC 2026-08-12 (see Open item #15)
-- [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see Open item #17)
-- [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
-- [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
-- [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
-- [x] `newPattern()` image-key reset bug fixed, committed, and deployed 2026-09-03 (see Open item #32)
-- [x] Delete-time S3 cleanup (Track A) shipped 2026-09-03, unconditional — thumbnail/sourceImageKey/researchImageKey/sourceImageMaskKey all deleted alongside the pattern (see Open item #32)
-- [x] Existing S3 orphan backlog cleared (Track B) 2026-09-03 via real cross-reference (not age-based) — 697 objects deleted, ~457 MiB, 0 failures (see Open item #32)
-- [x] S3 orphan leak closed at the source (Track D) 2026-09-03 — upload deferred from convert-time to Save-time (new api/converter/upload-source-photo/route.ts), verified an unsaved conversion no longer touches S3 (see Open item #32)
+- [x] Track 2 grounding-gate fix confirmed against a real `detectTrend()` run (see `docs/genai-growth/PROGRESS.md`)
+- [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see `docs/genai-growth/PROGRESS.md`)
+- [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see `docs/genai-growth/PROGRESS.md`)
+- [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see `docs/web/photo-converter-cpu-saturation-2026-09.md`) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
+- [x] `newPattern()` image-key reset bug fixed, committed, and deployed 2026-09-03 (see `docs/web/source-image-key-sharing-and-orphans-2026-09.md`)
+- [x] Delete-time S3 cleanup (Track A) shipped 2026-09-03, unconditional — thumbnail/sourceImageKey/researchImageKey/sourceImageMaskKey all deleted alongside the pattern (see `docs/web/source-image-key-sharing-and-orphans-2026-09.md`)
+- [x] Existing S3 orphan backlog cleared (Track B) 2026-09-03 via real cross-reference (not age-based) — 697 objects deleted, ~457 MiB, 0 failures (see `docs/web/source-image-key-sharing-and-orphans-2026-09.md`)
+- [x] S3 orphan leak closed at the source (Track D) 2026-09-03 — upload deferred from convert-time to Save-time (new api/converter/upload-source-photo/route.ts), verified an unsaved conversion no longer touches S3 (see `docs/web/source-image-key-sharing-and-orphans-2026-09.md`)
 - [ ] Ownerless-pattern auth gap in patterns/source-image routes fixed — deliberately deferred 2026-09-03, currently dormant/not exploitable (see Open item #32)

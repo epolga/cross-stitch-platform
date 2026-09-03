@@ -1,4 +1,5 @@
-// Throwaway comparison helper for Focus.md Open item #11 (CIE76 vs
+// Throwaway comparison helper for docs/session-log/2026-08.md "Closed item
+// #11" (CIE76 vs
 // CIEDE2000 DMC color matching). Runs convertImage() three ways on the same
 // image — the current CIE76-everywhere baseline, CIEDE2000 only at the
 // final DMC-snap step, and CIEDE2000 everywhere including k-means

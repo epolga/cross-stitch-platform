@@ -12,9 +12,10 @@ const COLOR_OPTIONS_LINEART = [2, 3, 4, 5, 10, 20] as const;
 
 type UserMode = 'auto' | 'photo' | 'illustration' | 'line-art';
 
-// Focus.md Open item #11 — plain-language labels for the underlying
-// CIE76/CIEDE2000 color-distance formulas (see pattern-converter.ts), so
-// visitors pick by what it means for them, not the color-science jargon.
+// docs/session-log/2026-08.md "Closed item #11" — plain-language labels for
+// the underlying CIE76/CIEDE2000 color-distance formulas (see
+// pattern-converter.ts), so visitors pick by what it means for them, not
+// the color-science jargon.
 const DISTANCE_MODE_LABELS: Record<ColorDistanceMode, string> = {
   cie76: 'Standard',
   'final-only': 'Better Color Match',

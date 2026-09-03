@@ -12,8 +12,8 @@ Threshold=65`. Production deploy `app-260902_201907185445`
 queue) remain undone — defense-in-depth/nice-to-have, not blockers, per
 the "suggested order of attack" below. Started 2026-09-01 from Olga
 noticing GA4 Realtime showing 0-1 active users when she normally sees
-several at once. Full pointer lives in `Focus.md` Open item #29 — this
-file is the durable detailed write-up (survives Focus.md archiving, same
+several at once. Item #29 is now archived in `Focus.md` (fixed and
+deployed 2026-09-03) — this file is the durable detailed write-up (same
 pattern as `docs/web/gsc-indexing-investigation-2026-08.md`).
 
 ## Update 2026-09-01: CPU-based scaling policy drafted and tested
@@ -108,7 +108,7 @@ far enough to fire the GA4 pageview beacon.
 
 Full evidence chain (GA4 numbers, EB health events, EC2 CPU metrics, raw
 ALB log breakdown) is in the conversation history around 2026-09-01 and
-condensed in `Focus.md` Open item #29. Short version: current IP not
+condensed in `Focus.md`'s archived Item #29. Short version: current IP not
 blocked → ALB/WAF traffic volume normal (rules out a tracking/traffic
 mystery) → GA4 tag verified firing live via a real browser test (rules out
 "GA4 itself is broken") → daily session totals showed a real, channel-
@@ -161,7 +161,8 @@ code (not assumed):**
     (`labDist2`) distance function. Used for clustering itself in
     `colorDistanceMode='everywhere'`, and for the final DMC-thread match in
     `'final-only'`/`'everywhere'` (the public "Thread color accuracy"
-    picker from Focus.md Open item #11 lets any visitor pick either mode).
+    picker from docs/session-log/2026-08.md "Closed item #11" lets any
+    visitor pick either mode).
   - **Final DMC matching against all 452 reference colors**
     (`dmc-colors.json` has 452 entries) — comparing the resolved palette
     against every DMC swatch.

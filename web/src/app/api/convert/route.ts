@@ -35,8 +35,8 @@ const MIN_DIM = 10;
 const MAX_DIM = 500;
 const VALID_COLORS = new Set([2, 3, 4, 5, 10, 20, 30, 40, 50, 100]);
 
-// Focus.md Open item #11 — offered to every visitor (Import from Photo
-// dialog, "Thread color accuracy"), not admin-gated.
+// docs/session-log/2026-08.md "Closed item #11" — offered to every visitor
+// (Import from Photo dialog, "Thread color accuracy"), not admin-gated.
 function resolveColorDistanceMode(requested: string): ColorDistanceMode {
   return VALID_DISTANCE_MODES.has(requested) ? (requested as ColorDistanceMode) : 'cie76';
 }
