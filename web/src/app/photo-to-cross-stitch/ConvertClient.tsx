@@ -167,6 +167,11 @@ export default function ConvertPage() {
   const [downloadError, setDownloadError] = useState('');
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importInitialFile, setImportInitialFile] = useState<File | null>(null);
+  // See ImportFromPhotoDialog's resetSignal prop comment — bumped by
+  // newPattern() to force the (always-mounted) dialog to release its
+  // in-memory selectedFile/previewUrl, which otherwise outlive the design
+  // they belonged to for the rest of the page session.
+  const [importResetSignal, setImportResetSignal] = useState(0);
   const [dragOverCanvas, setDragOverCanvas] = useState(false);
   const [showFeatureRequest, setShowFeatureRequest] = useState(false);
   const [showWishHint, setShowWishHint] = useState(false);
@@ -2054,6 +2059,8 @@ export default function ConvertPage() {
     setResearchImageKey(undefined);
     setSourceImageKey(undefined);
     setSourceImageMaskKey(undefined);
+    setImportInitialFile(null);
+    setImportResetSignal(s => s + 1);
     setIsAiDraft(false);
     setSourceGenerationId(null);
     setNeedsAiReview(false);
@@ -2938,6 +2945,7 @@ export default function ConvertPage() {
         onImport={handleImport}
         onRemoveFile={() => setImportInitialFile(null)}
         hasExistingDesign={hasDesign}
+        resetSignal={importResetSignal}
       />
 
       {isAdmin && (

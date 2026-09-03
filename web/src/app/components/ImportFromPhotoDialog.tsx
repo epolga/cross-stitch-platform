@@ -43,9 +43,17 @@ interface Props {
   // once a design exists, this photo IS that design's source — Cancel just
   // closes and leaves it in place, only "Load New" replaces it.
   hasExistingDesign?: boolean;
+  // Bumped by the parent (e.g. newPattern()) to force this dialog to
+  // forget its currently-selected file/preview, even while the dialog
+  // itself stays mounted (it's always rendered — open just toggles
+  // visibility — so its own selectedFile ref/previewUrl otherwise persist
+  // for the whole page session with no signal that the design they
+  // belonged to was discarded). Any change in value triggers a clear;
+  // the actual number is meaningless.
+  resetSignal?: number;
 }
 
-export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport, onRemoveFile, hasExistingDesign }: Props) {
+export default function ImportFromPhotoDialog({ open, initialFile, onClose, onImport, onRemoveFile, hasExistingDesign, resetSignal }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [patWidth, setPatWidth] = useState(100);
   const [patHeight, setPatHeight] = useState(100);
@@ -83,6 +91,18 @@ export default function ImportFromPhotoDialog({ open, initialFile, onClose, onIm
     if (open && initialFile) handleFile(initialFile);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialFile]);
+
+  // See the resetSignal prop comment — lets the parent force-clear the
+  // currently-selected file even though this dialog stays mounted for the
+  // whole page session. Skips the very first render (a ref, initialized to
+  // the same value the prop starts at, so mount never counts as "changed").
+  const resetSignalSeen = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal === undefined || resetSignal === resetSignalSeen.current) return;
+    resetSignalSeen.current = resetSignal;
+    removeFile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
   // When analysis arrives with a suggested minimum width, auto-update the inputs.
   useEffect(() => {
