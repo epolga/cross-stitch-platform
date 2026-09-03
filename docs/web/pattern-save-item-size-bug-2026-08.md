@@ -99,3 +99,58 @@ worth considering, not yet decided:
   would help but doesn't fully solve it for a big enough/colorful enough
   design — likely worth doing anyway, but not a substitute for the
   item-size guard.
+
+## Proposed implementation plan for "move thumbnail to S3" (2026-09-03, not started)
+
+Unlike `sourceImageKey`/`researchImageKey`
+(`docs/web/source-image-key-sharing-and-orphans-2026-09.md`), `thumbnail`
+is **not** content-addressed — it's freshly rendered per save from that
+pattern's own grid/palette, so no cross-pattern sharing risk and no
+reference-counting needed on delete. That makes this simpler than the
+source-image case in one respect (step 5 below), but the write/read
+sequencing still needs care.
+
+**Step 0 (do first, before any write-path change) — backward-compatible
+reads.** Olga's call, 2026-09-03: read support for both formats (existing
+inline base64 data URI, and a new S3 key/URL) must ship *before* any save
+starts producing the new format. Reversing the order creates a window
+where a pattern saved in the new format is unreadable by a client that
+still only understands data URIs — the render code
+(`<img src={p.thumbnail}>`, `ProfilePatternsPageClient.tsx:170`, and the
+editor's own thumbnail display) needs to branch on "is this a data URI or
+an S3 reference" first. The 127 existing patterns keep working
+indefinitely on the old inline format once this ships — no synchronized
+cutover, no backfill required to avoid breakage.
+
+1. **Write-path ordering.** Once step 0 is live, switch saves to store the
+   thumbnail in S3 instead of inline. `PutObject` to S3 first, then the
+   DynamoDB write with just the key — if the DynamoDB write then fails,
+   the result is a harmless orphaned S3 object (same shape as the existing
+   orphans, same lifecycle-rule safety net — see
+   `source-image-key-sharing-and-orphans-2026-09.md`), not a corrupted
+   pattern. Decide server-side decode-and-upload (client sends base64 in
+   the request body as today, server does the `PutObject`) vs. client
+   direct-upload via a presigned URL.
+2. **Serving it back.** `listPatternsByOwner()` (`pattern-storage.ts:265-289`)
+   currently returns the thumbnail inline via one `Query`. After this
+   change it needs to return a CloudFront URL built from the stored key
+   instead. Add the thumbnail prefix to `next.config.js`'s
+   `remotePatterns` (currently only `/photos/**` is allowed).
+3. **Client render paths.** Swap `<img src={p.thumbnail}>` in
+   `ProfilePatternsPageClient.tsx` and the editor's equivalent from a data
+   URI to the served URL — a small UX regression (one extra network
+   round-trip instead of an instant inline render), not a blocker.
+4. **Existing rows — backfill, not left permanently dual-format.** Olga's
+   call, 2026-09-03: the dual-format read support from step 0 is a
+   transition aid, not the end state. Once steps 1-3 are live, run a
+   one-off script to move all 127 existing inline thumbnails to S3 and
+   rewrite their DynamoDB rows to the key-only format.
+5. **Deletion.** Simpler than `sourceImageKey`: since the key isn't
+   content-addressed, `deletePattern()` can delete its own thumbnail
+   object unconditionally, no reference-count check needed (contrast with
+   Track A in the source-image doc).
+6. **Remove the old inline-format read path.** After step 4's backfill is
+   verified complete (no row left with an inline data-URI thumbnail), drop
+   the data-URI branch from step 0's dual-format read code — the
+   transition period ends once nothing depends on it anymore, so the
+   codebase doesn't carry a permanent legacy-format branch.
