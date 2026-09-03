@@ -31,6 +31,7 @@ import { initPinterestToken } from "../src/services/pinterestTokenManager";
 import { syncBlockedIpsToWaf } from "../src/services/wafIpSync";
 import { detectSuspiciousIps } from "../src/services/suspiciousIpDetector";
 import { formatDate, yesterdayDate } from "../src/services/dateUtils";
+import { alertPipelineStepFailure } from "../src/services/pipelineAlert";
 
 export interface PipelineEvent {
   date?: string; // override reporting date (YYYY-MM-DD); defaults to yesterday
@@ -54,6 +55,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   } catch (err) {
     // Non-critical: don't let a WAF hiccup take down the daily business report.
     console.error("  WAF sync failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("WAF auto-block IP sync", err);
   }
 
   console.log("[init] suspicious IP detection");
@@ -66,6 +68,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     }
   } catch (err) {
     console.error("  suspicious IP detection failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("suspicious IP detection", err);
   }
 
   console.log("[1/14] daily business report");
@@ -148,6 +151,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     }
   } catch (err) {
     console.error("  AI tools scan failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("AI tools scan", err);
   }
 
   console.log("[monthly] Competitor scan");
@@ -160,6 +164,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     }
   } catch (err) {
     console.error("  Competitor scan failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("Competitor scan", err);
   }
 
   // Re-enabled: the GSC indexed-rate sample (step 14) reads this DDB table
@@ -169,6 +174,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     await runPinMap();
   } catch (err) {
     console.error("  design pin map export failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("design pin map export", err);
   }
 
   console.log("[14/15] GSC sitemap indexed-rate sample");
@@ -176,6 +182,7 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
     await runGscReport();
   } catch (err) {
     console.error("  GSC report failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("GSC sitemap indexed-rate sample", err);
   }
 
   // Step 15 (design performance, AI design analysis) is disabled — output is

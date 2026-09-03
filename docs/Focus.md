@@ -197,10 +197,25 @@ live-user bug fix (Christa — verify-email login). Full detail:
    `send-announcement`). Not yet verified end-to-end — run
    `check-email-campaign.ts`/`check-email-recipient.ts` against that
    send's `eid`.
-10. **AI-tools-scan first real trigger** — built and deployed 2026-07-26
-    to the daily Lambda pipeline, gated on day-of-month === 26. Verified
-    via manual local test runs only so far; first real scheduled trigger is
-    **2026-08-26**.
+10. **AI-tools-scan first real trigger — fired 2026-08-26 as scheduled,
+    but failed.** Found 2026-09-03 checking real CloudWatch logs
+    (`/aws/lambda/cross-stitch-daily-pipeline`): both AI-tools-scan and
+    Competitor scan (same day, both call the Anthropic API) failed with
+    "Your credit balance is too low to access the Anthropic API" — a
+    real billing issue, not a code bug. Correctly logged via
+    `console.error`, but **nothing surfaced it anywhere Olga would see**,
+    so it went unnoticed for a week. No recurrence found since 08-26
+    (checked through 09-03), so credits appear to have been topped up —
+    but neither August monthly report actually went out. **Fixed the
+    visibility gap same day**: new `src/services/pipelineAlert.ts`
+    (`alertPipelineStepFailure()`) sends a Telegram alert — reuses the
+    same already-working client `aiToolsScan.ts` uses on success, no new
+    infra — wired into all 6 of `lambda/handler.ts`'s existing try/catch
+    blocks (WAF sync, suspicious-IP detection, AI tools scan, Competitor
+    scan, design pin map export, GSC report). Verified live end-to-end
+    (real test Telegram message sent and received). **Not yet
+    committed/deployed.** Next real scheduled trigger to actually confirm
+    success: **2026-09-26**.
 11. ~~Switch photo converter's DMC matching from CIE76 to CIEDE2000~~ —
     **done 2026-08-03**, public picker shipped, `cie76` stays the default.
     Full detail: `docs/session-log/2026-08.md`.
@@ -494,7 +509,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] GSC average position — re-check ~2026-09-06 (see Open item #7; Pinterest-spend correlation found 08-23 as a second candidate cause alongside the original "Google dance" theory, need more data at the restored $6.5 budget to separate the two)
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
-- [ ] First real AI-tools-scan trigger observed via the actual scheduled pipeline (2026-08-26)
+- [x] First real AI-tools-scan trigger observed (2026-08-26) — fired but failed (Anthropic API credit balance), found 2026-09-03; failure-alerting added same day (see Open item #10) — [ ] next real trigger (2026-09-26) to confirm an actual success
 - [x] Photo converter's DMC color matching: public "Thread color accuracy" picker shipped 08-03, `cie76` stays the default
 - [ ] DINOHash prototyped against known duplicate-designs test pairs, then wired into the real pipeline if it resolves the dHash false-positive mode
 - [ ] Revisit unconditional S3 archiving in `save-ai-draft.ts` by 2026-09-30 (see Open item #24) — keep as-is or scope back to `GenerationMeta`-only runs
