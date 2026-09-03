@@ -280,6 +280,48 @@ describe('deletePattern', () => {
     const ddbCall = mockSend.mock.calls.findLast((c) => c[0] instanceof DeleteItemCommand);
     expect((ddbCall![0] as DeleteItemCommand).input.Key!.patternId.S).toBe('fixed-id');
   });
+
+  it('also deletes sourceImageKey/researchImageKey/sourceImageMaskKey unconditionally, no reference check', async () => {
+    mockS3Send.mockClear();
+    mockSend.mockImplementationOnce(async () => ({
+      Item: ddbPatternItem({
+        sourceImageKey:     { S: 'pattern-source-images/abc.jpg' },
+        researchImageKey:   { S: 'research-uploads/abc.jpg' },
+        sourceImageMaskKey: { S: 'pattern-source-images/abc.mask.png' },
+      }),
+    }));
+
+    await deletePattern('fixed-id');
+
+    const deletedKeys = mockS3Send.mock.calls
+      .filter((c) => c[0] instanceof DeleteObjectCommand)
+      .map((c) => (c[0] as DeleteObjectCommand).input.Key);
+    expect(deletedKeys).toEqual(expect.arrayContaining([
+      'pattern-source-images/abc.jpg',
+      'research-uploads/abc.jpg',
+      'pattern-source-images/abc.mask.png',
+    ]));
+    // No Scan/Query fired to check whether another pattern shares these
+    // keys - deliberately unconditional (2026-09-03 decision, see the
+    // comment above deletePattern()).
+    expect(mockSend.mock.calls.some((c) => c[0]?.constructor?.name === 'ScanCommand')).toBe(false);
+  });
+
+  it('deletes the remaining keys even if one S3 delete fails partway through', async () => {
+    mockS3Send.mockClear();
+    mockSend.mockImplementationOnce(async () => ({
+      Item: ddbPatternItem({
+        thumbnail:      { S: 'photos/converter-patterns/fixed-id.jpg' },
+        sourceImageKey: { S: 'pattern-source-images/abc.jpg' },
+      }),
+    }));
+    mockS3Send.mockImplementationOnce(async () => { throw new Error('S3 down for the first key'); });
+    mockS3Send.mockImplementationOnce(async () => ({}));
+
+    await deletePattern('fixed-id');
+
+    expect(mockS3Send).toHaveBeenCalledTimes(2); // both attempted, despite the first failing
+  });
 });
 
 // ── listPatternsByOwner ───────────────────────────────────────────────────────

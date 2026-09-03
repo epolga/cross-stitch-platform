@@ -1,8 +1,10 @@
 # Source-image key sharing, S3 orphans, and an ownerless-pattern auth gap — September 2026
 
-**Status: mixed — one fix shipped (uncommitted), one cleanup planned but not
-started, one gap documented and deliberately deferred.** Found 2026-09-03
-while investigating the pattern-save DynamoDB item-size bug (Open item #25,
+**Status: mixed — `newPattern()` fix and Track A (delete-time cleanup)
+shipped 2026-09-03, Track C (thumbnail to S3) also done same day; Track B
+(the ~506 MiB backlog) not started; the ownerless-pattern auth gap
+documented and deliberately deferred.** Found 2026-09-03 while
+investigating the pattern-save DynamoDB item-size bug (Open item #25,
 `docs/web/pattern-save-item-size-bug-2026-08.md`) and whether `thumbnail`
 could move to S3 the same way `sourceImageKey`/`researchImageKey` already
 do. Full pointer in `Focus.md` Open item #32.
@@ -54,22 +56,34 @@ newest noncurrent versions) — a `DeleteObject` here creates a delete
 marker, not an immediate hard delete, so mistakes are recoverable for 90
 days without any new configuration.
 
-**Proposed plan, not started:**
-- **Track A** — add reference-counted S3 cleanup to `deletePattern()`
-  (query `ConverterPatterns` for any other row still using the same key
-  before deleting it from S3 — required because of content-addressing,
-  see above). Stops new leakage from deletions specifically.
-- **Track B** — clear the existing ~506 MiB backlog via an S3 lifecycle
-  rule expiring objects in these two prefixes past some age (e.g. 30
-  days), relying on the existing versioning safety net rather than new
-  app code. Simpler and safer than a one-off delete script.
-- **Track C** — migrate `thumbnail` (Open item #25) to S3 the same way,
-  *after* Track A ships, so it lands directly under the same
-  reference-aware cleanup instead of creating a third leak source. Unlike
-  `sourceImageKey`/`researchImageKey`, `thumbnail` is **not**
-  content-addressed (freshly rendered per save from the live grid/palette
-  state), so it has no cross-pattern sharing risk — a straight per-pattern
-  key works.
+**Plan, updated 2026-09-03:**
+- **Track A — DONE 2026-09-03, unconditional (no reference check).**
+  `deletePattern()` (`pattern-storage.ts`) now deletes
+  `thumbnail`/`sourceImageKey`/`researchImageKey`/`sourceImageMaskKey`
+  from S3 unconditionally alongside the DDB row, best-effort (one key's
+  S3 failure doesn't stop the others or block the pattern delete). A
+  reference-counted check (Scan `ConverterPatterns` for any other row
+  sharing the key before deleting) was the original plan but was decided
+  against after checking the real data: 0 of 44 currently-referenced
+  `sourceImageKey`/`researchImageKey` values collide across any of the
+  127 real patterns — the sharing mechanism is real (see Finding 1's two
+  scenarios) but has never actually happened, and a false-positive delete
+  only degrades "Redo from Photo" on the other pattern (re-uploadable),
+  not a data loss. Not worth a Scan on every delete for a collision that
+  doesn't occur in practice. Covered by tests in `pattern-storage.test.ts`
+  (deletes all four key types, no `ScanCommand` fired, one key's failure
+  doesn't stop the rest).
+- **Track B — clears the existing ~506 MiB backlog, not started.** An S3
+  lifecycle rule expiring objects in these two prefixes past some age
+  (e.g. 30 days), relying on the existing versioning safety net rather
+  than new app code. Simpler and safer than a one-off delete script.
+- **Track C — migrate `thumbnail` (Open item #25) to S3 — DONE
+  2026-09-03**, full write-up in
+  `docs/web/pattern-save-item-size-bug-2026-08.md`. Landed after Track A
+  as planned, so it went straight under the same delete-time cleanup.
+  Confirmed genuinely simpler than `sourceImageKey`/`researchImageKey` as
+  expected — not content-addressed, so no sharing risk ever existed for
+  it regardless of the Track A reference-check decision above.
 
 ## Finding 2 (fixed, uncommitted): `newPattern()` didn't reset the image-key state
 

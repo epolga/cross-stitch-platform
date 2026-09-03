@@ -23,14 +23,17 @@ const REGION = process.env.AWS_REGION || 'us-east-1';
 const client = new DynamoDBClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
 
-// Same bucket/CloudFront distribution the catalog's own design photos use
-// (photos/<albumId>/<designId>/4.jpg — data-access.ts, semantic-search.ts),
-// so no new CloudFront behavior or next.config.js remotePatterns entry is
-// needed: `/photos/**` is already whitelisted and already routes to this
-// bucket. See docs/web/pattern-save-item-size-bug-2026-08.md "Proposed
-// implementation plan" — this is step 1 (write path), step 0 (backward-
-// compatible reads, resolveThumbnailSrc()) already shipped.
-const THUMBNAIL_BUCKET = 'cross-stitch-designs';
+// Same bucket sourceImageKey/researchImageKey/sourceImageMaskKey already
+// live in (convert/route.ts's pattern-source-images/, research-uploads/
+// prefixes) and the catalog's own design photos use (photos/<albumId>/
+// <designId>/4.jpg — data-access.ts, semantic-search.ts). Thumbnails reuse
+// the photos/ prefix specifically so `/photos/**`, already whitelisted on
+// the CloudFront distribution and in next.config.js remotePatterns, covers
+// them too with no new infra. See
+// docs/web/pattern-save-item-size-bug-2026-08.md "Proposed implementation
+// plan" — this is step 1 (write path), step 0 (backward-compatible reads,
+// resolveThumbnailSrc()) already shipped.
+const DESIGNS_BUCKET = 'cross-stitch-designs';
 const THUMBNAIL_PREFIX = 'photos/converter-patterns';
 
 // Moves a freshly-rendered thumbnail out of the DynamoDB item and into S3,
@@ -52,7 +55,7 @@ async function storeThumbnail(patternId: string, thumbnail: string): Promise<str
   const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
   const key = `${THUMBNAIL_PREFIX}/${patternId}.${ext}`;
   await s3.send(new PutObjectCommand({
-    Bucket: THUMBNAIL_BUCKET,
+    Bucket: DESIGNS_BUCKET,
     Key: key,
     Body: Buffer.from(base64, 'base64'),
     ContentType: contentType,
@@ -383,22 +386,29 @@ export async function loadPattern(id: string): Promise<SavedPattern | null> {
   };
 }
 
-// Step 5 of docs/web/pattern-save-item-size-bug-2026-08.md's implementation
-// plan: unlike sourceImageKey/researchImageKey (content-addressed, so a
-// key can be shared by multiple patterns — see Track A in
-// docs/web/source-image-key-sharing-and-orphans-2026-09.md, which needs a
-// reference count check before deleting), a thumbnail key is derived from
-// patternId and never shared, so it's always safe to delete unconditionally
-// alongside the pattern itself. Best-effort: an S3 delete failure must
-// never block deleting the pattern the owner actually asked to delete.
+// Deletes this pattern's S3-backed images unconditionally alongside the
+// DDB row — thumbnail (Step 5 of pattern-save-item-size-bug-2026-08.md)
+// plus sourceImageKey/researchImageKey/sourceImageMaskKey (Track A of
+// source-image-key-sharing-and-orphans-2026-09.md). The latter three are
+// content-addressed (convert/route.ts) and could in principle be shared
+// by another pattern that uploaded identical bytes, which would argue for
+// a reference check before deleting — decided against 2026-09-03 after
+// checking the real data: 0 of 44 currently-referenced keys collide across
+// any of the 127 real patterns, and a false-positive delete only degrades
+// "Redo from Photo" on the (hypothetical) other pattern, not a data loss —
+// not worth a Scan on every delete for a collision that's never actually
+// happened. Best-effort throughout: an S3 delete failure must never block
+// deleting the pattern the owner actually asked to delete.
 export async function deletePattern(id: string): Promise<void> {
   await ensureTable();
   const existing = await loadPattern(id);
-  if (existing?.thumbnail) {
+  const keys = [existing?.thumbnail, existing?.sourceImageKey, existing?.researchImageKey, existing?.sourceImageMaskKey]
+    .filter((k): k is string => !!k);
+  for (const key of keys) {
     try {
-      await s3.send(new DeleteObjectCommand({ Bucket: THUMBNAIL_BUCKET, Key: existing.thumbnail }));
+      await s3.send(new DeleteObjectCommand({ Bucket: DESIGNS_BUCKET, Key: key }));
     } catch (e) {
-      console.error('[pattern-storage] thumbnail S3 delete failed (continuing with pattern delete):', e);
+      console.error(`[pattern-storage] S3 delete failed for ${key} (continuing with pattern delete):`, e);
     }
   }
   await client.send(new DeleteItemCommand({

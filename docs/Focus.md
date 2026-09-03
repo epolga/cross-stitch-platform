@@ -65,11 +65,10 @@ production, confirmed 2026-09-03. Full write-up in
 2-4 (concurrency limit, algorithmic cost reduction, background queue) are
 optional hardening, not blockers.
 
-**Fix the pattern-save DynamoDB item-size bug (see Open item #25) —
-detailed write-up, real repro, real users exposed too, not just a
-script.** Found 2026-08-12 saving a real design ("Black Cat with Magic
-Cauldron") to Olga's own account; she explicitly asked this be written up
-in full detail for tomorrow.
+~~Fix the pattern-save DynamoDB item-size bug (see Open item #25)~~ —
+**fixed and deployed 2026-09-03.** Thumbnail moved to S3, all 113 legacy
+rows backfilled and verified live. Full write-up:
+`docs/web/pattern-save-item-size-bug-2026-08.md`.
 
 ~~Revisit the AWS WAF Bot Control decision (see Open item #2).~~ — **done
 2026-08-13.** Real morning-after evidence made the case on its own: 08-12
@@ -355,17 +354,21 @@ live-user bug fix (Christa — verify-email login). Full detail:
     side effect (extra orphaned `AiDesignGenerations` row on a re-run) is
     now surfaced via an SES alert (`alertExistingPatternRerun()`) rather
     than silent.
-25. **Pattern-save DynamoDB item-size bug — full write-up in
-    `docs/web/pattern-save-item-size-bug-2026-08.md`, read that first.**
-    Found 2026-08-12: saving a detailed/colorful pattern can fail with a
+25. **Pattern-save DynamoDB item-size bug — FIXED and deployed 2026-09-03,
+    full write-up in `docs/web/pattern-save-item-size-bug-2026-08.md`.**
+    Found 2026-08-12: saving a detailed/colorful pattern could fail with a
     raw DynamoDB `ValidationException` because `savePattern()`/
-    `updatePattern()` only guard the *grid* field size, never the
-    `thumbnail` field (often 98% of item size) or the total item — affects
-    real users through the live editor UI, not just scripts. **Not yet
-    fixed** — needs a considered fix (doc has 3 candidate directions: a
-    real total-item-size guard, move thumbnail to S3, or compress harder),
-    since the thumbnail renderer has a lot of deliberately-tuned visual
-    behavior Olga cares about.
+    `updatePattern()` only guarded the *grid* field size, never the
+    `thumbnail` field (often 98% of item size) or the total item. Fixed by
+    moving `thumbnail` to S3 (`photos/converter-patterns/<patternId>.<ext>`,
+    reusing the already-whitelisted CloudFront `/photos/**` path — no new
+    infra needed): backward-compatible reads shipped first
+    (`resolveThumbnailSrc()`), then the write path
+    (`storeThumbnail()` in `pattern-storage.ts`), then all 113 existing
+    legacy-format rows backfilled and verified live via CloudFront (10
+    spot-checked, all valid), then `deletePattern()` simplified to also
+    clean up the S3 object, then the now-dead legacy-format read branch
+    removed. 104 tests passing, deployed same day.
 
 26. **GSC "Duplicate without user-selected canonical" cleanup — deployed
     2026-08-23, Validate Fix clicked same day.** Olga found several flagged
@@ -538,14 +541,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
       `pattern-source-images/`+`research-uploads/`) — mostly from
       converter use that never got saved as a pattern, not from
       deletions. Bucket has versioning + a 90-day noncurrent-version
-      lifecycle rule already, so any cleanup is recoverable. 3-track plan
-      proposed (reference-counted delete-time cleanup, an age-based S3
-      lifecycle rule for the backlog, then migrate `thumbnail`) — **not
-      started**.
+      lifecycle rule already, so any cleanup is recoverable. Track A
+      (delete-time cleanup, unconditional — no reference check, see below)
+      and Track C (migrate `thumbnail`, Open item #25) **done 2026-09-03**;
+      Track B (age-based S3 lifecycle rule for the existing backlog) —
+      **not started**.
     - **`newPattern()` didn't reset `sourceImageKey`/`researchImageKey`/
       `sourceImageMaskKey`** (added ~6 weeks after `newPattern()` was
-      written, never wired into its reset list) — **fixed 2026-09-03,
-      not yet committed** (`ConvertClient.tsx`).
+      written, never wired into its reset list) — **fixed, committed, and
+      deployed 2026-09-03** (`ConvertClient.tsx`).
     - **Ownerless-pattern auth gap**: `GET`/`PUT`/`DELETE`
       (`api/converter/patterns/[id]/route.ts`) and `source-image/route.ts`
       only check ownership `if (pattern.ownerID)` — a row with no owner
@@ -559,7 +563,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 
 - [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see Open item #30)
 - [ ] Legacy pre-EB Amplify-era IAM cruft cleaned up or explicitly deferred — full list in `docs/web/iam-legacy-amplify-cruft-2026-09.md`, nothing deleted yet, needs Olga's go-ahead
-- [ ] Pattern-save DynamoDB item-size bug fixed (thumbnail not size-guarded, real users exposed — see Open item #25)
+- [x] Pattern-save DynamoDB item-size bug fixed — thumbnail moved to S3, all 113 legacy rows backfilled, deployed and verified live 2026-09-03 (see Open item #25)
 - [ ] GSC "Duplicate without user-selected canonical" cleanup validated — re-check ~2026-09-06, Validate Fix clicked 2026-08-23 (see Open item #26)
 - [ ] Backfill-vs-control A/B test checked — re-check ~2026-09-06, groups saved in `ab-test-backfill-groups.json` (see Open item #27); afterward restore control group's 150 designs to new AI text
 - [ ] Caption-rename recrawl-trigger batch checked — re-check ~2026-09-06, list saved in `caption-rename-batch.json` (see Open item #28); scale up gradually if it worked
@@ -583,6 +587,7 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [x] Track 2 `search_catalog` dedup tool confirmed against a real `detectTrend()` run (see Open item #20)
 - [x] Transparent-PNG black-background fix (`pattern-converter.ts`) deployed to the live site (see Open item #18)
 - [x] `/photo-to-cross-stitch` + `/api/convert*` CPU-saturation root cause fixed — worker threads + CPU-based Auto Scaling deployed, confirmed live 2026-09-03 (found 2026-09-01, caused a real ~60% GA4 session drop on 08-31 — see Open item #29) — [ ] optional hardening (concurrency limit, algorithmic cost reduction, background queue) still undone
-- [x] `newPattern()` image-key reset bug fixed 2026-09-03, not yet committed (see Open item #32)
-- [ ] S3 orphan cleanup for `pattern-source-images/`/`research-uploads/` (~506 MiB, 94.7% orphaned) — 3-track plan proposed, not started (see Open item #32)
+- [x] `newPattern()` image-key reset bug fixed, committed, and deployed 2026-09-03 (see Open item #32)
+- [x] Delete-time S3 cleanup (Track A) shipped 2026-09-03, unconditional — thumbnail/sourceImageKey/researchImageKey/sourceImageMaskKey all deleted alongside the pattern (see Open item #32)
+- [ ] Existing ~506 MiB S3 orphan backlog cleared (Track B — age-based lifecycle rule) — not started (see Open item #32)
 - [ ] Ownerless-pattern auth gap in patterns/source-image routes fixed — deliberately deferred 2026-09-03, currently dormant/not exploitable (see Open item #32)
