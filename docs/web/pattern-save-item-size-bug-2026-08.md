@@ -1,9 +1,11 @@
 # Pattern-save DynamoDB item-size bug — August 2026
 
-**Status: open, not yet fixed.** Durable record moved out of `Focus.md`
-(which only keeps a one-line pointer + status now) so the full reasoning
-and evidence survive Focus.md archiving — same pattern as
-`docs/web/gsc-indexing-investigation-2026-08.md`.
+**Status: root fix (move thumbnail to S3) in progress — steps 0-3 shipped
+2026-09-03, not yet deployed; steps 4-6 (backfill existing rows, simplify
+deletion, remove the legacy read branch) not started.** Durable record
+moved out of `Focus.md` (which only keeps a one-line pointer + status now)
+so the full reasoning and evidence survive Focus.md archiving — same
+pattern as `docs/web/gsc-indexing-investigation-2026-08.md`.
 
 ## The bug
 
@@ -100,7 +102,7 @@ worth considering, not yet decided:
   design — likely worth doing anyway, but not a substitute for the
   item-size guard.
 
-## Proposed implementation plan for "move thumbnail to S3" (2026-09-03, not started)
+## Proposed implementation plan for "move thumbnail to S3" (2026-09-03, steps 0-3 done same day)
 
 Unlike `sourceImageKey`/`researchImageKey`
 (`docs/web/source-image-key-sharing-and-orphans-2026-09.md`), `thumbnail`
@@ -110,36 +112,52 @@ reference-counting needed on delete. That makes this simpler than the
 source-image case in one respect (step 5 below), but the write/read
 sequencing still needs care.
 
-**Step 0 (do first, before any write-path change) — backward-compatible
-reads.** Olga's call, 2026-09-03: read support for both formats (existing
-inline base64 data URI, and a new S3 key/URL) must ship *before* any save
-starts producing the new format. Reversing the order creates a window
-where a pattern saved in the new format is unreadable by a client that
-still only understands data URIs — the render code
-(`<img src={p.thumbnail}>`, `ProfilePatternsPageClient.tsx:170`, and the
-editor's own thumbnail display) needs to branch on "is this a data URI or
-an S3 reference" first. The 127 existing patterns keep working
-indefinitely on the old inline format once this ships — no synchronized
-cutover, no backfill required to avoid breakage.
+**Step 0 — DONE 2026-09-03.** Backward-compatible reads shipped first, per
+Olga's call: read support for both formats (existing inline base64 data
+URI, and a new S3 key) had to ship *before* any save starts producing the
+new format, so a pattern saved in the new format is never unreadable by
+the client. New file `web/src/lib/pattern-thumbnail-url.ts` exports
+`resolveThumbnailSrc()` — `data:` prefix → pass through unchanged,
+otherwise → build a CloudFront URL. Wired into both display sites:
+`ProfilePatternsPageClient.tsx:170` and `OpenPatternDialog.tsx:105`. The
+127 existing patterns keep rendering exactly as before (identity
+pass-through for their format), no backfill needed for this step to be
+safe.
 
-1. **Write-path ordering.** Once step 0 is live, switch saves to store the
-   thumbnail in S3 instead of inline. `PutObject` to S3 first, then the
-   DynamoDB write with just the key — if the DynamoDB write then fails,
-   the result is a harmless orphaned S3 object (same shape as the existing
-   orphans, same lifecycle-rule safety net — see
-   `source-image-key-sharing-and-orphans-2026-09.md`), not a corrupted
-   pattern. Decide server-side decode-and-upload (client sends base64 in
-   the request body as today, server does the `PutObject`) vs. client
-   direct-upload via a presigned URL.
-2. **Serving it back.** `listPatternsByOwner()` (`pattern-storage.ts:265-289`)
-   currently returns the thumbnail inline via one `Query`. After this
-   change it needs to return a CloudFront URL built from the stored key
-   instead. Add the thumbnail prefix to `next.config.js`'s
-   `remotePatterns` (currently only `/photos/**` is allowed).
-3. **Client render paths.** Swap `<img src={p.thumbnail}>` in
-   `ProfilePatternsPageClient.tsx` and the editor's equivalent from a data
-   URI to the served URL — a small UX regression (one extra network
-   round-trip instead of an instant inline render), not a blocker.
+1. **Write-path ordering — DONE 2026-09-03.** `storeThumbnail()`
+   (`pattern-storage.ts`) uploads to S3 (`PutObject`) first, then the
+   caller writes DynamoDB with just the returned key — chose server-side
+   decode-and-upload (client keeps sending base64 in the request body
+   exactly as before; `savePattern()`/`updatePattern()` decode and
+   `PutObject` internally) over a client presigned-URL flow, since all
+   three real callers (`api/converter/patterns/route.ts`,
+   `.../[id]/route.ts`, `scripts/save-ai-draft.ts`) already send the same
+   base64 shape and needed zero changes. Best-effort on failure, matching
+   `saveResearchCopy()`/`saveSourceCopy()`'s convention (`convert/route.ts`)
+   — but with a real subtlety found while implementing: `updatePattern()`
+   distinguishes "no thumbnail sent" (explicit clear, pre-existing
+   behavior) from "a thumbnail was sent but the S3 upload failed" (now
+   leaves the field untouched — a transient S3 hiccup on a routine resave
+   must never silently wipe out an existing, working thumbnail; the
+   original two-way `if (thumbnail) SET else REMOVE` logic would have
+   gotten this wrong). Covered by new tests in `pattern-storage.test.ts`
+   (S3 mock added, upload-succeeds/upload-fails/already-migrated-passthrough
+   cases for both `savePattern()` and `updatePattern()`) — full suite
+   (101 tests) passes, `tsc --noEmit` clean.
+2. **Serving it back — folded into step 0, no separate server change
+   needed.** Originally planned as a `listPatternsByOwner()` change
+   (construct the CloudFront URL server-side); implemented instead as a
+   client-side resolve in `resolveThumbnailSrc()` (step 0) — the server
+   just returns the raw stored string (data URI or key) unchanged in both
+   `listPatternsByOwner()` and `loadPattern()`, and the client decides how
+   to render it. Simpler: no `next.config.js` change needed either — the
+   chosen key convention (`photos/converter-patterns/<patternId>.<ext>`,
+   see step 1) reuses the CloudFront path pattern `/photos/**` already
+   whitelisted for catalog design images (`data-access.ts`,
+   `semantic-search.ts`), so no new remotePatterns entry or CloudFront
+   behavior was needed.
+3. **Client render paths — DONE 2026-09-03**, as part of step 0 above
+   (both display sites already route through `resolveThumbnailSrc()`).
 4. **Existing rows — backfill, not left permanently dual-format.** Olga's
    call, 2026-09-03: the dual-format read support from step 0 is a
    transition aid, not the end state. Once steps 1-3 are live, run a

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
+import { resolveThumbnailSrc } from '@/lib/pattern-thumbnail-url';
 
 interface PatternSummary {
   id: string;
@@ -167,7 +168,7 @@ export default function ProfilePatternsPageClient() {
               <div className="relative flex h-[120px] items-center justify-center overflow-hidden rounded-2xl bg-rose-50">
                 {p.thumbnail ? (
                   <Image
-                    src={p.thumbnail}
+                    src={resolveThumbnailSrc(p.thumbnail)!}
                     alt={`${p.name} preview`}
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"

@@ -13,6 +13,21 @@ vi.mock('@aws-sdk/client-dynamodb', async (importOriginal) => {
   };
 });
 
+// ── S3 mock ───────────────────────────────────────────────────────────────────
+// storeThumbnail() (pattern-storage.ts) uploads to S3 on any save/update that
+// carries a data-URI thumbnail — without this mock, these tests would fire
+// real PutObjectCommand calls at AWS.
+const { mockS3Send } = vi.hoisted(() => ({ mockS3Send: vi.fn() }));
+
+vi.mock('@aws-sdk/client-s3', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@aws-sdk/client-s3')>();
+  return {
+    ...actual,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    S3Client: vi.fn(function (this: any) { this.send = mockS3Send; }),
+  };
+});
+
 import {
   DescribeTableCommand,
   PutItemCommand,
@@ -26,6 +41,7 @@ import {
   updatePattern,
   listPatternsByOwner,
 } from './pattern-storage';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import type { PatternPalette } from './pattern-converter';
 
 const RED: PatternPalette = { number: '666', name: 'Red', r: 200, g: 0, b: 0, symbol: 'X', stitchCount: 0 };
@@ -39,6 +55,8 @@ beforeAll(() => {
     if (cmd instanceof QueryCommand)         return { Items: [] };
     return {};
   });
+  // Default: every S3 upload succeeds.
+  mockS3Send.mockImplementation(async () => ({}));
 });
 
 // ── RLE codec ─────────────────────────────────────────────────────────────────
@@ -91,11 +109,36 @@ describe('savePattern', () => {
     expect(item.modifiedAt.S).toBe(item.createdAt.S);
   });
 
-  it('includes thumbnail when provided', async () => {
-    await savePattern('With Thumb', 1, 1, [RED], [[0]], 'user-abc', 'data:image/jpeg;base64,abc');
+  it('uploads a data-URI thumbnail to S3 and stores the key, not the raw data URI', async () => {
+    const id = await savePattern('With Thumb', 1, 1, [RED], [[0]], 'user-abc', 'data:image/jpeg;base64,abc');
+
+    const expectedKey = `photos/converter-patterns/${id}.jpg`;
+    const call = mockSend.mock.calls.findLast((c) => c[0] instanceof PutItemCommand);
+    expect((call![0] as PutItemCommand).input.Item!.thumbnail?.S).toBe(expectedKey);
+    const s3Call = mockS3Send.mock.calls.findLast((c) => c[0] instanceof PutObjectCommand);
+    expect((s3Call![0] as PutObjectCommand).input.Key).toBe(expectedKey);
+    expect((s3Call![0] as PutObjectCommand).input.Bucket).toBe('cross-stitch-designs');
+  });
+
+  it('saves without a thumbnail if the S3 upload fails, instead of blocking the save', async () => {
+    mockS3Send.mockImplementationOnce(async () => { throw new Error('S3 down'); });
+
+    const id = await savePattern('Thumb Fails', 1, 1, [RED], [[0]], 'user-abc', 'data:image/jpeg;base64,abc');
+
+    expect(id).toMatch(/^[0-9a-f-]{36}$/); // save still succeeded
+    const call = mockSend.mock.calls.findLast((c) => c[0] instanceof PutItemCommand);
+    expect((call![0] as PutItemCommand).input.Item!.thumbnail).toBeUndefined();
+  });
+
+  it('passes an already-migrated thumbnail key through unchanged, without touching S3', async () => {
+    mockS3Send.mockClear();
+    const existingKey = 'photos/converter-patterns/some-other-id.png';
+
+    await savePattern('Already Migrated', 1, 1, [RED], [[0]], 'user-abc', existingKey);
 
     const call = mockSend.mock.calls.findLast((c) => c[0] instanceof PutItemCommand);
-    expect((call![0] as PutItemCommand).input.Item!.thumbnail?.S).toBe('data:image/jpeg;base64,abc');
+    expect((call![0] as PutItemCommand).input.Item!.thumbnail?.S).toBe(existingKey);
+    expect(mockS3Send).not.toHaveBeenCalled();
   });
 
   it('falls back to Untitled for a blank name', async () => {
@@ -140,14 +183,26 @@ describe('updatePattern', () => {
     expect(input.ExpressionAttributeValues![':t']).toBeUndefined();
   });
 
-  it('SETs thumbnail and hiddenColors when provided', async () => {
+  it('SETs thumbnail (as an S3 key, not the raw data URI) and hiddenColors when provided', async () => {
     await updatePattern('fixed-id', 'With Extras', 1, 1, [RED], [[0]], 'user-abc', 'data:image/jpeg;base64,abc', [1, 2]);
 
     const call = mockSend.mock.calls.findLast((c) => c[0] instanceof UpdateItemCommand);
     const input = (call![0] as UpdateItemCommand).input;
     expect(input.UpdateExpression).toContain('thumbnail = :t');
     expect(input.UpdateExpression).toContain('hiddenColors = :hc');
-    expect(input.ExpressionAttributeValues![':t'].S).toBe('data:image/jpeg;base64,abc');
+    expect(input.ExpressionAttributeValues![':t'].S).toBe('photos/converter-patterns/fixed-id.jpg');
+  });
+
+  it('leaves an existing thumbnail untouched (neither SET nor REMOVE) if the S3 upload fails', async () => {
+    mockS3Send.mockImplementationOnce(async () => { throw new Error('S3 down'); });
+
+    await updatePattern('fixed-id', 'Thumb Fails', 1, 1, [RED], [[0]], 'user-abc', 'data:image/jpeg;base64,abc');
+
+    const call = mockSend.mock.calls.findLast((c) => c[0] instanceof UpdateItemCommand);
+    const input = (call![0] as UpdateItemCommand).input;
+    expect(input.UpdateExpression).not.toContain('thumbnail = :t');
+    expect(input.UpdateExpression).not.toContain('REMOVE thumbnail');
+    expect(input.ExpressionAttributeValues![':t']).toBeUndefined();
   });
 
   it('SETs sourceImageMaskKey when provided, and never REMOVEs it (only-set rule)', async () => {

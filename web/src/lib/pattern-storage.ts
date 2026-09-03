@@ -10,6 +10,7 @@ import {
   UpdateTimeToLiveCommand,
   type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import type { PatternPalette } from './pattern-converter';
 import { rleEncode, rleDecode } from './rle';
@@ -20,6 +21,44 @@ const TABLE  = process.env.DDB_PATTERNS_TABLE || 'ConverterPatterns';
 const REGION = process.env.AWS_REGION || 'us-east-1';
 
 const client = new DynamoDBClient({ region: REGION });
+const s3 = new S3Client({ region: REGION });
+
+// Same bucket/CloudFront distribution the catalog's own design photos use
+// (photos/<albumId>/<designId>/4.jpg — data-access.ts, semantic-search.ts),
+// so no new CloudFront behavior or next.config.js remotePatterns entry is
+// needed: `/photos/**` is already whitelisted and already routes to this
+// bucket. See docs/web/pattern-save-item-size-bug-2026-08.md "Proposed
+// implementation plan" — this is step 1 (write path), step 0 (backward-
+// compatible reads, resolveThumbnailSrc()) already shipped.
+const THUMBNAIL_BUCKET = 'cross-stitch-designs';
+const THUMBNAIL_PREFIX = 'photos/converter-patterns';
+
+// Moves a freshly-rendered thumbnail out of the DynamoDB item and into S3,
+// returning the key to store instead of the full data URI — this is what
+// fixes the item-size bug (thumbnail was routinely 90%+ of item size,
+// docs/web/pattern-save-item-size-bug-2026-08.md). Not content-addressed
+// (unlike sourceImageKey/researchImageKey, convert/route.ts): a thumbnail
+// is freshly rendered per save from that pattern's own grid/palette, so
+// there's no cross-pattern sharing to dedupe and no reference-counting
+// needed on delete — one key per patternId, always safe to overwrite.
+// Throws on a real S3 failure rather than swallowing it — callers decide
+// what "no thumbnail came back" means for them (see savePattern() vs
+// updatePattern() below; a failed upload must never silently wipe out an
+// existing thumbnail on a routine resave).
+async function storeThumbnail(patternId: string, thumbnail: string): Promise<string> {
+  const match = thumbnail.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return thumbnail; // already a key (or unrecognized), pass through unchanged
+  const [, contentType, base64] = match;
+  const ext = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+  const key = `${THUMBNAIL_PREFIX}/${patternId}.${ext}`;
+  await s3.send(new PutObjectCommand({
+    Bucket: THUMBNAIL_BUCKET,
+    Key: key,
+    Body: Buffer.from(base64, 'base64'),
+    ContentType: contentType,
+  }));
+  return key;
+}
 
 // ── DDB table bootstrap (once per process) ───────────────────────────────────
 
@@ -127,7 +166,17 @@ export async function savePattern(
     modifiedAt: { S: now },
     ownerID:    { S: ownerID },
   };
-  if (thumbnail) item.thumbnail = { S: thumbnail };
+  // Best-effort: a failed thumbnail upload must never block saving the
+  // pattern itself — the pattern just saves without a preview image (the
+  // UI already has a placeholder for that case) rather than falling back
+  // to inline storage, which would silently reintroduce the item-size bug.
+  if (thumbnail) {
+    try {
+      item.thumbnail = { S: await storeThumbnail(id, thumbnail) };
+    } catch (e) {
+      console.error('[pattern-storage] thumbnail S3 upload failed, saving pattern without one:', e);
+    }
+  }
   if (hiddenColors && hiddenColors.length > 0) item.hiddenColors = { S: JSON.stringify(hiddenColors) };
   // Track 2 (Opportunity 9) provenance marker — set once, at first save,
   // for AI-generated drafts only. See docs/genai-growth/DESIGN_FEEDBACK_LOOP.md
@@ -188,8 +237,21 @@ export async function updatePattern(
   const setParts = ['#n = :n', 'width = :w', 'height = :h', 'palette = :p', 'grid = :g', 'ownerID = :o', 'modifiedAt = :m'];
   const removeParts: string[] = [];
 
-  if (thumbnail) { values[':t'] = { S: thumbnail }; setParts.push('thumbnail = :t'); }
-  else removeParts.push('thumbnail');
+  // Three distinct outcomes, not two: no thumbnail sent at all (explicit
+  // clear — matches the pre-S3 behavior), a new one uploaded successfully
+  // (set the new key), or one was sent but the S3 upload failed (leave the
+  // field untouched — a transient S3 hiccup on a routine resave must never
+  // wipe out an existing, working thumbnail).
+  if (thumbnail) {
+    try {
+      values[':t'] = { S: await storeThumbnail(id, thumbnail) };
+      setParts.push('thumbnail = :t');
+    } catch (e) {
+      console.error('[pattern-storage] thumbnail S3 upload failed, leaving existing thumbnail untouched:', e);
+    }
+  } else {
+    removeParts.push('thumbnail');
+  }
 
   if (hiddenColors && hiddenColors.length > 0) { values[':hc'] = { S: JSON.stringify(hiddenColors) }; setParts.push('hiddenColors = :hc'); }
   else removeParts.push('hiddenColors');

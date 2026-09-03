@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { isUserLoggedIn } from '@/app/components/AuthControl';
+import { resolveThumbnailSrc } from '@/lib/pattern-thumbnail-url';
 
 interface PatternSummary {
   id: string;
@@ -102,7 +103,7 @@ export default function OpenPatternDialog({ open, onPick, onClose }: Props) {
               >
                 <div className="w-12 h-12 flex-shrink-0 rounded bg-gray-100 overflow-hidden flex items-center justify-center">
                   {p.thumbnail ? (
-                    <Image src={p.thumbnail} alt="" width={48} height={48} className="object-cover w-full h-full" unoptimized />
+                    <Image src={resolveThumbnailSrc(p.thumbnail)!} alt="" width={48} height={48} className="object-cover w-full h-full" unoptimized />
                   ) : (
                     <span className="text-gray-300 text-xs">—</span>
                   )}
