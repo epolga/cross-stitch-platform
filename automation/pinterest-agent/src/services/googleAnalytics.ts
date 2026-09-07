@@ -3,11 +3,11 @@ import { yesterdayDate } from "./dateUtils";
 import type { GA4PinterestSessions } from "./types";
 import type { LandingPageStatsInput } from "./historyStore";
 
-export async function getGA4PinterestSessions(): Promise<GA4PinterestSessions> {
+export async function getGA4PinterestSessions(date: string = "yesterday"): Promise<GA4PinterestSessions> {
   const response = await analyticsData.properties.runReport({
     property: `properties/${GA4_PROPERTY_ID}`,
     requestBody: {
-      dateRanges: [{ startDate: "yesterday", endDate: "yesterday" }],
+      dateRanges: [{ startDate: date, endDate: date }],
       dimensions: [{ name: "sessionSource" }, { name: "sessionMedium" }],
       metrics: [{ name: "sessions" }],
       dimensionFilter: {
@@ -101,7 +101,7 @@ export async function getGA4TotalSessions(date: string): Promise<number> {
   return parseInt(response.data.rows?.[0]?.metricValues?.[0]?.value ?? "0", 10);
 }
 
-export async function getAdSenseEarnings(): Promise<number> {
+export async function getAdSenseEarnings(forDate?: Date): Promise<number> {
   const accountsResponse = await adsense.accounts.list();
   const accounts = accountsResponse.data.accounts || [];
   if (accounts.length === 0) {
@@ -109,16 +109,16 @@ export async function getAdSenseEarnings(): Promise<number> {
   }
 
   const accountName = accounts[0].name!;
-  const yesterday = yesterdayDate();
+  const target = forDate ?? yesterdayDate();
 
   const report = await adsense.accounts.reports.generate({
     account: accountName,
-    "startDate.year": yesterday.getFullYear(),
-    "startDate.month": yesterday.getMonth() + 1,
-    "startDate.day": yesterday.getDate(),
-    "endDate.year": yesterday.getFullYear(),
-    "endDate.month": yesterday.getMonth() + 1,
-    "endDate.day": yesterday.getDate(),
+    "startDate.year": target.getFullYear(),
+    "startDate.month": target.getMonth() + 1,
+    "startDate.day": target.getDate(),
+    "endDate.year": target.getFullYear(),
+    "endDate.month": target.getMonth() + 1,
+    "endDate.day": target.getDate(),
     metrics: ["ESTIMATED_EARNINGS"],
     reportingTimeZone: "ACCOUNT_TIME_ZONE",
   });

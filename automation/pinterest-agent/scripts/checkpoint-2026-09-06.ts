@@ -89,7 +89,7 @@ async function checkCaptionRenameBatch(): Promise<string> {
   const report = JSON.parse(fs.readFileSync(reportPath, "utf8")) as {
     renames: Array<{ designId: number; newCaption: string; id: string; nPage: string }>;
   };
-  const urls = report.renames.map((r) => buildDesignUrl(r.newCaption, r.id, r.nPage));
+  const urls = report.renames.map((r) => `https://cross-stitch.com${buildDesignUrl(r.newCaption, r.id, r.nPage)}`);
   if (urls.length === 0) return "  No URLs found in caption-rename-batch.json — skipped.";
 
   const sample = urls.slice(0, CAPTION_RENAME_SAMPLE_SIZE);

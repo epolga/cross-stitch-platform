@@ -8,7 +8,7 @@ import "dotenv/config"; // no-op in Lambda; env vars come from Lambda configurat
 // Set REPORTS_DIR to /tmp before any script imports touch it
 process.env.REPORTS_DIR = "/tmp";
 
-import { run as runDailyReport } from "../scripts/daily-business-report";
+import { run as runDailyReport, backfillDailyBusiness } from "../scripts/daily-business-report";
 import { run as runBuildHistory } from "../scripts/build-business-history";
 import { run as runPromotedAds } from "../scripts/build-promoted-ads-report";
 import { run as runLandingPages } from "../scripts/build-landing-page-report";
@@ -73,6 +73,14 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
 
   console.log("[1/14] daily business report");
   await runDailyReport(dateStr);
+
+  console.log("[1b/14] GA4/AdSense backfill correction (rolling 14-day recheck)");
+  try {
+    await backfillDailyBusiness();
+  } catch (err) {
+    console.error("  backfill correction failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("GA4/AdSense backfill correction", err);
+  }
 
   console.log("[2/14] build business history");
   await runBuildHistory("/tmp");

@@ -182,6 +182,61 @@ export async function putDailyBusiness(input: DailyBusinessInput): Promise<void>
   );
 }
 
+export async function getDailyBusiness(
+  date: string
+): Promise<(DailyBusinessInput & { writtenAt: string; backfilledAt?: string }) | null> {
+  const res = await ddb.send(
+    new GetCommand({
+      TableName: TABLE,
+      Key: { EntityType: "DAILY_BUSINESS", SortKey: sortKey.dailyBusiness(date) },
+    })
+  );
+  return res.Item ? (res.Item as DailyBusinessInput & { writtenAt: string; backfilledAt?: string }) : null;
+}
+
+// GA4/AdSense session and revenue counts settle over more than the ~24h the
+// daily pipeline waits before its first write (see docs/session-log —
+// confirmed some days undercounted by up to 100% even 4-5 days later isn't
+// always enough, but re-checking a rolling window catches the common case).
+// This corrects just those fields on an already-written row via UpdateCommand
+// rather than PutCommand, so it never clobbers fields it isn't re-deriving.
+export interface DailyBusinessGa4Correction {
+  ga4TotalAllSessions?: number;
+  ga4Sessions?: number;
+  ga4PaidSessions?: number;
+  ga4OrganicSessions?: number;
+  ga4ReferralSessions?: number;
+  adsenseRevenue?: number;
+  revenuePerHundredSessions?: number;
+  profit?: number;
+}
+
+export async function updateDailyBusinessGa4Fields(
+  date: string,
+  fields: DailyBusinessGa4Correction
+): Promise<void> {
+  const names: Record<string, string> = { "#backfilledAt": "backfilledAt" };
+  const values: Record<string, unknown> = { ":backfilledAt": new Date().toISOString() };
+  const setParts = ["#backfilledAt = :backfilledAt"];
+  for (const [field, value] of Object.entries(fields)) {
+    if (value === undefined) continue;
+    names[`#${field}`] = field;
+    values[`:${field}`] = value;
+    setParts.push(`#${field} = :${field}`);
+  }
+  if (setParts.length === 1) return; // nothing but the timestamp — no real correction to make
+
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE,
+      Key: { EntityType: "DAILY_BUSINESS", SortKey: sortKey.dailyBusiness(date) },
+      UpdateExpression: `SET ${setParts.join(", ")}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    })
+  );
+}
+
 export async function putAiAnalysis(input: AiAnalysisInput): Promise<void> {
   const { generatedAt, analysisType, ...rest } = input;
   await ddb.send(
