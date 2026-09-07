@@ -1,15 +1,35 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)",
-      "Bash(npm install*)",
-      "Bash(npx *)",
-      "Bash(node *)",
-      "Bash(git -C *)",
       "Bash(git add *)",
       "Bash(git status*)",
       "Bash(git diff*)",
-      "Bash(git log*)"
+      "Bash(git log*)",
+      "Bash(eb status *)",
+      "Bash(eb health *)",
+      "Bash(aws logs filter-log-events *)",
+      "Bash(aws logs describe-*)",
+      "Bash(aws logs get-*)",
+      "Bash(aws iam get-*)",
+      "Bash(aws elasticbeanstalk describe-*)",
+      "Bash(aws wafv2 get-*)",
+      "Bash(aws wafv2 list-*)",
+      "Bash(aws s3api list-objects-v2 *)",
+      "Bash(aws s3api head-object *)",
+      "Bash(aws cloudwatch get-metric-statistics *)",
+      "Bash(aws cloudwatch describe-alarms *)",
+      "Bash(aws autoscaling describe-auto-scaling-groups *)",
+      "Bash(aws s3 ls *)",
+      "Bash(aws dynamodb scan *)",
+      "Bash(aws cloudfront list-distributions *)",
+      "Bash(npm test)",
+      "Bash(curl -s https://api.ipify.org)",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_find"
     ],
     "additionalDirectories": [
       ".claude/worktrees/affiliate-materials"
