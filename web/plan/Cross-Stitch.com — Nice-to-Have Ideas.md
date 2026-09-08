@@ -11,6 +11,14 @@ recurring) — this is not a backlog to grind through. Split out from
 - **Bianca's fabric-merge idea** — merge two designs based on the size of
   fabric the user is working with. Researched 2026-07-08: not standard even
   in paid desktop tools (WinStitch/PCStitch). Deferred, not built.
+- **Fawn-design print-size catalog gap** (found 2026-08-08 via a live
+  customer email, Linda) — no Fawn design lands close to the common
+  5x7"/8x10" print sizes (all existing Fawn designs are square ~10"x10" or
+  too tall/narrow — see reply draft
+  `web/plan/_draft_email_linda_2026-08-08.md` for the full sizing
+  analysis). Real, customer-driven candidate theme for Track 2's
+  design-generation pipeline — a manually-sized Fawn (~70x98 or ~112x140
+  stitches) would be a good manual-override test case. Not yet started.
 
 ## Ann persona / blog
 
