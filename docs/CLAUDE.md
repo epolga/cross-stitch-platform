@@ -36,13 +36,44 @@ When a planning doc references a file path, treat unprefixed paths as relative t
 stay lean — it's re-read in full every session, so completed-work narrative
 left sitting in it dilutes the signal (current goal, active work, genuinely
 open items). When reading it at session start, check its size: **if it
-exceeds ~500 lines, proactively propose archiving** before other work.
-Archiving means: for Pending items that are fully resolved/deployed/verified,
-collapse them to a one-line pointer and move the full narrative to
-`docs/session-log/<year-month>.md` (create a new month file when the current
-one doesn't fit, following the existing `2026-07.md` pattern). Leave
-genuinely open items untouched. Confirm the specific items with Olga before
-archiving — don't do it silently.
+exceeds ~600 lines, proactively propose archiving** before other work.
+(Raised from ~500 on 2026-09-07 — the file's actual history never held at
+500 for more than about a week; it steadily regrows to 550-660 between
+archiving passes because the project genuinely carries 5-10 concurrent
+open, non-trivial threads at once, each with an irreducible minimum of
+context. ~600 better matches that real steady state instead of triggering
+a proposal with little left to actually compress.)
+
+Archiving means: for Pending items that are fully resolved/deployed/
+verified, collapse them to a one-line pointer and move the full narrative
+to `docs/session-log/<year-month>.md` (create a new month file when the
+current one doesn't fit, following the existing `2026-07.md` pattern).
+Leave genuinely open items untouched. Confirm the specific items with
+Olga before archiving — don't do it silently.
+
+**Growth-prevention habits, not just periodic cleanup** — the file grows
+between archiving passes mainly from two patterns; catch both as they
+happen rather than only during a size-triggered pass:
+
+- **A "Shipped"-style running changelog stays in `docs/session-log/`, not
+  inline.** Don't add a new "Shipped YYYY-MM-DD — ..." paragraph directly
+  into `Focus.md`; append it to `docs/session-log/SHIPPED.md` instead and
+  leave `Focus.md`'s own "Recently shipped" line untouched (it already
+  points there). Same idea applies to any genuinely-deferred,
+  not-yet-started idea with no urgency — it belongs in
+  `web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`, not `Focus.md`.
+- **When re-checking an already-tracked open item, replace its status
+  paragraph instead of appending a new one on top of the old.** An item
+  like the GSC position/halo-effect tracking (Open item #7) is a standing
+  watch, not a one-time task — it will accumulate a new "Checked
+  YYYY-MM-DD" paragraph every check-back forever if each update just adds
+  another paragraph. Keep only the current numbers/conclusion plus enough
+  of the "why" to stay actionable; the full history of prior checks is
+  already in `docs/session-log/`, so don't duplicate it inline. The same
+  applies to the "Done when" checklist: once every sub-part of a line is
+  checked off, delete the line entirely (git log and session-log are the
+  permanent record) rather than leaving it as a growing list of `[x]`
+  entries no one needs to see at session start.
 
 ## AI workflow and documentation usage
 
