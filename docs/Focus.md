@@ -3,12 +3,14 @@
 Session-start guide — current goal, active work, and genuinely open items
 only. Resolved narrative lives in `docs/session-log/2026-07.md`,
 `docs/session-log/2026-08.md`, and `docs/session-log/2026-09.md`
-(detailed history) and git log (what changed, when). Longer-term ideas
+(detailed history) and git log (what changed, when); a running one-line-ish
+shipped changelog lives in `docs/session-log/SHIPPED.md`. Longer-term ideas
 with no urgency live in `web/plan/Cross-Stitch.com — Nice-to-Have Ideas.md`.
 Big-picture roadmap lives in `web/plan/Pinterest AI Agent — Milestones and
 Roadmap.md` and `web/plan/Cross-Stitch.com — Site Technology Milestones.md`.
 Split into these four files on 2026-07-26; archived again on 2026-08-03
-(~510 lines), 2026-08-12 (~554 lines), and 2026-09-03 (~660 lines) to stay
+(~510 lines), 2026-08-12 (~554 lines), 2026-09-03 (~660 lines), and
+2026-09-07 (~520 lines, Shipped entries moved to `SHIPPED.md`) to stay
 lean.
 
 ## Session-start check — GSC growth (do this every session)
@@ -43,31 +45,26 @@ and fixed along the way. Full detail: `docs/session-log/2026-08.md`
 
 ## Next session — pick up here first
 
-Priority-ordered pointer list, written 2026-09-03. Full context for each
-lives in the matching Open item below — this list only adds the first
-concrete step, not a restatement.
+Priority-ordered pointer list, written 2026-09-03, item 1 closed and
+renumbered 2026-09-07 (was item #1, 09-02 spike); items 5 (Singapore GA4
+anomaly, was Open item #3) and 10 (CloudWatch log gap, was Open item #15)
+closed and renumbered 2026-09-08 — both root-caused and resolved, see
+session-log. Full context for each lives in the matching Open item
+below — this list only adds the first concrete step, not a restatement.
 
-1. **09-02 traffic/AdSense spike (+121%, $39.28)** — do first, GA4 data
-   should be reliable by now (deferred same-day due to Reporting API lag).
-   Run `gsc-compare.ts`/`gsc-explore.ts` (dimension=channel) for 2026-09-02
-   and cross-reference `DAILY_BUSINESS`'s `ga4*Sessions` split — three
-   things launched that day (newsletter, 10 pins, 10 newly-indexed pages),
-   attribute by channel, don't just confirm "traffic was up." While in the
-   same data: check whether AdSense's day boundary vs GA4's explains the
-   08-31 anomaly ($35.34 AdSense despite the CPU-saturation session crash).
-2. **`docs/srs/`** (the SRS doc set, built 2026-07-11 — a full requirements/
+1. **`docs/srs/`** (the SRS doc set, built 2026-07-11 — a full requirements/
    test-plan spec for the site) — ask Olga directly whether she's read it
-   yet (state once, don't nudge repeatedly). Yes → item 3.
-3. **Automated test coverage — Open item #4.** No tests exist yet for
-   `web/` beyond CI's build check; only after #2 is a yes. Start with the
+   yet (state once, don't nudge repeatedly). Yes → item 2.
+2. **Automated test coverage — Open item #4.** No tests exist yet for
+   `web/` beyond CI's build check; only after #1 is a yes. Start with the
    **PayPal webhook** per `09-Test-Plan.md` §4.2, priority order after that:
    auth/session → conversion algorithm → autopinner claim/pin logic →
    download-mode gating → Uploader publish sequence.
-4. **Legacy IAM cruft — Open item #31.** Dead pre-EB-hosting-era IAM
+3. **Legacy IAM cruft — Open item #31.** Dead pre-EB-hosting-era IAM
    roles/policies found during the 2026-09-02 IAM allowlist audit,
    documented but nothing deleted. Just needs a yes/no from Olga — list
    already written in `docs/web/iam-legacy-amplify-cruft-2026-09.md`.
-5. **Ownerless-pattern auth gap — Open item #32 remainder.** `GET`/`PUT`/
+4. **Ownerless-pattern auth gap — Open item #32 remainder.** `GET`/`PUT`/
    `DELETE` on converter patterns only check ownership `if (pattern.ownerID)`
    — a row with no owner has no check at all. Verified dormant (all 14
    ownerless rows predate `sourceImageKey`; new rows always get an owner),
@@ -83,24 +80,18 @@ concrete step, not a restatement.
    }
    ```
    with an unconditional check, all four spots.
-6. **Singapore/bot-traffic GA4 anomaly — Open item #3.** Confirmed bot
-   traffic 2026-07-10 (0.7% engagement, 99% direct/none — same signature
-   as the Alibaba scrapers). No fix decided yet: needs a session-quality
-   filter added to the Milestone 9 pin-attribution pipeline (or a re-run
-   excluding Singapore/China/Russia) to get a number on how much this
-   understates real traffic's revenue attribution before deciding anything.
-7. **GSC indexed-rate re-checks — Open item #6.** Two pending comparisons:
+5. **GSC indexed-rate re-checks — Open item #6.** Two pending comparisons:
    current indexed rate vs. the ~21-22% baseline after the Gap 3
    canonicalization fix, and vs. after the 2026-07-25 subject-blurb/lastmod
    changes. Also directly confirm in the GSC UI (not just the API) whether
    the original 2026-07-09 "Crawled – currently not indexed" Validate Fix
    ever actually passed — due 07-23, never explicitly confirmed.
-8. **`EmailSendLog` end-to-end verification — Open item #9.** Built
+6. **`EmailSendLog` end-to-end verification — Open item #9.** Built
    2026-07-26, first real exercise was the 2026-07-27 Announcement send
    (723 rows via `send-announcement`) — never verified it actually worked.
    Run `check-email-campaign.ts`/`check-email-recipient.ts` against that
    send's `eid`.
-9. **DINOHash prototype — Open item #12.** Not started. Current dedup
+7. **DINOHash prototype — Open item #12.** Not started. Current dedup
    pipeline (SHA-256 exact-match + 64-bit dHash) has a confirmed
    false-positive mode (the "99 Names of Allah" series — same layout,
    different text, flagged as duplicates). First step: clone
@@ -108,29 +99,23 @@ concrete step, not a restatement.
    against the known pairs in `reports/duplicate-designs-visual.json`; only
    wire into the real pipeline if it actually distinguishes better than
    dHash.
-10. **2026-07-27 Announcement send follow-up — Open item #13.** Sent to
+8. **2026-07-27 Announcement send follow-up — Open item #13.** Sent to
     723/723, 0 errors, never checked since. Look at GA4 traffic to
     `/XStitch-Charts.aspx` and the `catalog_pattern_opens` event for a
     post-send bump, plus SES complaint/bounce rate for this batch.
-11. **Design-vote "Previous vote: none" mystery — Open item #14.** A rare
+9. **Design-vote "Previous vote: none" mystery — Open item #14.** A rare
     user-reported bug where a repeat vote doesn't register the prior
     choice. One real example (2026-08-08) checked clean (no bug); a second
-    real example (2026-08-12) can't be checked until item #12 below is
-    fixed. Blocked on that — don't remove the diagnostic `console.log`s in
-    `design-likes.ts` yet.
-12. **CloudWatch log gap, `cross-stitch-com-env-clone` — Open item #15.**
-    Two stacked problems: `FilterLogEvents` (what `eb logs`/CloudWatch
-    console search use) returns empty for this log group even with no
-    filter, though `GetLogEvents` on a specific stream works fine; and log
-    ingestion itself appears to have stopped entirely around 11:17 UTC on
-    2026-08-12 (no newer timestamp found across all 87 streams as of last
-    check). Remember `MSYS_NO_PATHCONV=1` prefix for any AWS CLI arg
-    starting with `/` in this Git Bash env, or the path gets mangled.
-13. **S3 archiving in `save-ai-draft.ts` — Open item #24.** 2026-08-11
+    and third real example (2026-08-12, 2026-09-08) are permanently
+    unreachable now (CloudWatch retention had already expired that data —
+    root-caused and fixed forward 2026-09-08, see session-log). Don't
+    remove the diagnostic `console.log`s in `design-likes.ts` yet — still
+    no broad statistical confirmation either way.
+10. **S3 archiving in `save-ai-draft.ts` — Open item #24.** 2026-08-11
     decision (always archive the source image to S3, admin-only) is
     explicitly "in effect at least through 2026-09-30" — not due before
     then, skip until that date.
-14. **2026-09-26 — confirm the AI-tools-scan/Competitor-scan retry
+11. **2026-09-26 — confirm the AI-tools-scan/Competitor-scan retry
     actually succeeds — Open item #10.** Both failed 2026-08-26 (Anthropic
     API credit balance too low); `SEND_DAY_OF_MONTH = 26` means both retry
     automatically on the 26th of each month. `pipelineAlert.ts` (added
@@ -139,10 +124,14 @@ concrete step, not a restatement.
     explicitly checking CloudWatch/Telegram around that date to confirm an
     actual *success*, not just the absence of a visible failure.
 
-**2026-09-06 checkpoint** — already automated, no manual action needed:
-Windows Scheduled Task `Checkpoint20260906` (Open item #28) handles items
-#7/#26/#27/#28 plus the two watched IPs and emails the digest. Only
-manual step: item #26's GSC Validate Fix status, flagged in that email.
+**2026-09-06 checkpoint — ran, reviewed 2026-09-07, 2 real bugs found in
+the checkpoint script itself and fixed (see session-log).** Item #27 got
+its first real fair-groups data (+6.6pp, opposite direction from the old
+confounded number); item #28 got its first real recrawl data (65%
+indexed) after fixing a URL bug; item #7 got refreshed correlation data,
+still inconclusive. The two watched IPs resolved (no action, watch
+lapsed). **Still open**: item #26's GSC Validate Fix status (GSC-UI-only,
+never automated) — still needs a manual look.
 
 **Track 2 embeddings/`search_catalog` dedup tool** (discussed and built
 2026-08-09, confirmed against a real live run same day — see Open item
@@ -158,14 +147,6 @@ confirmed as this specific walkthrough. Worth confirming with Olga
 whether this still needs to happen. Explain in detail, not tersely — GenAI
 learning track (`feedback_genai_track_explain_in_detail`).
 
-**Real catalog gap found 2026-08-08, via a live customer email (Linda):**
-no Fawn design lands close to the common 5x7"/8x10" print sizes (all
-existing Fawn designs are square ~10"x10" or too tall/narrow — see reply
-draft `web/plan/_draft_email_linda_2026-08-08.md` for the full sizing
-analysis). Real, customer-driven candidate theme for Track 2's
-design-generation pipeline — a manually-sized Fawn (~70x98 or ~112x140
-stitches) would be a good manual-override test case. Not yet started.
-
 **GenAI Phase 0** — done 2026-08-06, Track 1 (Python `search-service/`)
 deployed as a real Lambda (`https://c9mkmhf9bi.execute-api.us-east-1.amazonaws.com`,
 see ADR-008). Current next-actions live in `docs/genai-growth/PROGRESS.md`
@@ -178,33 +159,11 @@ follow-up. Otherwise: S6's next step (prefetch/`content-visibility` work,
 `web/plan/Cross-Stitch.com — Site Technology Milestones.md`) or Open items
 below.
 
-**Shipped 2026-08-04/05** — editor fullscreen mode (+ 2 layout bugs found
-and fixed), palette panel width-clipping bug, simulation-mode cross
-thickness, "Publish to Catalog" admin feature (incl. a production IAM
-fix), outline/stroke preservation reworked (hysteresis threshold +
-k-means quantization pre-pass). Full detail: `docs/session-log/2026-08.md`.
-
-**Shipped 2026-08-03** — editor "Whole Chart" zoom default, CIE76→CIEDE2000
-public picker, editor mobile scroll affordances, Milestone S5, S6 first
-step (nav-performance baseline), password-reset fix, Ann/Nitka check,
-design-vote first clean recurrence check. Full detail:
-`docs/session-log/2026-08.md`.
-
-**Shipped 2026-07-27/07-28** — catalog PDF-to-editable conversion end to
-end, 3 parser bugs fixed, 6 quick-wins from a ChatGPT-doc review, a real
-live-user bug fix (Christa — verify-email login). Full detail:
-`docs/session-log/2026-07.md`.
+**Recently shipped** — running changelog, newest first:
+`docs/session-log/SHIPPED.md`.
 
 ## Open items
 
-3. **Singapore/bot-traffic GA4 anomaly** — confirmed bot traffic
-   2026-07-10 (0.7% engagement, 99% direct/none, same signature as ALB
-   scrapers; see `docs/session-log/2026-08.md`/`2026-09.md` for the much
-   larger 2026-08-12 recurrence and its resolution).
-   Not yet done: add a session-quality filter to the Milestone 9
-   pin-attribution pipeline (or re-run recent numbers excluding
-   Singapore/China/Russia) to see how much this understates real traffic's
-   revenue attribution.
 4. **Automated test coverage** — `docs/srs/` built 2026-07-11, Olga hasn't
    read through it yet. CI exists for `web/` (build+Vitest). Next: build
    tests for the priority-1 area, `09-Test-Plan.md` §4.2 — start with the
@@ -221,14 +180,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
 7. **GSC average position decline (found 2026-08-12) — full write-up in
    `docs/web/gsc-indexing-investigation-2026-08.md` § 2, read that first.**
    Three non-exclusive candidate causes tracked there: Pinterest ad-spend
-   halo effect (whole-history r=0.567 correlation), a confirmed Google
-   spam update (2026-08-18 to 08-21), and mechanical drag from rising
-   indexed-page-count (item #6's canonicalization work). Site-side causes
-   (5xx rate, Googlebot errors, latency, deploys, Manual Actions/Security)
-   already checked and ruled out. **Check ~2026-09-06**: re-run
-   `_check_halo_effect.ts`, compare US position/GA4 organic at the current
-   $5.5/day budget against both prior periods, and check whether the spam
-   update has settled and indexed-count growth has plateaued.
+   halo effect, a confirmed Google spam update (2026-08-18 to 08-21), and
+   mechanical drag from rising indexed-page-count (item #6's
+   canonicalization work). Site-side causes (5xx rate, Googlebot errors,
+   latency, deploys, Manual Actions/Security) already ruled out.
+   **Latest data (2026-09-07)**: same-day spend/organic correlation
+   r=0.513, lagged r≈0.46-0.47, ~29% organic-session drop after the ~56%
+   spend cut. Still no firm conclusion — all three causes remain
+   non-exclusive. Standing watch, no fixed next check-back date; re-run
+   `_check_halo_effect.ts` whenever revisited.
 8. **Newsletter/Announcement send follow-up** — newsletter side ("Lady of
    Perpetual Love", 07-24) confirmed healthy 2026-07-27. **Announcement
    email ("You spoke, I listened") remains unverifiable** — exact send
@@ -290,47 +250,29 @@ live-user bug fix (Christa — verify-email login). Full detail:
     write immediately followed by a correctly-`found:true` read, no bug.
     A second real example Olga forwarded (2026-08-12 15:59:09, DesignID
     5463 "Kawaii Cottagecore Frog", `dd46@btinternet.com`,
-    `86.182.135.45`) **could not be checked** — see Open item #15, the
-    CloudWatch log group has no data at all past ~11:17 UTC today.
-    Bottom line: one clean real example, no broad statistical confirmation
-    yet, and a second example currently unreachable. Do **not** remove
-    the temporary diagnostic `console.log`s yet.
+    `86.182.135.45`) **could not be checked** — same-day the CloudWatch
+    log group appeared to have no data past ~11:17 UTC.
+    A third real example (Olga forwarded 2026-09-08, DesignID 5470 "Cute
+    Ghost with Mushroom Basket", `phoenixlyn@hotmail.com`,
+    `78.146.25.70`, event at 2026-08-13T08:25:59Z) **also could not be
+    checked — root-caused 2026-09-08: CloudWatch retention on this
+    account's EB log groups is 7 days, so that ~27-day-old data was
+    already permanently deleted by the time it was looked up**, not a
+    live ingestion problem (likely explains the second example's
+    unreachability too, though that can no longer be verified either
+    way — full root-cause writeup in `docs/session-log/2026-09.md`).
+    **Fixed forward-looking**: retention raised to 30 days on
+    `cross-stitch-com-env-clone`'s log groups same day, negligible cost
+    (~$0.0004/mo at current volume) — future examples need to be checked
+    within that window, not whenever convenient. Bottom line: one clean
+    real example, no broad statistical confirmation yet, and two more
+    examples permanently unreachable. Do **not** remove the temporary
+    diagnostic `console.log`s yet.
 
     (Separately, not part of this mystery: whether clicking the opposite
     arrow should "switch" the vote instead of "clearing" it was an open
     product question — resolved 2026-09-03, Olga confirmed "clears" is the
     intended design. See `docs/session-log/2026-09.md`.)
-15. **CloudWatch log streaming for `cross-stitch-com-env-clone` — more
-    precisely diagnosed 2026-08-12, still unfixed.** Root cause is
-    narrower than "logs are stale": the **`FilterLogEvents` API returns
-    empty results for this log group even with no filter pattern at all**
-    (confirmed: 0 events, 0 streams searched, across multiple time
-    windows), while `DescribeLogStreams` and `GetLogEvents` on a specific
-    known stream both work fine and return real, near-real-time data. So
-    `eb logs`/CloudWatch console search (which use `FilterLogEvents`
-    under the hood) looks broken/empty, but the data is actually there —
-    it just has to be fetched stream-by-stream via `GetLogEvents`
-    instead. Separately noticed: log streams here are unusually
-    short-lived (many span only minutes), meaning EC2 instances are
-    cycling much more often than expected — not yet investigated why.
-    Not yet fixed: whether `FilterLogEvents` can be restored (IAM scope?
-    indexing issue?) or this is just how this log group has to be queried
-    going forward.
-    **Worse than that, found same day (later): actual log ingestion
-    appears to have stopped entirely around 11:17 UTC on 2026-08-12.**
-    Checked ~5 hours later (16:22 UTC): scanned all 87 log streams that
-    currently exist in the group via `GetLogEvents` (the workaround above)
-    and the newest content-timestamp found anywhere was `11:17:44Z` — no
-    trace of anything since, despite the site clearly being up and serving
-    real traffic the whole time (the 748-recipient Announcement send
-    completed fine at ~16:05 UTC). This blocked verifying a real
-    design-vote example from 15:59 UTC (Open item #14). Not yet
-    investigated: whether the CloudWatch agent process died on the
-    current instance, disk/buffer issue, or something related to the
-    unusually high instance churn noted above (maybe worse under today's
-    heavy bot load). Worth checking first thing next session — if it's
-    still not flowing, this is now blocking more than just occasional
-    debugging.
 23. **Converter improvements from a real kitten test image** (2026-08-09) —
     three findings: removed an unconditional photo→illustration mode
     override in `save-ai-draft.ts` (Olga's call — trust the classifier's
@@ -375,6 +317,9 @@ live-user bug fix (Christa — verify-email login). Full detail:
     has anything similar shown up elsewhere on the site that this general
     rule doesn't yet cover (it only touched homepage/albums/converter —
     other route types like individual design pages weren't audited).
+    **Still not checked as of 2026-09-07** — this is GSC-UI-only (not
+    cleanly API-accessible for a one-off 6-URL set), the checkpoint digest
+    flagged it as a manual step and it hasn't been done yet.
 
 27. **"Crawled – currently not indexed" (3.43K design pages) — fair A/B
     test set up 2026-08-23 for the 2026-07-09 visual-SEO AI backfill.**
@@ -408,6 +353,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
     control-group designs back to the new AI text (they're real live
     pages, not meant to stay on old text long-term) via
     `backfill-visual-seo.ts --force --designIds=<the 150 from the JSON>`.
+    **Checked 2026-09-07** (the checkpoint script itself was found to be
+    re-running the old confounded comparison, not this real one — fixed,
+    new script `_check_backfill_ab_test_groups.ts`): **Treatment (new AI
+    text) 43.7% indexed (31/71) vs Control (old text) 37.0% (20/54),
+    +6.6pp in favor of the new text** — opposite direction from the
+    confounded number the checkpoint email showed. Caveat: only 54/150 and
+    71/150 designIds resolved to URLs via the Pinterest pin map (doesn't
+    cover the full catalog), so the real sample is smaller/noisier than
+    the intended 150/150. **The revert step above is still not done.**
 
 28. **Caption-rename batch (recrawl trigger) — 150 designs, 2026-08-23.**
     For the "crawled long ago, still not indexed" majority (95/125 stale
@@ -449,6 +403,12 @@ live-user bug fix (Christa — verify-email login). Full detail:
     If yes, scale up gradually to more of the ~4702 pool; if no
     meaningful difference, the crawl-budget-neglect theory needs
     rethinking.
+    **Checked 2026-09-07** — the checkpoint script itself had a bug
+    (passed relative URLs to the GSC Inspection API, all 20 checks 403'd);
+    fixed and reran: **13/20 (65%) already "Submitted and indexed"** as of
+    their 08-24 crawl — much stronger than the general stale-page
+    baseline. It worked. **Scale-up decision to more of the ~4702 pool is
+    still not made.**
 
     **2026-09-03: a reminder is now scheduled** so this checkpoint cluster
     (items #7, #26, #27, #28, plus the two IPs watched the same day) isn't
@@ -482,15 +442,15 @@ live-user bug fix (Christa — verify-email login). Full detail:
 - [ ] Legacy pre-EB Amplify-era IAM cruft cleaned up or explicitly deferred — full list in `docs/web/iam-legacy-amplify-cruft-2026-09.md`, nothing deleted yet, needs Olga's go-ahead
 - [x] Pattern-save DynamoDB item-size bug fixed — thumbnail moved to S3, all 113 legacy rows backfilled, deployed and verified live 2026-09-03 (see `docs/web/pattern-save-item-size-bug-2026-08.md`)
 - [ ] GSC "Duplicate without user-selected canonical" cleanup validated — re-check ~2026-09-06, Validate Fix clicked 2026-08-23 (see Open item #26)
-- [ ] Backfill-vs-control A/B test checked — re-check ~2026-09-06, groups saved in `ab-test-backfill-groups.json` (see Open item #27); afterward restore control group's 150 designs to new AI text
-- [ ] Caption-rename recrawl-trigger batch checked — re-check ~2026-09-06, list saved in `caption-rename-batch.json` (see Open item #28); scale up gradually if it worked
+- [x] Backfill-vs-control A/B test checked — 2026-09-07, fair-groups result +6.6pp favoring new AI text (see Open item #27) — [ ] revert control group's 150 designs back to new AI text still not done
+- [x] Caption-rename recrawl-trigger batch checked — 2026-09-07, 65% indexed, worked (see Open item #28) — [ ] scale-up decision to more of the pool still not made
 - [x] Blog teaser email sent (confirmed by Olga 2026-08-05, exact date not recorded)
 - [x] Distributed scraping mitigation decision made — AWS WAF Bot Control (Common, Count mode) enabled 2026-08-13 (see `docs/session-log/2026-08.md`) — [x] reviewed 2026-09-03 with real 22-day data, decided against a wholesale category flip (SignalNonBrowserUserAgent confirmed genuinely mixed with wanted crawlers); shipped a narrow BlockSeoCrawlerUserAgents rule (AhrefsBot/Sogou) instead, verified live (see `docs/session-log/2026-09.md`)
 - [x] Thank-you reply sent to Leisa (see `docs/session-log/2026-09.md`)
 - [ ] Olga has read through the `docs/srs/` documentation set
 - [ ] Automated tests built for the priority-1 area (`09-Test-Plan.md` §4.2, starting with PayPal webhook)
 - [ ] GSC indexed-rate re-checked after Gap 3 canonicalization and after subject-blurb/lastmod changes
-- [ ] GSC average position — re-check ~2026-09-06 (see Open item #7; Pinterest-spend correlation found 08-23 as a second candidate cause alongside the original "Google dance" theory, need more data at the restored $6.5 budget to separate the two)
+- [ ] GSC average position — data refreshed 2026-09-07 (r=0.513 same-day, see Open item #7), still inconclusive; Pinterest-spend correlation remains a candidate cause alongside the original "Google dance" theory, need more data to separate the two
 - [x] Newsletter follow-up metrics checked (07-27: healthy — see Open item #8) — [ ] Announcement email follow-up unverifiable, exact send date unknown
 - [ ] `EmailSendLog` exercised by a real send and verified end-to-end
 - [x] First real AI-tools-scan trigger observed (2026-08-26) — fired but failed (Anthropic API credit balance), found 2026-09-03; failure-alerting added same day (see Open item #10) — [ ] next real trigger (2026-09-26) to confirm an actual success
