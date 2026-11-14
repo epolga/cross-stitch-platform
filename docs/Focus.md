@@ -43,6 +43,16 @@ Announcements), new per-campaign tracking (`EmailEntryEvents` +
 and fixed along the way. Full detail: `docs/session-log/2026-08.md`
 ("Email/Announcement campaigns" section). No email currently queued.
 
+**Open check — GCP crawler User-Agent (set 2026-10-11):** rotating
+Google Cloud crawler (`*.bc.googleusercontent.com`, GET+HEAD sweeps of
+design pages; blocked `23.251.146.115`, `34.122.173.216`, earlier watched
+`35.198.113.100`). Whether it is one actor is unverified. Next time such a
+sweep is active, within 3 hours run `aws wafv2 get-sampled-requests` with
+`--rule-metric-name BotControlCommonCount` (see `.claude/commands/review-ip.md`)
+and read its User-Agent and `RuleNameWithinRuleGroup`. Then decide: switch a
+Bot Control category to Block, add a custom rule, or do nothing. Delete this
+paragraph if it stops showing up in the daily alert.
+
 ## Next session — pick up here first
 
 Priority-ordered pointer list, written 2026-09-03, item 1 closed and
