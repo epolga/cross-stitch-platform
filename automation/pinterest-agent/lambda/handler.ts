@@ -111,7 +111,12 @@ export const handler = async (event: PipelineEvent = {}): Promise<void> => {
   }
 
   console.log("[8/14] AI trend analysis");
-  await runAiTrend("/tmp");
+  try {
+    await runAiTrend("/tmp");
+  } catch (err) {
+    console.error("  AI trend analysis failed:", err instanceof Error ? err.message : err);
+    await alertPipelineStepFailure("AI trend analysis", err);
+  }
 
   console.log("[9/14] recommendation change alert");
   const changeResult = await notifyRecommendationChange();
