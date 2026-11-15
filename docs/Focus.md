@@ -446,6 +446,15 @@ below.
     deferred, not fixed** — Olga's explicit "запиши на будущее"
     2026-09-03, not a live risk today.
 
+33. **Homepage Google drop (from 2026-11-12) — thumbnails / image domain.**
+    Fixes deployed 2026-11-14 (htmlLimitedBots, CloudFront `/robots.txt`);
+    homepage impressions ~3500/day vs ~4500-5000 baseline, effect unproven.
+    **Decision ~2026-11-22 to 11-25:** thumbnails not back in the SERP for
+    `cross stitch patterns` (gl=us) -> move images to `img.cross-stitch.com`
+    per `docs/plan/web/Image_Domain_Migration_Plan.md`. Deliberately NOT
+    switching earlier (new image URLs = re-indexing, and it would mask
+    which fix helped). Part A (ACM cert, alias, DNS) needs Olga's "да".
+
 ## Done when
 
 - [x] IAM allowlist audited for other missing self-provisioning tables — done 2026-09-02, `SubscriptionEvents` found+fixed (see `docs/session-log/2026-09.md`)
