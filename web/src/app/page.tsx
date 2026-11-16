@@ -63,6 +63,9 @@ const faqEntries: FAQEntry[] = [
   },
 ];
 
+const HOME_DESCRIPTION =
+  'Thousands of free cross-stitch PDF patterns — printable charts with DMC color keys and stitch counts, instant download, no subscription.';
+
 interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
@@ -104,7 +107,9 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     };
   }
 
-  const ogImage = designs[0]?.ImageUrl || 'https://d2o1uvvg91z7o4.cloudfront.net/images/default.jpg';
+  // No hard-coded fallback: the old default.jpg returns 403 on the CDN, so a
+  // broken og:image is worse than none.
+  const ogImage = designs[0]?.ImageUrl || undefined;
 
   // Facet-filtered variants of the homepage (?sizeCategory=, ?isBeginnerFriendly=,
   // ?subject=, etc.) are thin duplicates of the same design grid under different
@@ -137,34 +142,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const title = searchText ? `Search Results for "${searchText}" - Cross Stitch Designs` : 'Free Cross-Stitch Patterns — Printable PDF Charts';
   const description = searchText
     ? `Search results for "${searchText}". Explore thousands of free cross-stitch PDF patterns with instant downloads.`
-    : 'Thousands of free cross-stitch PDF patterns — printable charts with DMC color keys and stitch counts, instant download, no subscription.';
-
-  const homeUrl = buildCanonicalUrl('/');
-  const websiteStructuredData = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "Cross Stitch Pattern",
-    "description": description,
-    "url": homeUrl,
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": `${homeUrl}?searchText={search_term_string}`,
-      "query-input": "required name=search_term_string"
-    }
-  };
-
-  const faqStructuredData = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": faqEntries.map((item) => ({
-      "@type": "Question",
-      "name": item.question,
-      "acceptedAnswer": {
-        "@type": "Answer",
-        "text": item.answer,
-      },
-    })),
-  };
+    : HOME_DESCRIPTION;
 
   return {
     title,
@@ -187,10 +165,56 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       description,
       images: ogImage,
     },
-    other: {
-      'application/ld+json': JSON.stringify([websiteStructuredData, faqStructuredData]),
-    },
   };
+}
+
+// Emitted as real <script type="application/ld+json"> tags in the page body.
+// This used to go through metadata `other`, which Next renders as
+// <meta name="application/ld+json" content="...">, a tag Google's structured
+// data parser does not read (confirmed 2026-11-16 with Schema Markup
+// Validator: nothing detected on `/`, CollectionPage detected on
+// /small-cross-stitch-patterns which uses a <script>).
+function buildHomeStructuredData(description: string, imageUrl?: string | null) {
+  const homeUrl = buildCanonicalUrl('/');
+  const websiteStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Cross Stitch Pattern",
+    "description": description,
+    "url": homeUrl,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${homeUrl}?searchText={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  };
+
+  // primaryImageOfPage is Google's documented hint for the page's
+  // representative image (same image as og:image: the newest design).
+  const webPageStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": homeUrl,
+    "url": homeUrl,
+    "name": 'Free Cross-Stitch Patterns — Printable PDF Charts',
+    "description": description,
+    ...(imageUrl ? { "primaryImageOfPage": { "@type": "ImageObject", "url": imageUrl } } : {}),
+  };
+
+  const faqStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqEntries.map((item) => ({
+      "@type": "Question",
+      "name": item.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": item.answer,
+      },
+    })),
+  };
+
+  return [websiteStructuredData, webPageStructuredData, faqStructuredData];
 }
 
 export default async function Home({ searchParams }: Props) {
@@ -269,8 +293,18 @@ export default async function Home({ searchParams }: Props) {
     logSearchResults(searchId, designs.map(d => d.DesignID));
   }
 
+  // Structured data only for the canonical homepage; any search param makes
+  // the page noindex (see generateMetadata), so it doesn't need it.
+  const homeStructuredData =
+    Object.keys(resolvedSearchParams || {}).length === 0
+      ? buildHomeStructuredData(HOME_DESCRIPTION, designs[0]?.ImageUrl)
+      : null;
+
   return (
     <div className="p-4 md:pl-64 md:pr-4 relative">
+      {homeStructuredData && homeStructuredData.map((data, i) => (
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+      ))}
       <div className="hidden md:block fixed left-4 top-1/2 -translate-y-1/2 z-20 w-56">
         <SearchForm />
       </div>

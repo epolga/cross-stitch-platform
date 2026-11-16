@@ -40,32 +40,7 @@ export async function buildAlbumMetadata({ params, searchParams }: AlbumMetadata
   }
 
   const { albumCaption, designs } = designsResponse;
-  const ogImage = designs[0]?.ImageUrl || 'https://d2o1uvvg91z7o4.cloudfront.net/images/default.jpg';
-  const canonicalPath = albumCaption ? await CreateAlbumUrl(albumCaption) : `/albums/${albumId}`;
-  const canonicalUrl = buildCanonicalUrl(canonicalPath);
-  const baseName = albumCaption || `Album ${albumId}`;
-  // The "Free" theme (independence/liberation designs) reads as "free of charge" when
-  // dropped into the standard "{name} Cross-Stitch Patterns" template, colliding with the
-  // homepage's own "Free Cross-Stitch PDF Patterns" title/intent for the same search terms.
-  const isFreeThemeAlbum = (albumCaption || '').trim().toLowerCase() === 'free';
-  const displayName = isFreeThemeAlbum ? '"Free" Theme' : baseName;
-  const highlightNames = (designs || []).slice(0, 2).map((d) => d.Caption).filter(Boolean);
-  const isBookmarksAlbum = (albumCaption || '').toLowerCase() === 'bookmarks';
-  const title = `${displayName} Cross-Stitch Patterns (Album ${albumId}${page > 1 ? `, Page ${page}` : ''})`;
-  const highlights = highlightNames.length ? ` Highlights: ${highlightNames.join(' | ')}.` : '';
-  const bookmarkNote = isBookmarksAlbum ? ' Includes free cross-stitch bookmark patterns with slim, ready-to-print PDF charts.' : '';
-  const description = `Explore free cross-stitch designs in the ${displayName} collection (Album ${albumId})${page > 1 ? ` on page ${page}` : ''}. Downloadable PDF patterns available.${highlights}${bookmarkNote}`;
-  const slugCaption = baseName.replace(/\s+/g, '-');
-  const keywords = albumCaption
-    ? (isFreeThemeAlbum
-        ? `independence themed cross stitch patterns, liberation cross stitch charts, free embroidery PDFs, ${slugCaption}-theme designs, album ${albumId}`
-        : `free cross stitch ${albumCaption} patterns, ${albumCaption} charts, free embroidery PDFs, ${slugCaption} designs, download ${albumCaption} charts, album ${albumId}`)
-    : `cross stitch, free designs, free patterns, PDFs, album ${albumId}, download album ${albumId} charts`;
-  const hasPart = (designs || []).slice(0, 3).map((design) => ({
-    "@type": "CreativeWork",
-    "name": design.Caption,
-    "description": design.Description || undefined,
-  }));
+  const { ogImage, canonicalUrl, title, description, keywords } = await deriveAlbumSeo(albumId, page, albumCaption, designs);
 
   return {
     title,
@@ -96,17 +71,65 @@ export async function buildAlbumMetadata({ params, searchParams }: AlbumMetadata
       description,
       images: ogImage,
     },
-    other: {
-      'application/ld+json': JSON.stringify({
-        "@context": "https://schema.org",
-        "@type": "CollectionPage",
-        "name": title,
-        "description": description,
-        "image": ogImage,
-        "url": canonicalUrl,
-        "keywords": keywords,
-        "hasPart": hasPart,
-      }),
-    },
+  };
+}
+
+// Single source for the album's title/description/etc., shared by the metadata
+// above and by the CollectionPage JSON-LD the page renders below, so the two
+// can't drift apart.
+async function deriveAlbumSeo(
+  albumId: string,
+  page: number,
+  albumCaption: string | undefined | null,
+  designs: DesignsResponse['designs'],
+) {
+  // No hard-coded fallback: default.jpg returns 403 on the CDN.
+  const ogImage = designs[0]?.ImageUrl || undefined;
+  const canonicalPath = albumCaption ? await CreateAlbumUrl(albumCaption) : `/albums/${albumId}`;
+  const canonicalUrl = buildCanonicalUrl(canonicalPath);
+  const baseName = albumCaption || `Album ${albumId}`;
+  // The "Free" theme (independence/liberation designs) reads as "free of charge" when
+  // dropped into the standard "{name} Cross-Stitch Patterns" template, colliding with the
+  // homepage's own "Free Cross-Stitch PDF Patterns" title/intent for the same search terms.
+  const isFreeThemeAlbum = (albumCaption || '').trim().toLowerCase() === 'free';
+  const displayName = isFreeThemeAlbum ? '"Free" Theme' : baseName;
+  const highlightNames = (designs || []).slice(0, 2).map((d) => d.Caption).filter(Boolean);
+  const isBookmarksAlbum = (albumCaption || '').toLowerCase() === 'bookmarks';
+  const title = `${displayName} Cross-Stitch Patterns (Album ${albumId}${page > 1 ? `, Page ${page}` : ''})`;
+  const highlights = highlightNames.length ? ` Highlights: ${highlightNames.join(' | ')}.` : '';
+  const bookmarkNote = isBookmarksAlbum ? ' Includes free cross-stitch bookmark patterns with slim, ready-to-print PDF charts.' : '';
+  const description = `Explore free cross-stitch designs in the ${displayName} collection (Album ${albumId})${page > 1 ? ` on page ${page}` : ''}. Downloadable PDF patterns available.${highlights}${bookmarkNote}`;
+  const slugCaption = baseName.replace(/\s+/g, '-');
+  const keywords = albumCaption
+    ? (isFreeThemeAlbum
+        ? `independence themed cross stitch patterns, liberation cross stitch charts, free embroidery PDFs, ${slugCaption}-theme designs, album ${albumId}`
+        : `free cross stitch ${albumCaption} patterns, ${albumCaption} charts, free embroidery PDFs, ${slugCaption} designs, download ${albumCaption} charts, album ${albumId}`)
+    : `cross stitch, free designs, free patterns, PDFs, album ${albumId}, download album ${albumId} charts`;
+  const hasPart = (designs || []).slice(0, 3).map((design) => ({
+    "@type": "CreativeWork",
+    "name": design.Caption,
+    "description": design.Description || undefined,
+  }));
+  return { ogImage, canonicalUrl, title, description, keywords, hasPart };
+}
+
+// Rendered by the album page as a real <script type="application/ld+json">;
+// metadata `other` would produce a <meta> that Google's parser ignores.
+export async function buildAlbumCollectionStructuredData(
+  albumId: string,
+  page: number,
+  albumCaption: string | undefined | null,
+  designs: DesignsResponse['designs'],
+) {
+  const { ogImage, canonicalUrl, title, description, keywords, hasPart } = await deriveAlbumSeo(albumId, page, albumCaption, designs);
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": title,
+    "description": description,
+    "image": ogImage,
+    "url": canonicalUrl,
+    "keywords": keywords,
+    "hasPart": hasPart,
   };
 }

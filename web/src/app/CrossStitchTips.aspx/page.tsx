@@ -52,29 +52,31 @@ export const metadata: Metadata = {
     title: 'Cross-Stitch Tips & Techniques Guide | Free Stitching Advice',
     description: 'Helpful cross-stitch tips for beginners and seasoned stitchers alike.',
   },
-  other: {
-    'application/ld+json': JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: 'Cross-Stitch Tips & Techniques Guide | Free Stitching Advice',
-      description:
-        'Guidance on essential tools, fabric choices, thread management, stitching rhythm, and finishing steps for successful cross-stitching.',
-      author: {
-        '@type': 'Person',
-        name: 'Ann',
-      },
-      url: canonicalUrl,
-      mainEntityOfPage: {
-        '@type': 'WebPage',
-        '@id': canonicalUrl,
-      },
-    }),
+};
+
+// A real <script> tag: metadata `other` would render a <meta> that Google's
+// structured data parser ignores.
+const articleStructuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: 'Cross-Stitch Tips & Techniques Guide | Free Stitching Advice',
+  description:
+    'Guidance on essential tools, fabric choices, thread management, stitching rhythm, and finishing steps for successful cross-stitching.',
+  author: {
+    '@type': 'Person',
+    name: 'Ann',
+  },
+  url: canonicalUrl,
+  mainEntityOfPage: {
+    '@type': 'WebPage',
+    '@id': canonicalUrl,
   },
 };
 
 export default function CrossStitchTipsPage() {
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleStructuredData) }} />
       <h1 className="text-3xl font-bold mb-4 text-center">Cross-Stitch Tips &amp; Techniques Guide</h1>
       <p className="text-lg text-gray-700 mb-6 text-center">
         Whether you are threading your first needle or polishing advanced skills, these practical cross-stitch tips

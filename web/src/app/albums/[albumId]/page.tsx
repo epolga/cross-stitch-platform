@@ -5,7 +5,7 @@ import type { DesignsResponse } from '@/app/types/design';
 import { buildCanonicalUrl, CreateAlbumUrl } from '@/lib/url-helper';
 import { isPaidDownloadMode } from '@/lib/download-mode';
 import { getAdjacentAlbums, getAlbumCaption, getDesignsByAlbumId } from '@/lib/data-access';
-import { buildAlbumMetadata, type AlbumMetadataProps } from '@/lib/album-metadata';
+import { buildAlbumCollectionStructuredData, buildAlbumMetadata, type AlbumMetadataProps } from '@/lib/album-metadata';
 import Link from 'next/link';
 import AdSlot from '@/app/components/AdSlot';
 import EditorCTAButton from '@/app/components/EditorCTAButton';
@@ -78,9 +78,12 @@ export default async function AlbumDesignsPage({ params, searchParams }: Props) 
     ],
   };
 
+  const collectionStructuredData = await buildAlbumCollectionStructuredData(albumId, page, albumCaption, designs);
+
   return (
     <div className="container mx-auto p-4">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(collectionStructuredData) }} />
       <h1 className="text-3xl font-bold mb-6">Designs in {h1DisplayName} ({entryCount} designs)</h1>
       {albumSeoDescription ? (
         <div className="text-gray-600 text-sm mb-4">
