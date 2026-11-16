@@ -1,8 +1,15 @@
 # Image domain: move design images from the CloudFront domain to `img.cross-stitch.com`
 
 Status: **planned, deliberately not started** (decided with Olga 2026-11-15).
-Decision point: **~2026-11-22 to 11-25**, based on whether Google thumbnails for
-the homepage came back (see "Why wait").
+Decision point: **~2026-12-01** (moved 2026-11-16 from 11-22..25), based on
+whether Google thumbnails for the homepage came back (see "Why wait").
+
+**Why moved:** Google's November 2026 core update started 2026-11-10 and may
+run until ~11-24 (Google Search Status Dashboard); Google advises waiting a
+full week after it ends before judging impact in Search Console. The homepage's
+sharpest 3-month drop (impressions 12-13 Nov: ~1800/day vs ~2900) follows
+right after the start. Correlation, not proven cause. Changing the image host
+mid-rollout would add another variable.
 
 ## Why this came up
 
@@ -72,7 +79,7 @@ production AWS)
 3. Consider a 301 from old host paths to `img.` only if re-indexing is slow.
 4. Watch GSC (Pages / Images) and homepage impressions for 2 weeks.
 
-## Decision rule (~2026-11-22 to 11-25)
+## Decision rule (~2026-12-01, after the core update has finished + a week)
 
 - Thumbnails back and impressions recovering toward ~4500-5000/day -> do **not**
   switch; keep Part A prepared or drop it.

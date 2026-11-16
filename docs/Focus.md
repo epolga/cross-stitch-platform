@@ -449,7 +449,9 @@ below.
 33. **Homepage Google drop (from 2026-11-12) — thumbnails / image domain.**
     Fixes deployed 2026-11-14 (htmlLimitedBots, CloudFront `/robots.txt`);
     homepage impressions ~3500/day vs ~4500-5000 baseline, effect unproven.
-    **Decision ~2026-11-22 to 11-25:** thumbnails not back in the SERP for
+    Google's Nov 2026 core update began 11-10 (may run to ~11-24) and the
+    drop starts right after it, so the cause is unclear.
+    **Decision ~2026-12-01** (a week after the update ends): thumbnails not back in the SERP for
     `cross stitch patterns` (gl=us) -> move images to `img.cross-stitch.com`
     per `docs/plan/web/Image_Domain_Migration_Plan.md`. Deliberately NOT
     switching earlier (new image URLs = re-indexing, and it would mask
