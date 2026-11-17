@@ -804,17 +804,20 @@ static RenderedEmailContent RenderHtmlEmailContent(
     return new RenderedEmailContent(subject, textBody, htmlBody);
 }
 
-static string AppendTrackingParameters(string url, string? cid, string? eid, string utmSource = "newsletter")
+static string AppendTrackingParameters(string url, string? cid, string? eid, string utmSource = "newsletter", string? utmContent = null)
 {
     if (string.IsNullOrWhiteSpace(url)) return url;
     var queryParts = new List<string>();
     if (!string.IsNullOrWhiteSpace(cid)) queryParts.Add($"cid={Uri.EscapeDataString(cid)}");
     if (!string.IsNullOrWhiteSpace(eid)) queryParts.Add($"eid={Uri.EscapeDataString(eid)}");
     string trackedUrl = queryParts.Count == 0 ? url : AppendQueryParameters(url, queryParts);
-    return AppendUtmParameters(trackedUrl, utmSource);
+    return AppendUtmParameters(trackedUrl, utmSource, utmContent);
 }
 
-static string AppendUtmParameters(string url, string utmSource = "newsletter")
+// utmContent identifies WHICH link in the email was clicked (e.g. "editor",
+// "album", "design-4644"); null leaves it off, so older sends/templates that
+// never passed it are unaffected.
+static string AppendUtmParameters(string url, string utmSource = "newsletter", string? utmContent = null)
 {
     if (string.IsNullOrWhiteSpace(url)) return url;
     var queryParts = new List<string>();
@@ -822,6 +825,8 @@ static string AppendUtmParameters(string url, string utmSource = "newsletter")
     if (!HasQueryParameter(url, "utm_medium")) queryParts.Add("utm_medium=email");
     if (!HasQueryParameter(url, "utm_campaign"))
         queryParts.Add($"utm_campaign={Uri.EscapeDataString(DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))}");
+    if (!string.IsNullOrWhiteSpace(utmContent) && !HasQueryParameter(url, "utm_content"))
+        queryParts.Add($"utm_content={Uri.EscapeDataString(utmContent)}");
     return queryParts.Count == 0 ? url : AppendQueryParameters(url, queryParts);
 }
 
@@ -873,7 +878,8 @@ static async Task SendAnnouncementTestAsync()
     string? sesConfigurationSetName = ConfigurationManager.AppSettings["SesConfigurationSetName"];
 
     string eid = DateTime.UtcNow.ToString("yyMMdd", CultureInfo.InvariantCulture);
-    string editorUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement");
+    string editorUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/photo-to-cross-stitch", "admin", eid, "announcement", "editor");
+    string albumUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/Free-Christmas-Charts.aspx", "admin", eid, "announcement", "album");
     string changelogUrl = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/short-stories#milenas-tin", "admin", eid, "announcement");
     string siteUrl = AppendTrackingParameters(linkHelper.SiteBaseUrl, "admin", eid, "announcement");
     string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, "preview-admin-unsubscribe-token");
@@ -882,7 +888,7 @@ static async Task SendAnnouncementTestAsync()
 
     var htmlTemplate = LoadAnnouncementHtmlTemplate();
     var textTemplate = LoadAnnouncementTextTemplate();
-    var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, "Ann", editorUrl, siteUrl, unsubscribeUrl, changelogUrl, designGalleryHtml, designGalleryText);
+    var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, "Ann", editorUrl, siteUrl, unsubscribeUrl, changelogUrl, designGalleryHtml, designGalleryText, albumUrl);
 
     await emailHelper.SendEmailAsync(sesClient, sender, new[] { admin }, content.Subject, content.TextBody, content.HtmlBody, configurationSetName: sesConfigurationSetName);
 
@@ -948,7 +954,8 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
     foreach (var recipient in eligibleRecipients)
     {
         string cid = recipient.Cid ?? string.Empty;
-        string editorUrlWithTracking = AppendTrackingParameters(editorUrl, cid, eid, "announcement");
+        string editorUrlWithTracking = AppendTrackingParameters(editorUrl, cid, eid, "announcement", "editor");
+        string albumUrlWithTracking = AppendTrackingParameters($"{linkHelper.SiteBaseUrl}/Free-Christmas-Charts.aspx", cid, eid, "announcement", "album");
         string siteUrlWithTracking = AppendTrackingParameters(linkHelper.SiteBaseUrl, cid, eid, "announcement");
         string changelogUrlWithTracking = AppendTrackingParameters(changelogUrl, cid, eid, "announcement");
         string unsubscribeUrl = BuildUnsubscribeUrl(linkHelper, recipient.UnsubscribeToken!);
@@ -956,7 +963,7 @@ static async Task SendAnnouncementBatchAsync(int months, bool autoYes)
         string designGalleryHtml = BuildDesignGalleryHtml(linkHelper, cid, eid);
         string designGalleryText = BuildDesignGalleryText(linkHelper, cid, eid);
 
-        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrlWithTracking, siteUrlWithTracking, unsubscribeUrl, changelogUrlWithTracking, designGalleryHtml, designGalleryText);
+        var content = RenderAnnouncementEmailContent(htmlTemplate, textTemplate, recipient.FirstName, editorUrlWithTracking, siteUrlWithTracking, unsubscribeUrl, changelogUrlWithTracking, designGalleryHtml, designGalleryText, albumUrlWithTracking);
         string? messageId = await emailHelper.SendEmailAsync(sesClient, sender, new[] { recipient.Email }, content.Subject, content.TextBody, content.HtmlBody, unsubscribeHeaders, sesConfigurationSetName);
         await LogSendAsync(dynamoDbClient, sendLogTable, logPath, recipient.Email, recipient.Cid ?? string.Empty, messageId, "user", 0, eid);
 
@@ -996,22 +1003,22 @@ static EmailTemplateDefinition LoadAnnouncementTemplate(string configKey, string
     return new EmailTemplateDefinition(resolvedPath, sections);
 }
 
-// ---------------- 2026-08-12 "ten new patterns" announcement gallery ----------------
-// One-off design list for this specific send (designs published after
-// Capybara, DesignID 5462). Bespoke per-announcement, same as editorUrl/
-// changelogUrl above being hardcoded per-send rather than generic.
-static (int DesignId, int AlbumId, string NPage, string Caption)[] GetAnnouncementDesigns() => new[]
+// ---------------- 2026-11 Christmas announcement gallery ----------------
+// One-off design list for this specific send (existing album-35 Christmas
+// designs with the most 90-day pageviews as of 2026-11-14). Bespoke per-
+// announcement, same as editorUrl/changelogUrl above being hardcoded
+// per-send rather than generic. Caption feeds the URL slug (must match the
+// live DB Caption); Label is the human-readable text shown in the email,
+// since several Christmas designs share the same Caption ("Merry Christmas").
+static (int DesignId, int AlbumId, string NPage, string Caption, string Label)[] GetAnnouncementDesigns() => new[]
 {
-    (5463, 54, "00450", "Kawaii Cottagecore Frog"),
-    (5464, 54, "00451", "Kawaii Pink Axolotl"),
-    (5465, 59, "00074", "Luna Moth"),
-    (5466, 58, "00078", "Minimalist Line Art Face"),
-    (5467, 37, "00316", "Mouse"),
-    (5468, 15, "00212", "Kitten"),
-    (5469, 32, "00072", "Elephant"),
-    (5470, 34, "00033", "Cute Ghost with Mushroom Basket"),
-    (5471, 9, "00295", "Sparrow"),
-    (5472, 18, "00171", "Labrador"),
+    (4644, 35, "00113", "Merry Christmas", "Candy Cane and Holly"),
+    (5256, 35, "00120", "Holly Wreath", "Holly Wreath"),
+    (5385, 35, "00125", "Christmas", "Santa and Reindeer"),
+    (4677, 35, "00115", "Merry Christmas", "Santa in the Chimney"),
+    (5262, 35, "00124", "Merry Christmas", "Little Red Santa"),
+    (2806, 35, "00064", "Nativity", "Nativity Stable"),
+    (2113, 35, "00051", "Snowmen", "Snowman Family"),
 };
 
 static string BuildDesignGalleryHtml(PatternLinkHelper linkHelper, string? cid, string eid)
@@ -1025,14 +1032,14 @@ static string BuildDesignGalleryHtml(PatternLinkHelper linkHelper, string? cid, 
         var d = designs[i];
         string url = AppendTrackingParameters(
             linkHelper.BuildPatternUrl(new PinPatternInfo { AlbumId = d.AlbumId, DesignId = d.DesignId, NPage = d.NPage, Title = d.Caption }),
-            cid, eid, "announcement");
+            cid, eid, "announcement", $"design-{d.DesignId}");
         string imageUrl = linkHelper.BuildImageUrl(d.DesignId, d.AlbumId);
         bool startOfRow = i % 2 == 0;
         bool endOfRow = i % 2 == 1 || i == designs.Length - 1;
         if (startOfRow) sb.Append("<!--[if mso]>\n<td width=\"50%\" valign=\"top\" style=\"padding:12px;\">\n<![endif]-->\n");
         sb.Append("<div style=\"display:inline-block; width:46%; min-width:150px; max-width:240px; vertical-align:top; margin:0 1.5% 24px; text-align:center;\">\n");
-        sb.Append($"<a href=\"{WebUtility.HtmlEncode(url)}\"><img src=\"{WebUtility.HtmlEncode(imageUrl)}\" alt=\"{WebUtility.HtmlEncode(d.Caption)}\" width=\"220\" style=\"width:100%; max-width:220px; border-radius:8px; display:block; margin:0 auto;\"></a>\n");
-        sb.Append($"<p style=\"margin:8px 0 0; font-size:14px;\"><a href=\"{WebUtility.HtmlEncode(url)}\">{WebUtility.HtmlEncode(d.Caption)}</a></p>\n");
+        sb.Append($"<a href=\"{WebUtility.HtmlEncode(url)}\"><img src=\"{WebUtility.HtmlEncode(imageUrl)}\" alt=\"{WebUtility.HtmlEncode(d.Label)}\" width=\"220\" style=\"width:100%; max-width:220px; border-radius:8px; display:block; margin:0 auto;\"></a>\n");
+        sb.Append($"<p style=\"margin:8px 0 0; font-size:14px;\"><a href=\"{WebUtility.HtmlEncode(url)}\">{WebUtility.HtmlEncode(d.Label)}</a></p>\n");
         sb.Append("</div>\n");
         if (startOfRow && !endOfRow) sb.Append("<!--[if mso]>\n</td>\n<td width=\"50%\" valign=\"top\" style=\"padding:12px;\">\n<![endif]-->\n");
         else if (endOfRow) sb.Append("<!--[if mso]>\n</td></tr>\n<![endif]-->\n");
@@ -1049,8 +1056,8 @@ static string BuildDesignGalleryText(PatternLinkHelper linkHelper, string? cid, 
     {
         string url = AppendTrackingParameters(
             linkHelper.BuildPatternUrl(new PinPatternInfo { AlbumId = d.AlbumId, DesignId = d.DesignId, NPage = d.NPage, Title = d.Caption }),
-            cid, eid, "announcement");
-        sb.Append($"{d.Caption}: {url}\n");
+            cid, eid, "announcement", $"design-{d.DesignId}");
+        sb.Append($"{d.Label}: {url}\n");
     }
     return sb.ToString().TrimEnd();
 }
@@ -1064,10 +1071,12 @@ static RenderedEmailContent RenderAnnouncementEmailContent(
     string? unsubscribeUrl,
     string? changelogUrl = null,
     string designGalleryHtml = "",
-    string designGalleryText = "")
+    string designGalleryText = "",
+    string? albumUrl = null)
 {
     Dictionary<string, string> replacements = CreateCommonTemplateReplacements(firstName);
     replacements["<editor_url>"] = editorUrl;
+    replacements["<album_url>"] = albumUrl ?? string.Empty;
     replacements["<changelog_url>"] = changelogUrl ?? string.Empty;
     replacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
     replacements["<design_gallery>"] = designGalleryHtml;
@@ -1090,6 +1099,7 @@ static RenderedEmailContent RenderAnnouncementEmailContent(
 
     Dictionary<string, string> textReplacements = CreateCommonTemplateReplacements(firstName);
     textReplacements["<editor_url>"] = editorUrl;
+    textReplacements["<album_url>"] = albumUrl ?? string.Empty;
     textReplacements["<changelog_url>"] = changelogUrl ?? string.Empty;
     textReplacements["<unsubscribe_url>"] = unsubscribeUrl ?? string.Empty;
     textReplacements["<design_gallery>"] = designGalleryText;

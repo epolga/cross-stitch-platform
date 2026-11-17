@@ -1,19 +1,27 @@
 [Subject]
-Ten new patterns went up while nobody was looking
+Seven free Christmas patterns to start now 🎄
 
 [Greeting]
 Hi [FName],
 
 [Body1]
-I've been heads-down finishing a batch of new patterns, and I only just looked up to realize there are ten of them now, sitting quietly on the site with nobody but me looking at them. That felt like a waste, so here they all are.
+Christmas is closer than it feels, and a holiday project is much nicer to start in November than on December 20th.
 
-A kawaii frog and a pink axolotl, for anyone who likes things a little too cute. A luna moth and a sparrow, for the nature lovers. A minimalist line-art face if you want something modern and quick. And a small menagerie I made mostly for myself — a mouse, a kitten, an elephant, a ghost with a basket of mushrooms, and a labrador that looks exactly like every labrador I've ever met.
+So I went through the Christmas collection and picked seven that people open most often. There is a tiny Santa, only 17 × 22 stitches, that you can finish in one evening. There is a holly wreath in just two colors, which is quicker than it looks. And for something with more to it, a nativity stable and a whole family of snowmen. All of them are free.
 
 [EditorLink]
 <design_gallery>
+<p style="text-align:center;">
+	👉 <a href="<album_url>">See all the Christmas patterns</a>
+</p>
+<p style="text-align:center;">
+	Or turn a favorite photo into a Christmas pattern of your own: <a href="<editor_url>">try the editor</a>
+</p>
 
 [Body2]
-They're all free, all printable, and all just a click away above. If one of them sends you thread-hunting through your own stash, tell me about it — reply to this email, I read every one.
+They are all printable, and the small ones make lovely gift tags or card toppers.
+
+If there is a Christmas motif you wish I had made, an animal, a scene, anything at all, just hit Reply and tell me. I read every one.
 
 [Unsubscribe]
 If you prefer not to receive these emails, you can unsubscribe here:
