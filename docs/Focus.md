@@ -447,8 +447,16 @@ below.
     2026-09-03, not a live risk today.
 
 33. **Homepage Google drop (from 2026-11-12) — thumbnails / image domain.**
-    Fixes deployed 2026-11-14 (htmlLimitedBots, CloudFront `/robots.txt`);
-    homepage impressions ~3500/day vs ~4500-5000 baseline, effect unproven.
+    Fixes deployed 2026-11-14 (htmlLimitedBots, CloudFront `/robots.txt`)
+    and 11-16 (JSON-LD as real `<script>`); effect unproven.
+    Checked 2026-11-19: site impressions ~3200-3650/day vs ~4500-5000
+    baseline (avg position 7.5 on 11-17/18, better than 8-8.6 before).
+    ~90% of the loss is the homepage `/` (2967 -> 1940 imps/day), on generic
+    head queries (`cross stitch patterns` 630 -> 358, `cross stitch`
+    303 -> 142); other pages flat, so not a site-wide crawl/index problem.
+    AdSense back to ~29-32 ₪/day on 11-17..19 (was 18-25 on 11-11..16), but
+    homepage page-level earnings still ~6-8 vs 14-15 on 11-08/09, and the
+    recovery is not attributable to the 11-17 email (it explains <=5-8 ₪).
     Google's Nov 2026 core update began 11-10 (may run to ~11-24) and the
     drop starts right after it, so the cause is unclear.
     **Decision ~2026-12-01** (a week after the update ends): thumbnails not back in the SERP for
@@ -456,6 +464,25 @@ below.
     per `docs/plan/web/Image_Domain_Migration_Plan.md`. Deliberately NOT
     switching earlier (new image URLs = re-indexing, and it would mask
     which fix helped). Part A (ACM cert, alias, DNS) needs Olga's "да".
+
+34. **Register-to-download funnel — does the download gate cost traffic?**
+    `DOWNLOAD_MODE=register` (live): a PDF needs sign-up. Olga asked 2026-11-19
+    whether the gate is worth it since email brings little (~120 visits per
+    send in 2 days, ~2/3 of the eventual total per eid `260902`; ~6-8 ₪ per
+    send, an estimate). Registrations: 545 in last 30 days (296 from
+    `design-download`), ~3.5% of design-landing sessions; no event existed
+    for "clicked Download" / "abandoned the form", so the drop-off is unknown.
+    **Shipped 2026-11-19** (commit 9a0dc97, deployed `app-261119_214609402527`):
+    GA4 events `register_modal_opened` (param `source`),
+    `register_modal_dismissed`, `register_submitted`, `design_pdf_download`
+    via `trackEvent` (`web/src/lib/track-event.ts`; skips `no_track=1`).
+    **Check ~2026-11-26 to 12-03:** build the funnel from GA4 and compare
+    GA4 `register_submitted` with real new rows in `CrossStitchUsers`
+    (`CreatedAt`) over the same days to get GA4's undercount. If GA4 sees
+    ~80%+ of registrations, scale its numbers; if far less, consider also
+    logging these events to our own DB (new table needs an IAM grant first —
+    confirm with Olga). Any `DOWNLOAD_MODE=free` test only after ~12-01 (core
+    update confounds it) and only with Olga's "да".
 
 ## Done when
 
