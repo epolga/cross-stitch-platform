@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import type { RegistrationSourceInfo } from '@/app/types/registration';
+import { trackEvent } from '@/lib/track-event';
 
 type RegisterOnlyDialogProps = {
   isOpen: boolean;
@@ -105,6 +106,7 @@ export function RegisterOnlyDialog({
       }
 
       const data: { message?: string } = await response.json().catch(() => ({}));
+      trackEvent('register_submitted', { source: sourceInfo?.source ?? 'unknown' });
       setDone(true);
       setSuccessMessage(
         data.message || 'Thanks for registering. Please check your email to verify your address.',
@@ -118,6 +120,14 @@ export function RegisterOnlyDialog({
     }
   }, [email, firstName, password, formValid, submitting, onSuccess, sourceInfo]);
 
+  // Closing before the form was submitted (x or Cancel) = the visitor gave up.
+  const handleClose = useCallback((): void => {
+    if (!done) {
+      trackEvent('register_modal_dismissed', { source: sourceInfo?.source ?? 'unknown' });
+    }
+    onClose();
+  }, [done, onClose, sourceInfo]);
+
   if (!isOpen) return null;
 
   return (
@@ -129,7 +139,7 @@ export function RegisterOnlyDialog({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-900">Register</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700 text-lg"
             aria-label="Close modal"
           >
@@ -272,7 +282,7 @@ export function RegisterOnlyDialog({
 
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="rounded-md px-3 py-1.5 text-gray-700 hover:text-gray-900"
                 disabled={submitting}
               >
@@ -289,7 +299,7 @@ export function RegisterOnlyDialog({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-md bg-gray-500 px-3 py-1.5 text-white hover:bg-gray-600"
             >
               Close

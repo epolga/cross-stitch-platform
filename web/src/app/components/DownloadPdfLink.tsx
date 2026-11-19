@@ -9,6 +9,7 @@ import {
 } from './AuthControl';
 import { Design } from '../types/design';
 import { devLog } from '@/lib/devLog';
+import { trackEvent } from '@/lib/track-event';
 import { logSearchEngagementClient } from '@/lib/search-engagement-client';
 //import { CreateDesignUrl } from '@/lib/url-helper';
 
@@ -78,6 +79,7 @@ export default function DownloadPdfLink({ design, className, formatLabel, format
         : '';
     const fromNewsletter =
       typeof window !== 'undefined' && sessionStorage.getItem('cameFromNewsletter') === 'true';
+    trackEvent('design_pdf_download', { design_id: design.DesignID });
     void fetch(`/api/designs/${design.DesignID}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

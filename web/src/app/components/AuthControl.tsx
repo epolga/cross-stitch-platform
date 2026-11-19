@@ -7,6 +7,7 @@ import { RegisterOnlyDialog } from './RegisterOnlyDialog';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { RegistrationSourceInfo } from '@/app/types/registration';
 import { devLog } from '@/lib/devLog';
+import { trackEvent } from '@/lib/track-event';
 
 const USER_FIRST_NAME_STORAGE_KEY = 'userFirstName';
 export const USER_VOTES_CHANGED_EVENT = 'userVotesChanged';
@@ -420,6 +421,10 @@ export function AuthControl() {
         if (mode === 'register') {
           const detail =
             (event as CustomEvent<RegistrationSourceInfo | null>).detail ?? null;
+          trackEvent('register_modal_opened', {
+            source: detail?.source ?? 'unknown',
+            design_id: detail?.designId,
+          });
           setRegistrationSource(detail);
           setIsRegisterOnlyOpen(true);
           setIsRegisterModalOpen(false);
