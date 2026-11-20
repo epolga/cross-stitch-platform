@@ -13,6 +13,12 @@ Split into these four files on 2026-07-26; archived again on 2026-08-03
 2026-09-07 (~520 lines, Shipped entries moved to `SHIPPED.md`) to stay
 lean.
 
+## MANDATORY at session start — read `docs/Reminders.md`
+
+Dated follow-ups live in `docs/Reminders.md` (not in session crons, which die
+with the session). Read it first, compare with today's date, and tell Olga
+about anything due or overdue before other work. Delete a row there when done.
+
 ## Session-start check — GSC growth (do this every session)
 
 Run a GSC growth check (`automation/pinterest-agent/scripts/gsc-explore.ts`
