@@ -13,10 +13,16 @@ to the site or DOWNLOAD_MODE without her "да".
 
 | When | What | How |
 |---|---|---|
-| 2026-11-24 (evening) | 1-week report for the Christmas email (eid=261117). Windows Task `AnnouncementReport-261117-1week` emails it to Olga at ~18:41 by itself. | Run `automation/pinterest-agent/scripts/announcement-report.ts --eid 261117 --since <date> --sent-at <ISO> --label 1-week --no-email` (copy args from the 1-day task), interpret for Olga in chat. Compare with 1-day: 127 distinct recipients, GA4 121 sessions, SES 1 bounce + 1 complaint. |
-| 2026-11-24 | Google Nov 2026 core update expected to end. Homepage lost ~20-25% of page views and ~half its AdSense revenue after 2026-11-10/12 (generic head queries `cross stitch patterns`, `cross stitch`; GSC impressions 3200-3650/day vs 4500-5000). Cause unknown. | Do not change the site before ~2026-12-01. Olga agreed to wait (2026-11-20). Until then only observe GSC (`gsc-explore.ts` / `gsc-compare.ts`) and AdSense homepage by day. |
 | 2026-11-26 .. 12-03 | Register-to-download funnel (Focus.md item 34). GA4 events live since 2026-11-19: `register_modal_opened`, `register_modal_dismissed`, `register_submitted`, `design_pdf_download`. | Build the funnel from GA4. Compare `register_submitted` with new `CrossStitchUsers` rows (CreatedAt) to estimate GA4 undercount. Then discuss with Olga: log events in her own DB (needs an IAM grant, ask first) and whether to test `DOWNLOAD_MODE=free` (only after 12-01, only with her "да"). |
-| 2026-12-01 | Homepage / Google decision and image-domain migration. | Review GSC + AdSense homepage first. Plan: `docs/plan/web/Image_Domain_Migration_Plan.md`; Part A needs Olga's "да". Note: no evidence that images caused the drop; the migration is planned for other reasons. |
+| 2026-12-01 | Homepage / Google decision and image-domain migration. Background: after 2026-11-10/12 the homepage lost ~35-40% of impressions (3-11 Nov 2640-3410/day -> 17-22 Nov 1740-1940), concentrated in head queries without "free": `cross stitch` pos 7.7 -> 10.8 (imps/day 299 -> 91), `cross stitch pattern` pos 5.5 -> 8.0 (131 -> 85), `cross stitch patterns` pos 8.5 (619 -> 425); "free ..." queries ~flat. Cause unknown. End of the Nov 2026 core update (~Nov 24) is NOT verified against Google; check it first. AdSense revenue since 11-19 is not a recovery signal: US CPC doubled (0.77 -> 1.50 ₪), likely pre-Black-Friday, views/clicks did not recover. Olga agreed 2026-11-20 to wait: no site changes before this date. | Review GSC (`gsc-explore.ts --dimensions query --page https://cross-stitch.com/`, compare per day) + AdSense homepage first. Plan: `docs/plan/web/Image_Domain_Migration_Plan.md`; Part A needs Olga's "да". Note: no evidence that images caused the drop; the migration is planned for other reasons. |
+
+## Already set up (do not create again)
+
+- Windows Task `Reminder20261201` emails Olga on 2026-12-01 10:00 (StartWhenAvailable).
+  Files in `automation/pinterest-agent/`: `scripts/reminder-2026-12-01.ts`,
+  `install-reminder-2026-12-01.ps1`, log `reminder-2026-12-01.log`. Deliberately NOT
+  committed (Olga: one-shot, no need to keep). After it fires: delete the task
+  (`schtasks /Delete /TN Reminder20261201 /F`) and those files.
 
 ## Open offers (no date, Olga has not decided)
 
